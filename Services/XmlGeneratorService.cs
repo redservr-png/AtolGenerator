@@ -85,7 +85,7 @@ public static class XmlGeneratorService
         receipt.Add(itemsEl);
 
         // Payment
-        var payType = c.Tab == "realization" ? "14"
+        var payType = c.Tab == "realization" ? "2"
                     : c.PaymentType == "cash" ? "0" : "1";
         receipt.Add(new XElement("payments",
             new XElement("payment",
@@ -107,8 +107,8 @@ public static class XmlGeneratorService
 
     private static XElement BuildCorrection(CheckData c)
     {
-        // Тип оплаты: реализация → 14 (зачёт аванса), оплата → 0/1
-        var payCode = c.Tab == "realization" ? "14"
+        // Тип оплаты: реализация → 2 (аванс), оплата → 0/1
+        var payCode = c.Tab == "realization" ? "2"
                     : c.PaymentType == "cash" ? "0" : "1";
 
         // НДС: с агентом → none; без агента: оплата → vat122, реализация → vat22
