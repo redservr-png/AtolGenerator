@@ -1,0 +1,592 @@
+<Window x:Class="AtolGenerator.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:AtolGenerator.ViewModels"
+        xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
+        Title="АТОЛ Чек-генератор"
+        Icon="/Resources/app.ico"
+        Height="820" Width="1160"
+        MinHeight="600" MinWidth="800"
+        Background="{StaticResource BrushBg}"
+        WindowStartupLocation="CenterScreen">
+
+  <Window.DataContext>
+    <vm:MainViewModel/>
+  </Window.DataContext>
+
+  <Window.Resources>
+    <cv:BoolToVisibilityConverter        x:Key="BoolVis"/>
+    <cv:InverseBoolToVisibilityConverter x:Key="InvBoolVis"/>
+    <cv:ZeroToVisibilityConverter        x:Key="ZeroVis"/>
+    <cv:NonZeroToBoolConverter           x:Key="NonZeroBool"/>
+    <cv:StringEqualConverter             x:Key="StrEq"/>
+  </Window.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="58"/>   <!-- header -->
+      <RowDefinition Height="*"/>    <!-- content -->
+      <RowDefinition Height="34"/>   <!-- status bar -->
+    </Grid.RowDefinitions>
+
+    <!-- ══════════ HEADER ══════════ -->
+    <Border Grid.Row="0"
+            Background="{StaticResource BrushSurface1}"
+            BorderBrush="{StaticResource BrushBorder}"
+            BorderThickness="0,0,0,1">
+      <Grid Margin="24,0">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <Border Width="32" Height="32" CornerRadius="8" Margin="0,0,10,0">
+            <Border.Background>
+              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#4C8AF5" Offset="0"/>
+                <GradientStop Color="#8155FF" Offset="1"/>
+              </LinearGradientBrush>
+            </Border.Background>
+            <TextBlock Text="🧾" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <TextBlock Text="АТОЛ Чек-генератор"
+                     FontSize="17" FontWeight="Bold"
+                     Foreground="{StaticResource BrushAccent2}"
+                     VerticalAlignment="Center"/>
+        </StackPanel>
+        <TextBlock Text="ИП Шевелев Е.Н. · ИНН 352526561274 · ФФД 1.05"
+                   FontSize="12" Foreground="{StaticResource BrushText3}"
+                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+      </Grid>
+    </Border>
+
+    <!-- ══════════ CONTENT ══════════ -->
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <Grid Margin="18,16,18,16">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="18"/>
+          <ColumnDefinition Width="330"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ════ LEFT COLUMN ════ -->
+        <StackPanel Grid.Column="0">
+
+          <!-- Tabs -->
+          <Border Background="{StaticResource BrushSurface2}"
+                  CornerRadius="10" Padding="4">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition/>
+              </Grid.ColumnDefinitions>
+              <ToggleButton Grid.Column="0" Style="{StaticResource TabBtn}"
+                            Content="💳  Оплаты"
+                            IsChecked="{Binding Tab, Converter={StaticResource StrEq}, ConverterParameter=payment, Mode=TwoWay}"
+                            Command="{Binding SwitchTabCommand}" CommandParameter="payment"/>
+              <ToggleButton Grid.Column="1" Style="{StaticResource TabBtn}"
+                            Content="📦  Реализации / Возвраты"
+                            IsChecked="{Binding Tab, Converter={StaticResource StrEq}, ConverterParameter=realization, Mode=TwoWay}"
+                            Command="{Binding SwitchTabCommand}" CommandParameter="realization"/>
+            </Grid>
+          </Border>
+
+          <!-- Check Type card -->
+          <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+            <StackPanel>
+              <!-- Section title -->
+              <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                        CornerRadius="2" Margin="0,0,7,0"/>
+                <TextBlock Text="ТИП ЧЕКА" Style="{StaticResource SectionTitle}" Margin="0"/>
+              </StackPanel>
+
+              <!-- Radio chips -->
+              <WrapPanel>
+                <RadioButton Style="{StaticResource RadioChip}" Content="✅ Приход"
+                             IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=sell, Mode=TwoWay}"/>
+                <RadioButton Style="{StaticResource RadioChip}" Content="↩ Возврат прихода"
+                             IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=sell_refund, Mode=TwoWay}"/>
+                <RadioButton Style="{StaticResource RadioChip}" Content="⚡ Корр. Приход"
+                             IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=sell_correction, Mode=TwoWay}"/>
+                <RadioButton Style="{StaticResource RadioChip}" Content="⚡ Корр. Расход"
+                             IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=buy_correction, Mode=TwoWay}"/>
+                <RadioButton Style="{StaticResource RadioChip}" Content="🔄 Корр. Возврат прихода"
+                             IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=buy_refund, Mode=TwoWay}"
+                             Visibility="{Binding ShowBuyRefundOption, Converter={StaticResource BoolVis}}"/>
+              </WrapPanel>
+
+              <!-- Payment Type (только на вкладке оплаты; реализация всегда тип 14 — аванс) -->
+              <StackPanel Margin="0,14,0,0"
+                          Visibility="{Binding ShowPaymentType, Converter={StaticResource BoolVis}}">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                  <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                          CornerRadius="2" Margin="0,0,7,0"/>
+                  <TextBlock Text="ТИП ОПЛАТЫ" Style="{StaticResource SectionTitle}" Margin="0"/>
+                </StackPanel>
+                <WrapPanel>
+                  <RadioButton Style="{StaticResource RadioChip}" Content="💵 Наличные"
+                               IsChecked="{Binding PaymentType, Converter={StaticResource StrEq}, ConverterParameter=cash, Mode=TwoWay}"/>
+                  <RadioButton Style="{StaticResource RadioChip}" Content="💳 Безналичные"
+                               IsChecked="{Binding PaymentType, Converter={StaticResource StrEq}, ConverterParameter=card, Mode=TwoWay}"/>
+                </WrapPanel>
+              </StackPanel>
+
+              <!-- Correction box -->
+              <Border Visibility="{Binding ShowCorrectionBox, Converter={StaticResource BoolVis}}"
+                      Background="#12F0960F" BorderBrush="#33F0960F"
+                      BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,10,0,0">
+                <StackPanel>
+                  <TextBlock Text="⚡ ДАННЫЕ КОРРЕКЦИИ" FontSize="11" FontWeight="Bold"
+                             Foreground="{StaticResource BrushOrange}"
+                             Margin="0,0,0,10"/>
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition/>
+                      <ColumnDefinition Width="14"/>
+                      <ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                      <TextBlock Text="Дата события *" Style="{StaticResource FieldLabel}"/>
+                      <TextBox Text="{Binding CorrectionDate, UpdateSourceTrigger=PropertyChanged}"
+                               Tag="ДД.ММ.ГГГГ"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                      <TextBlock Text="Номер документа основания" Style="{StaticResource FieldLabel}"/>
+                      <TextBox Text="{Binding CorrectionNumber, UpdateSourceTrigger=PropertyChanged}"
+                               Tag="авто: Основание_[номер заказа]"/>
+                      <TextBlock Text="Оставьте пустым — заполнится автоматически"
+                                 Style="{StaticResource HintText}"/>
+                    </StackPanel>
+                  </Grid>
+                </StackPanel>
+              </Border>
+
+            </StackPanel>
+          </Border>
+
+          <!-- Bulk input card -->
+          <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+            <StackPanel>
+              <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                        CornerRadius="2" Margin="0,0,7,0"/>
+                <TextBlock Text="МАССОВЫЙ ВВОД ЗАКАЗОВ" Style="{StaticResource SectionTitle}" Margin="0"/>
+              </StackPanel>
+              <TextBlock Text="Вставьте сообщение с заказами" Style="{StaticResource FieldLabel}"/>
+              <TextBox Text="{Binding BulkText, UpdateSourceTrigger=PropertyChanged}"
+                       AcceptsReturn="True" MinHeight="112" TextWrapping="Wrap"
+                       VerticalScrollBarVisibility="Auto"
+                       Tag="Заказ покупателя т0000027760 от 23.03.2026 12:37:39 сумма 3000 Шкрабий Екатерина Васильевна"/>
+              <TextBlock Text="Ctrl+V · Разделитель: «;» или перевод строки."
+                         Style="{StaticResource HintText}"/>
+              <WrapPanel Margin="0,10,0,0">
+                <Button Content="🔍  Распознать заказы"
+                        Style="{StaticResource BtnPrimary}"
+                        Padding="13,7" FontSize="13"
+                        Margin="0,0,8,0"
+                        Command="{Binding ParseBulkCommand}"/>
+                <Button Content="📊  Импорт из Excel"
+                        Style="{StaticResource BtnSecondary}"
+                        Padding="13,7" FontSize="13"
+                        Visibility="{Binding IsRealizationTab, Converter={StaticResource BoolVis}}"
+                        Command="{Binding ImportExcelCommand}"/>
+              </WrapPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- Divider -->
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+            <Separator Grid.Column="0" VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="или введите один заказ вручную"
+                       Foreground="{StaticResource BrushText3}" FontSize="12"
+                       Margin="10,0"/>
+            <Separator Grid.Column="2" VerticalAlignment="Center"/>
+          </Grid>
+
+          <!-- Single order card -->
+          <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+            <StackPanel>
+              <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                        CornerRadius="2" Margin="0,0,7,0"/>
+                <TextBlock Text="ДАННЫЕ ОДНОГО ЧЕКА" Style="{StaticResource SectionTitle}" Margin="0"/>
+              </StackPanel>
+
+              <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                  <TextBlock Text="Номер заказа *" Style="{StaticResource FieldLabel}"/>
+                  <TextBox Text="{Binding SingleOrderNum, UpdateSourceTrigger=PropertyChanged}"
+                           Tag="т0000027760"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="Дата заказа" Style="{StaticResource FieldLabel}"/>
+                  <TextBox Text="{Binding SingleOrderDate, UpdateSourceTrigger=PropertyChanged}"
+                           Tag="23.03.2026 12:37:39"/>
+                </StackPanel>
+              </Grid>
+
+              <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                  <TextBlock Text="Сумма, руб. *" Style="{StaticResource FieldLabel}"/>
+                  <TextBox Text="{Binding SingleAmount, UpdateSourceTrigger=PropertyChanged}"
+                           Tag="3000"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Text="ФИО покупателя" Style="{StaticResource FieldLabel}"/>
+                  <TextBox Text="{Binding SingleCustomer, UpdateSourceTrigger=PropertyChanged}"
+                           Tag="Иванов Иван Иванович"/>
+                </StackPanel>
+              </Grid>
+
+              <!-- Service / agent checkbox -->
+              <CheckBox Content="🔧  Услуга (поставщик / агент)"
+                        IsChecked="{Binding IsServiceProvider}"
+                        Margin="0,4,0,0"/>
+
+              <!-- Agent panel -->
+              <Border Visibility="{Binding ShowAgentPanel, Converter={StaticResource BoolVis}}"
+                      Background="{StaticResource BrushSurface2}"
+                      BorderBrush="{StaticResource BrushBorder}"
+                      BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,10,0,0">
+                <StackPanel>
+                  <TextBlock Text="ПОСТАВЩИК УСЛУГИ" FontSize="11" FontWeight="Bold"
+                             Foreground="{StaticResource BrushAccent2}"
+                             Margin="0,0,0,10"/>
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                      <TextBlock Text="Тип услуги" Style="{StaticResource FieldLabel}"/>
+                      <ComboBox ItemsSource="{x:Static cv:ServiceTypeList.Items}"
+                                SelectedItem="{Binding SelectedServiceType}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                      <TextBlock Text="Город" Style="{StaticResource FieldLabel}"/>
+                      <ComboBox ItemsSource="{Binding AvailableCities}"
+                                SelectedItem="{Binding SelectedCity}"/>
+                    </StackPanel>
+                  </Grid>
+                  <TextBlock Text="{Binding AgentInfoText}"
+                             FontSize="12" Foreground="{StaticResource BrushText2}"
+                             Margin="0,8,0,0" LineHeight="22"
+                             TextWrapping="Wrap"/>
+                </StackPanel>
+              </Border>
+
+              <!-- Items section (realization) -->
+              <StackPanel Visibility="{Binding ShowItemsSection, Converter={StaticResource BoolVis}}"
+                          Margin="0,10,0,0">
+                <Separator/>
+                <TextBlock Text="ТОВАРНЫЕ ПОЗИЦИИ" FontSize="11" FontWeight="Bold"
+                           Foreground="{StaticResource BrushText3}" Margin="0,0,0,8"/>
+                <ItemsControl ItemsSource="{Binding CurrentItems}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Grid Margin="0,0,0,7">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition/>
+                          <ColumnDefinition Width="12"/>
+                          <ColumnDefinition Width="80"/>
+                          <ColumnDefinition Width="12"/>
+                          <ColumnDefinition Width="110"/>
+                          <ColumnDefinition Width="12"/>
+                          <ColumnDefinition Width="34"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                                 Tag="Наименование"/>
+                        <TextBox Grid.Column="2" Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}"
+                                 Tag="Кол-во"/>
+                        <TextBox Grid.Column="4" Text="{Binding Sum, UpdateSourceTrigger=PropertyChanged}"
+                                 Tag="Сумма, руб."/>
+                        <Button  Grid.Column="6" Content="✕"
+                                 Style="{StaticResource BtnDelete}"
+                                 Command="{Binding DataContext.DeleteItemCommand,
+                                           RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                 CommandParameter="{Binding}"/>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="＋  Добавить позицию"
+                        Style="{StaticResource BtnGhost}"
+                        Margin="0,4,0,0"
+                        Command="{Binding AddItemCommand}"/>
+              </StackPanel>
+
+              <Separator Margin="0,14"/>
+              <Button Content="＋  Добавить в список"
+                      Style="{StaticResource BtnSecondary}"
+                      HorizontalAlignment="Left"
+                      Command="{Binding AddSingleCommand}"/>
+            </StackPanel>
+          </Border>
+
+        </StackPanel>
+
+        <!-- ════ RIGHT COLUMN ════ -->
+        <StackPanel Grid.Column="2">
+
+          <!-- Orders list card -->
+          <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+            <StackPanel>
+              <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                        CornerRadius="2" Margin="0,0,7,0"/>
+                <TextBlock Text="ЗАКАЗЫ К ПРОБИТИЮ" Style="{StaticResource SectionTitle}" Margin="0"/>
+              </StackPanel>
+
+              <!-- Empty placeholder -->
+              <TextBlock Text="Заказы не добавлены"
+                         Foreground="{StaticResource BrushText3}" FontSize="13"
+                         HorizontalAlignment="Center" Padding="0,14"
+                         Visibility="{Binding OrderCount, Mode=OneWay, Converter={StaticResource ZeroVis}}"/>
+
+              <!-- Orders list -->
+              <ItemsControl ItemsSource="{Binding Orders}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Background="{StaticResource BrushSurface2}"
+                            BorderBrush="{StaticResource BrushBorder}"
+                            BorderThickness="1" CornerRadius="8"
+                            Padding="10,8" Margin="0,0,0,6">
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition/>
+                          <ColumnDefinition Width="Auto"/>
+                          <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                          <TextBlock Text="{Binding OrderNum}"
+                                     FontFamily="Courier New" FontSize="12"
+                                     Foreground="{StaticResource BrushAccent2}"/>
+                          <TextBlock Text="{Binding OrderDate}"
+                                     FontSize="11" Foreground="{StaticResource BrushText3}"
+                                     Margin="0,1,0,0"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1"
+                                   FontWeight="Bold" FontSize="14"
+                                   Foreground="{StaticResource BrushGreen}"
+                                   VerticalAlignment="Center" Margin="8,0">
+                          <TextBlock.Text>
+                            <MultiBinding StringFormat="{}{0:N0} ₽">
+                              <Binding Path="Amount"/>
+                            </MultiBinding>
+                          </TextBlock.Text>
+                        </TextBlock>
+                        <Button Grid.Column="2" Content="✕"
+                                Style="{StaticResource BtnDelete}"
+                                VerticalAlignment="Center"
+                                Command="{Binding DataContext.DeleteOrderCommand,
+                                          RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}"/>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
+          <!-- Generate box -->
+          <Border Background="{StaticResource BrushSurface1}"
+                  BorderBrush="{StaticResource BrushBorder}"
+                  BorderThickness="1" CornerRadius="10" Padding="16">
+            <StackPanel>
+              <TextBlock FontSize="13" Foreground="{StaticResource BrushText2}"
+                         Margin="0,0,0,12" LineHeight="22">
+                <Run Text="Будет создано: "/>
+                <Run Text="{Binding OrderCount, Mode=OneWay}" FontWeight="Bold"
+                     Foreground="{StaticResource BrushText}"/>
+                <Run Text=" чек(ов) + "/>
+                <Run Text="{Binding OrderCount, Mode=OneWay}" FontWeight="Bold"
+                     Foreground="{StaticResource BrushText}"/>
+                <Run Text=" служебных записок"/>
+              </TextBlock>
+              <CheckBox Content="Объединить все чеки в 1 XML-файл"
+                        IsChecked="{Binding MergeXml}"
+                        Margin="0,0,0,10" FontSize="13"/>
+              <Button Style="{StaticResource BtnGenerate}"
+                      Command="{Binding GenerateCommand}"
+                      IsEnabled="{Binding OrderCount, Mode=OneWay, Converter={StaticResource NonZeroBool}}">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="⚡" FontSize="15" Margin="0,0,8,0"/>
+                  <TextBlock Text="Сформировать документы" FontSize="15" FontWeight="Bold"/>
+                </StackPanel>
+              </Button>
+              <TextBlock Text="Файлы сохраняются в папку atol_output/"
+                         FontSize="11" Foreground="{StaticResource BrushText3}"
+                         HorizontalAlignment="Center" Margin="0,8,0,0"/>
+            </StackPanel>
+          </Border>
+
+          <!-- Skipped rows panel -->
+          <Border Background="#1AFF6B00" BorderBrush="#44FF6B00"
+                  BorderThickness="1" CornerRadius="10" Padding="16" Margin="0,0,0,14"
+                  Visibility="{Binding ShowSkipped, Converter={StaticResource BoolVis}}">
+            <StackPanel>
+              <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <TextBlock Text="⚠️" FontSize="14" Margin="0,0,8,0"/>
+                <TextBlock Style="{StaticResource SectionTitle}" Margin="0"
+                           Text="{Binding SkippedRows.Count, StringFormat='ПРОПУЩЕНО {0} СТРОК — ЧЕКИ УЖЕ ПРОБИТЫ'}"/>
+              </StackPanel>
+              <TextBlock Text="Для исправления нужны данные из оригинального чека (Такском / 1С). Пробейте вручную."
+                         FontSize="12" Foreground="{StaticResource BrushText2}" Margin="0,0,0,10" TextWrapping="Wrap"/>
+              <ItemsControl ItemsSource="{Binding SkippedRows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Background="{StaticResource BrushSurface2}"
+                            BorderBrush="{StaticResource BrushBorder}"
+                            BorderThickness="1" CornerRadius="6"
+                            Padding="10,7" Margin="0,0,0,5">
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="Auto" MinWidth="130"/>
+                          <ColumnDefinition Width="Auto" MinWidth="90"/>
+                          <ColumnDefinition/>
+                          <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding OrderNum}"
+                                   FontFamily="Courier New" FontSize="12"
+                                   Foreground="{StaticResource BrushAccent2}"/>
+                        <TextBlock Grid.Column="1" Text="{Binding OrderDate}"
+                                   FontSize="12" Foreground="{StaticResource BrushText2}"/>
+                        <TextBlock Grid.Column="2" Text="{Binding CheckDate, StringFormat='Чек: {0}'}"
+                                   FontSize="12" Foreground="{StaticResource BrushText2}"/>
+                        <TextBlock Grid.Column="3"
+                                   Text="{Binding Amount, StringFormat={}{0:N2} ₽}"
+                                   FontSize="12" FontWeight="SemiBold"/>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+
+          <!-- Results panel -->
+          <Border Background="{StaticResource BrushSurface1}"
+                  BorderBrush="{StaticResource BrushBorder}"
+                  BorderThickness="1" CornerRadius="10" Padding="16"
+                  Visibility="{Binding ShowResults, Converter={StaticResource BoolVis}}">
+            <StackPanel>
+              <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                        CornerRadius="2" Margin="0,0,7,0"/>
+                <TextBlock Text="РЕЗУЛЬТАТЫ" Style="{StaticResource SectionTitle}" Margin="0"/>
+              </StackPanel>
+              <ItemsControl ItemsSource="{Binding Results}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Border Background="{StaticResource BrushSurface2}"
+                            BorderBrush="{StaticResource BrushBorder}"
+                            BorderThickness="1" CornerRadius="8"
+                            Padding="11" Margin="0,0,0,7">
+                      <StackPanel>
+                        <TextBlock Text="{Binding OrderNum}"
+                                   FontFamily="Courier New" FontSize="12"
+                                   Foreground="{StaticResource BrushAccent2}"
+                                   Margin="0,0,0,4"/>
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition/><ColumnDefinition Width="Auto"/>
+                          </Grid.ColumnDefinitions>
+                          <TextBlock Grid.Column="0" Text="{Binding XmlFilename}"
+                                     FontSize="12" Foreground="{StaticResource BrushText2}"/>
+                          <Border Grid.Column="1" Background="#21F0D020"
+                                  CornerRadius="4" Padding="6,2">
+                            <TextBlock Text="XML" FontSize="11" FontWeight="Bold"
+                                       Foreground="{StaticResource BrushYellow}"/>
+                          </Border>
+                        </Grid>
+                        <Grid Margin="0,3,0,0"
+                              Visibility="{Binding HasDocx, Mode=OneWay, Converter={StaticResource BoolVis}}">
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition/><ColumnDefinition Width="Auto"/>
+                          </Grid.ColumnDefinitions>
+                          <TextBlock Grid.Column="0" Text="{Binding DocxFilename}"
+                                     FontSize="12" Foreground="{StaticResource BrushText2}"/>
+                          <Border Grid.Column="1" Background="#212DD4A0"
+                                  CornerRadius="4" Padding="6,2">
+                            <TextBlock Text="DOCX" FontSize="11" FontWeight="Bold"
+                                       Foreground="{StaticResource BrushGreen}"/>
+                          </Border>
+                        </Grid>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button Content="📂  Открыть папку с файлами"
+                      Style="{StaticResource BtnSecondary}"
+                      Margin="0,10,0,0" Padding="0,9"
+                      HorizontalAlignment="Stretch"
+                      Command="{Binding OpenFolderCommand}"/>
+            </StackPanel>
+          </Border>
+
+        </StackPanel>
+
+      </Grid>
+    </ScrollViewer>
+
+    <!-- ══════════ STATUS BAR ══════════ -->
+    <Border Grid.Row="2"
+            Background="{StaticResource BrushSurface1}"
+            BorderBrush="{StaticResource BrushBorder}"
+            BorderThickness="0,1,0,0">
+      <Grid Margin="22,0">
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <Ellipse Width="7" Height="7" Fill="{StaticResource BrushGreen}">
+            <Ellipse.Effect>
+              <DropShadowEffect Color="{StaticResource ColorGreen}" BlurRadius="5"
+                                ShadowDepth="0" Opacity="1"/>
+            </Ellipse.Effect>
+          </Ellipse>
+          <TextBlock Text="{Binding StatusText}" Margin="10,0,0,0"
+                     FontSize="12" Foreground="{StaticResource BrushText2}"/>
+        </StackPanel>
+        <TextBlock Text="ИНН 352526561274 · https://alleyadoma.ru"
+                   FontSize="12" Foreground="{StaticResource BrushText3}"
+                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+      </Grid>
+    </Border>
+
+    <!-- ══════════ TOAST ══════════ -->
+    <Border Grid.Row="1"
+            HorizontalAlignment="Right" VerticalAlignment="Top"
+            Margin="0,14,18,0" MaxWidth="320"
+            Visibility="{Binding ToastVisible, Converter={StaticResource BoolVis}}"
+            Panel.ZIndex="999">
+      <Border Background="{StaticResource BrushSurface2}"
+              BorderThickness="1" CornerRadius="9"
+              Padding="15,10">
+        <Border.Style>
+          <Style TargetType="Border">
+            <Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/>
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding ToastIsError}" Value="True">
+                <Setter Property="BorderBrush" Value="{StaticResource BrushRed}"/>
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Border.Style>
+        <Border.Effect>
+          <DropShadowEffect BlurRadius="28" ShadowDepth="4" Opacity="0.5" Color="#000000"/>
+        </Border.Effect>
+        <TextBlock Text="{Binding ToastMessage}"
+                   FontSize="13" Foreground="{StaticResource BrushText}"
+                   TextWrapping="Wrap"/>
+      </Border>
+    </Border>
+
+  </Grid>
+</Window>
