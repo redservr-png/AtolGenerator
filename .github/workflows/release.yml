@@ -5,6 +5,9 @@ on:
     branches: [ main ]
     tags:     [ 'v*' ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -31,28 +34,23 @@ jobs:
           -p:IncludeNativeLibrariesForSelfExtract=true
           -o publish/
 
-      - name: Get version
-        id: version
-        run: echo "tag=$(git describe --tags --always)" >> $env:GITHUB_OUTPUT
-
-      - name: Upload artifact
+      - name: Upload artifact (всегда)
         uses: actions/upload-artifact@v4
         with:
-          name: AtolGenerator-${{ steps.version.outputs.tag }}
+          name: AtolGenerator-exe
           path: publish/AtolGenerator.exe
 
-      - name: Create Release (only on tag push)
+      - name: Create Release (только при теге v*)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           files: publish/AtolGenerator.exe
-          name: Release ${{ github.ref_name }}
+          name: АТОЛ Чек-генератор ${{ github.ref_name }}
           body: |
-            ## АТОЛ Чек-генератор ${{ github.ref_name }}
+            ## Скачать и запустить
 
-            ### Установка
-            Скачайте `AtolGenerator.exe` и запустите — установка не требуется.
+            1. Нажмите **AtolGenerator.exe** ниже
+            2. Запустите — установка не нужна
 
-            ### Требования
-            - Windows 10/11 x64
-            - .NET 8 не нужен (встроен в exe)
+            **Требования:** Windows 10/11 x64
