@@ -92,42 +92,50 @@ public static class OneCService
 
             while ((bool)selection.Следующий())
             {
-                // Ссылка и Сделка теперь строки (ПРЕДСТАВЛЕНИЕ в запросе)
-                var ssylka    = Str(selection.Ссылка);
-                var sdelka    = Str(selection.Сделка);
-                var docNumber = ExtractDocNumber(ssylka);
-                var docDate   = ExtractDate(ssylka);
-                var orderNum  = ExtractDocNumber(sdelka);
-                var orderDate = ExtractDate(sdelka);
-
-                // Дата чека
-                var checkDt  = (DateTime)selection.ДатаПечатиЧека;
-                var checkNum = Str(selection.НомерЧекаККМ);
-                var hasCheck = !string.IsNullOrEmpty(checkNum)
-                            && checkDt > new DateTime(2000, 1, 1);
-
-                // Договор: если содержит "агент" → IsService
-                var dogovor   = Str(selection.Договор);
-                var isService = dogovor.IndexOf("агент", StringComparison.OrdinalIgnoreCase) >= 0;
-
-                var r = new OneCRealization
+                try
                 {
-                    DocNumber    = docNumber,
-                    DocDate      = docDate,
-                    OrderNumber  = orderNum,
-                    OrderDate    = orderDate,
-                    CustomerName = Str(selection.Покупатель),
-                    Amount       = (double)selection.СуммаДокумента,
-                    IsService    = isService,
-                    City         = Str(selection.Подразделение),
-                    HasCheck     = hasCheck,
-                    CheckNumber  = checkNum,
-                    FiscalNumber = Str(selection.ЧекНомерФП),
-                    CheckDate    = hasCheck
-                                    ? checkDt.ToString("dd.MM.yyyy HH:mm:ss")
-                                    : string.Empty,
-                };
-                result.Add(r);
+                    // Ссылка и Сделка теперь строки (ПРЕДСТАВЛЕНИЕ в запросе)
+                    var ssylka    = Str(selection.Ссылка);
+                    var sdelka    = Str(selection.Сделка);
+                    var docNumber = ExtractDocNumber(ssylka);
+                    var docDate   = ExtractDate(ssylka);
+                    var orderNum  = ExtractDocNumber(sdelka);
+                    var orderDate = ExtractDate(sdelka);
+
+                    // Дата чека — может быть null если чек не пробит
+                    var checkDt  = ToDateTime(selection.ДатаПечатиЧека);
+                    var checkNum = Str(selection.НомерЧекаККМ);
+                    var hasCheck = !string.IsNullOrEmpty(checkNum)
+                                && checkDt > new DateTime(2000, 1, 1);
+
+                    // Договор: если содержит "агент" → IsService
+                    var dogovor   = Str(selection.Договор);
+                    var isService = dogovor.IndexOf("агент", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    var r = new OneCRealization
+                    {
+                        DocNumber    = docNumber,
+                        DocDate      = docDate,
+                        OrderNumber  = orderNum,
+                        OrderDate    = orderDate,
+                        CustomerName = Str(selection.Покупатель),
+                        Amount       = ToDouble(selection.СуммаДокумента),
+                        IsService    = isService,
+                        City         = Str(selection.Подразделение),
+                        HasCheck     = hasCheck,
+                        CheckNumber  = checkNum,
+                        FiscalNumber = Str(selection.ЧекНомерФП),
+                        CheckDate    = hasCheck
+                                        ? checkDt.ToString("dd.MM.yyyy HH:mm:ss")
+                                        : string.Empty,
+                    };
+                    result.Add(r);
+                }
+                catch (Exception rowEx)
+                {
+                    // Пропускаем строку с ошибкой, не прерывая всю выгрузку
+                    System.Diagnostics.Debug.WriteLine($"[1С] пропущена строка: {rowEx.Message}");
+                }
             }
         }
         finally
@@ -147,11 +155,23 @@ public static class OneCService
             ?? throw new InvalidOperationException("Не удалось создать экземпляр V83.COMConnector");
     }
 
-    // Безопасное приведение COM-значения к строке
+    // Безопасные приведения COM-значений
     private static string Str(dynamic? v)
     {
         try { return v?.ToString() ?? string.Empty; }
         catch { return string.Empty; }
+    }
+
+    private static DateTime ToDateTime(dynamic? v)
+    {
+        try { return v is null ? DateTime.MinValue : (DateTime)v; }
+        catch { return DateTime.MinValue; }
+    }
+
+    private static double ToDouble(dynamic? v)
+    {
+        try { return v is null ? 0.0 : (double)v; }
+        catch { return 0.0; }
     }
 
     // ── String helpers (same logic as ExcelImportService) ────────────────────
