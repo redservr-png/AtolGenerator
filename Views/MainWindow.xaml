@@ -802,6 +802,16 @@
                   </DataGridTextColumn.ElementStyle>
                 </DataGridTextColumn>
 
+                <!-- Номер чека ККМ -->
+                <DataGridTextColumn Header="№ чека ККМ" Binding="{Binding CheckNumber}"
+                                    Width="110" IsReadOnly="True"
+                                    ElementStyle="{StaticResource DataGridTextStyle}"/>
+
+                <!-- Номер ФП -->
+                <DataGridTextColumn Header="№ ФП" Binding="{Binding FiscalNumber}"
+                                    Width="110" IsReadOnly="True"
+                                    ElementStyle="{StaticResource DataGridTextStyle}"/>
+
                 <!-- Агент -->
                 <DataGridTemplateColumn Header="Агент" Width="52" CanUserSort="False">
                   <DataGridTemplateColumn.CellTemplate>

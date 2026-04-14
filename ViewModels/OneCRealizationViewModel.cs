@@ -25,6 +25,7 @@ public class OneCRealizationViewModel : BaseViewModel
     public bool   HasCheck     => Source.HasCheck;
     public string CheckDate    => Source.CheckDate;
     public string CheckNumber  => Source.CheckNumber;
+    public string FiscalNumber => Source.FiscalNumber;
 
     public OneCRealizationViewModel(OneCRealization r) => Source = r;
 }

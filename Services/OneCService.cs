@@ -26,6 +26,7 @@ public class OneCRealization
     public bool   HasCheck       { get; set; }  // чек уже пробит
     public string CheckNumber    { get; set; } = string.Empty;
     public string CheckDate      { get; set; } = string.Empty;
+    public string FiscalNumber   { get; set; } = string.Empty;  // ЧекНомерФП
 }
 
 public static class OneCService
@@ -91,26 +92,23 @@ public static class OneCService
 
             while ((bool)selection.Следующий())
             {
-                // Ссылка: "Реализация товаров и услуг т0000025218 от 12.03.2026 19:38:36"
-                var ssylka     = selection.Ссылка?.ToString() ?? string.Empty;
-                var docNumber  = ExtractDocNumber(ssylka);
-                var docDate    = ExtractDate(ssylka);
+                // Ссылка и Сделка теперь строки (ПРЕДСТАВЛЕНИЕ в запросе)
+                var ssylka    = Str(selection.Ссылка);
+                var sdelka    = Str(selection.Сделка);
+                var docNumber = ExtractDocNumber(ssylka);
+                var docDate   = ExtractDate(ssylka);
+                var orderNum  = ExtractDocNumber(sdelka);
+                var orderDate = ExtractDate(sdelka);
 
-                // Сделка: "Заказ покупателя т0000018913 от 23.02.2026 16:50:38"
-                var sdelkaStr  = string.Empty;
-                try { sdelkaStr = selection.Сделка?.ToString() ?? string.Empty; }
-                catch { /* Сделка может быть пустой */ }
-                var orderNum   = ExtractDocNumber(sdelkaStr);
-                var orderDate  = ExtractDate(sdelkaStr);
-
-                // Дата чека (может быть пустой датой 0001-01-01 в 1С = DateTime.MinValue)
-                var checkDt    = (DateTime)selection.ДатаПечатиЧека;
-                var hasCheck   = !string.IsNullOrEmpty(selection.НомерЧекаККМ?.ToString())
-                              && checkDt > new DateTime(2000, 1, 1);
+                // Дата чека
+                var checkDt  = (DateTime)selection.ДатаПечатиЧека;
+                var checkNum = Str(selection.НомерЧекаККМ);
+                var hasCheck = !string.IsNullOrEmpty(checkNum)
+                            && checkDt > new DateTime(2000, 1, 1);
 
                 // Договор: если содержит "агент" → IsService
-                var dogovor    = selection.Договор?.ToString() ?? string.Empty;
-                var isService  = dogovor.IndexOf("агент", StringComparison.OrdinalIgnoreCase) >= 0;
+                var dogovor   = Str(selection.Договор);
+                var isService = dogovor.IndexOf("агент", StringComparison.OrdinalIgnoreCase) >= 0;
 
                 var r = new OneCRealization
                 {
@@ -118,12 +116,13 @@ public static class OneCService
                     DocDate      = docDate,
                     OrderNumber  = orderNum,
                     OrderDate    = orderDate,
-                    CustomerName = selection.Покупатель?.ToString() ?? string.Empty,
+                    CustomerName = Str(selection.Покупатель),
                     Amount       = (double)selection.СуммаДокумента,
                     IsService    = isService,
-                    City         = selection.Подразделение?.ToString() ?? string.Empty,
+                    City         = Str(selection.Подразделение),
                     HasCheck     = hasCheck,
-                    CheckNumber  = selection.НомерЧекаККМ?.ToString() ?? string.Empty,
+                    CheckNumber  = checkNum,
+                    FiscalNumber = Str(selection.ЧекНомерФП),
                     CheckDate    = hasCheck
                                     ? checkDt.ToString("dd.MM.yyyy HH:mm:ss")
                                     : string.Empty,
@@ -146,6 +145,13 @@ public static class OneCService
              ?? throw new InvalidOperationException("V83.COMConnector не найден. Установите клиент 1С.");
         return Activator.CreateInstance(t)
             ?? throw new InvalidOperationException("Не удалось создать экземпляр V83.COMConnector");
+    }
+
+    // Безопасное приведение COM-значения к строке
+    private static string Str(dynamic? v)
+    {
+        try { return v?.ToString() ?? string.Empty; }
+        catch { return string.Empty; }
     }
 
     // ── String helpers (same logic as ExcelImportService) ────────────────────
@@ -172,19 +178,18 @@ public static class OneCService
     }
 
     // ── Запрос к УТ 10.3 ─────────────────────────────────────────────────────
-    // TODO: скорректировать поля под реальную структуру базы
+    // ПРЕДСТАВЛЕНИЕ() преобразует ссылочные объекты в строку прямо в запросе
     private static string BuildQuery() => """
         ВЫБРАТЬ
-            РеализацияТоваровУслуг.Ссылка                                   КАК Ссылка,
-            РеализацияТоваровУслуг.Сделка.КонтактноеЛицоКонтрагента        КАК Покупатель,
-            РеализацияТоваровУслуг.Сделка                                   КАК Сделка,
-            РеализацияТоваровУслуг.СуммаДокумента                          КАК СуммаДокумента,
-            РеализацияТоваровУслуг.ДоговорКонтрагента.Наименование         КАК Договор,
-            РеализацияТоваровУслуг.Подразделение                           КАК Подразделение,
-            РеализацияТоваровУслуг.НомерЧекаККМ                            КАК НомерЧекаККМ,
-            РеализацияТоваровУслуг.ККМ                                     КАК ККМ,
-            РеализацияТоваровУслуг.ЧекНомерФП                              КАК ЧекНомерФП,
-            РеализацияТоваровУслуг.ДатаПечатиЧека                         КАК ДатаПечатиЧека
+            ПРЕДСТАВЛЕНИЕ(РеализацияТоваровУслуг.Ссылка)                           КАК Ссылка,
+            ПРЕДСТАВЛЕНИЕ(РеализацияТоваровУслуг.Сделка.КонтактноеЛицоКонтрагента) КАК Покупатель,
+            ПРЕДСТАВЛЕНИЕ(РеализацияТоваровУслуг.Сделка)                           КАК Сделка,
+            РеализацияТоваровУслуг.СуммаДокумента                                  КАК СуммаДокумента,
+            РеализацияТоваровУслуг.ДоговорКонтрагента.Наименование                 КАК Договор,
+            РеализацияТоваровУслуг.Подразделение.Наименование                      КАК Подразделение,
+            РеализацияТоваровУслуг.НомерЧекаККМ                                    КАК НомерЧекаККМ,
+            РеализацияТоваровУслуг.ЧекНомерФП                                      КАК ЧекНомерФП,
+            РеализацияТоваровУслуг.ДатаПечатиЧека                                  КАК ДатаПечатиЧека
         ИЗ
             Документ.РеализацияТоваровУслуг КАК РеализацияТоваровУслуг
         ГДЕ
