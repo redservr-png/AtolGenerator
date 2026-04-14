@@ -51,9 +51,21 @@ public static class OneCService
             Marshal.ReleaseComObject(connector);
             return $"OK: подключено (конфигурация v{version})";
         }
+        catch (COMException ex)
+        {
+            var hint = ex.HResult switch
+            {
+                unchecked((int)0x8002801D) =>
+                    " → Запустите от Администратора: regsvr32 \"C:\\Program Files\\1cv8\\[версия]\\bin\\comcntr.dll\"",
+                unchecked((int)0x80040154) =>
+                    " → V83.COMConnector не зарегистрирован. Установите клиент 1С.",
+                _ => string.Empty
+            };
+            return $"Ошибка COM (0x{ex.HResult:X8}): {ex.Message}{hint}";
+        }
         catch (Exception ex)
         {
-            return $"Ошибка: {ex.Message}";
+            return $"Ошибка ({ex.GetType().Name}): {ex.Message}";
         }
     }
 
