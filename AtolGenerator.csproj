@@ -9,14 +9,16 @@
     <RootNamespace>AtolGenerator</RootNamespace>
     <AssemblyName>AtolGenerator</AssemblyName>
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
-<InvariantGlobalization>false</InvariantGlobalization>
+    <InvariantGlobalization>false</InvariantGlobalization>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <!-- x86 required: V83.COMConnector (1C COM connector) is 32-bit only -->
+    <PlatformTarget>x86</PlatformTarget>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <RuntimeIdentifier>win-x86</RuntimeIdentifier>
     <DebugType>none</DebugType>
   </PropertyGroup>
 
