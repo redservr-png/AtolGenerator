@@ -130,12 +130,11 @@ public static class OneCService
 
                 try
                 {
-                    var ssylka    = Str(selection.Ссылка);
-                    var sdelka    = Str(selection.Сделка);
-                    var docNumber = ExtractDocNumber(ssylka);
-                    var docDate   = ExtractDate(ssylka);
-                    var orderNum  = ExtractDocNumber(sdelka);
-                    var orderDate = ExtractDate(sdelka);
+                    // Скалярные поля — строки и даты, никаких COM-объектов
+                    var docNumber = Str(selection.НомерДок);
+                    var docDate   = ToDateTime(selection.Дата);
+                    var orderNum  = Str(selection.НомерЗаказа);
+                    var orderDate = ToDateTime(selection.ДатаЗаказа);
 
                     var checkDt  = ToDateTime(selection.ДатаПечатиЧека);
                     var checkNum = Str(selection.НомерЧекаККМ);
@@ -148,9 +147,13 @@ public static class OneCService
                     result.Add(new OneCRealization
                     {
                         DocNumber    = docNumber,
-                        DocDate      = docDate,
+                        DocDate      = docDate > DateTime.MinValue
+                                        ? docDate.ToString("dd.MM.yyyy")
+                                        : string.Empty,
                         OrderNumber  = orderNum,
-                        OrderDate    = orderDate,
+                        OrderDate    = orderDate > DateTime.MinValue
+                                        ? orderDate.ToString("dd.MM.yyyy HH:mm:ss")
+                                        : string.Empty,
                         CustomerName = Str(selection.Покупатель),
                         Amount       = ToDouble(selection.СуммаДокумента),
                         IsService    = isService,
@@ -237,18 +240,21 @@ public static class OneCService
     }
 
     // ── Запрос к УТ 10.3 ─────────────────────────────────────────────────────
-    // ПРЕДСТАВЛЕНИЕ() преобразует ссылочные объекты в строку прямо в запросе
+    // Используем скалярные атрибуты (строки/числа/даты) вместо ПРЕДСТАВЛЕНИЕ(),
+    // чтобы избежать ошибки COM NullReferenceException при выполнении запроса.
     private static string BuildQuery() => """
         ВЫБРАТЬ
-            ПРЕДСТАВЛЕНИЕ(РеализацияТоваровУслуг.Ссылка)                           КАК Ссылка,
-            ПРЕДСТАВЛЕНИЕ(РеализацияТоваровУслуг.Сделка.КонтактноеЛицоКонтрагента) КАК Покупатель,
-            ПРЕДСТАВЛЕНИЕ(РеализацияТоваровУслуг.Сделка)                           КАК Сделка,
-            РеализацияТоваровУслуг.СуммаДокумента                                  КАК СуммаДокумента,
-            РеализацияТоваровУслуг.ДоговорКонтрагента.Наименование                 КАК Договор,
-            РеализацияТоваровУслуг.Подразделение.Наименование                      КАК Подразделение,
-            РеализацияТоваровУслуг.НомерЧекаККМ                                    КАК НомерЧекаККМ,
-            РеализацияТоваровУслуг.ЧекНомерФП                                      КАК ЧекНомерФП,
-            РеализацияТоваровУслуг.ДатаПечатиЧека                                  КАК ДатаПечатиЧека
+            РеализацияТоваровУслуг.Номер                                            КАК НомерДок,
+            РеализацияТоваровУслуг.Дата                                             КАК Дата,
+            РеализацияТоваровУслуг.Сделка.Номер                                     КАК НомерЗаказа,
+            РеализацияТоваровУслуг.Сделка.Дата                                      КАК ДатаЗаказа,
+            РеализацияТоваровУслуг.Сделка.КонтактноеЛицоКонтрагента.Наименование   КАК Покупатель,
+            РеализацияТоваровУслуг.СуммаДокумента                                   КАК СуммаДокумента,
+            РеализацияТоваровУслуг.ДоговорКонтрагента.Наименование                  КАК Договор,
+            РеализацияТоваровУслуг.Подразделение.Наименование                       КАК Подразделение,
+            РеализацияТоваровУслуг.НомерЧекаККМ                                     КАК НомерЧекаККМ,
+            РеализацияТоваровУслуг.ЧекНомерФП                                       КАК ЧекНомерФП,
+            РеализацияТоваровУслуг.ДатаПечатиЧека                                   КАК ДатаПечатиЧека
         ИЗ
             Документ.РеализацияТоваровУслуг КАК РеализацияТоваровУслуг
         ГДЕ
