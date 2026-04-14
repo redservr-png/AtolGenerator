@@ -280,11 +280,21 @@ public class MainViewModel : BaseViewModel
         SaveAtolSettingsCommand    = new RelayCommand(_ => SaveAtolSettings());
         PunchViaAtolCommand        = new AsyncRelayCommand(PunchViaAtolAsync);
 
-        // Загружаем сохранённые настройки
+        // Загружаем сохранённые настройки АТОЛ
         var saved = AtolCredentials.Load();
         AtolLogin     = saved.Login;
         AtolPassword  = saved.Password;
         AtolGroupCode = saved.GroupCode;
+
+        // Загружаем сохранённые настройки 1С
+        var savedOneC = OneCConnectionSettings.Load();
+        if (!string.IsNullOrEmpty(savedOneC.Server))
+        {
+            OneCServer   = savedOneC.Server;
+            OneCDatabase = savedOneC.Database;
+            OneCUser     = savedOneC.User;
+            OneCPassword = savedOneC.Password;
+        }
     }
 
     // ── Logic ─────────────────────────────────────────────────────────────────
@@ -511,6 +521,7 @@ public class MainViewModel : BaseViewModel
         OneCStatus = "Загрузка данных из 1С...";
         StatusText = "Загрузка из 1С...";
         var settings = BuildOneCSettings();
+        settings.Save();
 
         List<OneCRealization> realizations;
         try

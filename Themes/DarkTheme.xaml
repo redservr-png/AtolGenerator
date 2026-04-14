@@ -143,6 +143,45 @@
     </Setter>
   </Style>
 
+  <!-- ── PASSWORDBOX ── -->
+  <Style TargetType="PasswordBox">
+    <Setter Property="Background"  Value="{StaticResource BrushSurface2}"/>
+    <Setter Property="Foreground"  Value="{StaticResource BrushText}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Padding"     Value="9,8"/>
+    <Setter Property="FontFamily"  Value="Segoe UI"/>
+    <Setter Property="FontSize"    Value="14"/>
+    <Setter Property="CaretBrush"  Value="{StaticResource BrushAccent}"/>
+    <Setter Property="SelectionBrush" Value="{StaticResource BrushAccent}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="PasswordBox">
+          <Border x:Name="border"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="7">
+            <ScrollViewer x:Name="PART_ContentHost"
+                          Margin="{TemplateBinding Padding}"
+                          VerticalScrollBarVisibility="Hidden"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsFocused" Value="True">
+              <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource BrushAccent}"/>
+              <Setter TargetName="border" Property="Effect">
+                <Setter.Value>
+                  <DropShadowEffect Color="{StaticResource ColorAccent}" BlurRadius="8"
+                                    ShadowDepth="0" Opacity="0.25"/>
+                </Setter.Value>
+              </Setter>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- ── COMBOBOX ── -->
   <Style TargetType="ComboBox">
     <Setter Property="Background"  Value="{StaticResource BrushSurface2}"/>

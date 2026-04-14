@@ -1,5 +1,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 
 namespace AtolGenerator.Services;
 
@@ -12,6 +13,26 @@ public class OneCConnectionSettings
 
     public string ConnectionString =>
         $"Srvr=\"{Server}\";Ref=\"{Database}\";Usr=\"{User}\";Pwd=\"{Password}\";";
+
+    private static string SettingsPath => Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory, "onec_settings.json");
+
+    public void Save()
+    {
+        var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(SettingsPath, json);
+    }
+
+    public static OneCConnectionSettings Load()
+    {
+        try
+        {
+            if (!File.Exists(SettingsPath)) return new();
+            var json = File.ReadAllText(SettingsPath);
+            return JsonSerializer.Deserialize<OneCConnectionSettings>(json) ?? new();
+        }
+        catch { return new(); }
+    }
 }
 
 public class OneCRealization
