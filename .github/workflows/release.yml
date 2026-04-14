@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # нужен для generate_release_notes
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -24,7 +26,7 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      - name: Publish (self-contained exe)
+      - name: Publish x64
         run: >
           dotnet publish AtolGenerator.csproj
           -c Release
@@ -32,25 +34,62 @@ jobs:
           --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
-          -o publish/
+          -o publish/x64/
 
-      - name: Upload artifact (всегда)
+      - name: Publish x86
+        run: >
+          dotnet publish AtolGenerator.csproj
+          -c Release
+          -r win-x86
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish/x86/
+
+      - name: Переименовать exe
+        run: |
+          Rename-Item publish/x64/AtolGenerator.exe AtolGenerator-x64.exe
+          Rename-Item publish/x86/AtolGenerator.exe AtolGenerator-x86.exe
+        shell: pwsh
+
+      - name: Upload artifact x64
         uses: actions/upload-artifact@v4
         with:
-          name: AtolGenerator-exe
-          path: publish/AtolGenerator.exe
+          name: AtolGenerator-x64
+          path: publish/x64/AtolGenerator-x64.exe
+
+      - name: Upload artifact x86
+        uses: actions/upload-artifact@v4
+        with:
+          name: AtolGenerator-x86
+          path: publish/x86/AtolGenerator-x86.exe
 
       - name: Create Release (только при теге v*)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          files: publish/AtolGenerator.exe
+          files: |
+            publish/x64/AtolGenerator-x64.exe
+            publish/x86/AtolGenerator-x86.exe
           name: АТОЛ Чек-генератор ${{ github.ref_name }}
+          generate_release_notes: true
           body: |
             ## Скачать и запустить
 
-            1. Нажмите **AtolGenerator.exe** ниже
-            2. Запустите — установка не нужна
+            | Файл | Когда использовать |
+            |---|---|
+            | `AtolGenerator-x64.exe` | Windows 10/11 **64-bit** (большинство компьютеров) |
+            | `AtolGenerator-x86.exe` | Windows **32-bit** или если 1С-коннектор 32-bit |
 
-            **Требования:** Windows 10/11 x64
+            > Установка не нужна — просто запустите exe.
+
+            ### Подключение к 1С
+            Для загрузки реализаций из 1С требуется зарегистрированный `comcntr.dll`.
+            Если появляется ошибка `0x8002801D`, запустите от Администратора:
+            ```
+            regsvr32 "C:\Program Files\1cv8\[версия]\bin\comcntr.dll"
+            ```
+
+            ---
+            ### Изменения в этой версии

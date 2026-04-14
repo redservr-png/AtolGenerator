@@ -16,8 +16,8 @@
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <DebugType>none</DebugType>
+    <!-- RuntimeIdentifier задаётся через -r при dotnet publish в CI -->
   </PropertyGroup>
 
   <ItemGroup>
