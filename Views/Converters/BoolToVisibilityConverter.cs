@@ -44,6 +44,16 @@ public class NonZeroToBoolConverter : IValueConverter
         => throw new NotImplementedException();
 }
 
+[ValueConversion(typeof(bool), typeof(bool))]
+public class InverseBoolConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is not true;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is not true;
+}
+
 [ValueConversion(typeof(string), typeof(bool))]
 public class StringEqualConverter : IValueConverter
 {

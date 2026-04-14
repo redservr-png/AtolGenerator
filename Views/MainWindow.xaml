@@ -20,6 +20,15 @@
     <cv:ZeroToVisibilityConverter        x:Key="ZeroVis"/>
     <cv:NonZeroToBoolConverter           x:Key="NonZeroBool"/>
     <cv:StringEqualConverter             x:Key="StrEq"/>
+    <cv:InverseBoolConverter             x:Key="InvBool"/>
+
+    <!-- Стиль текста в ячейках DataGrid -->
+    <Style x:Key="DataGridTextStyle" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource BrushText2}"/>
+      <Setter Property="FontSize"   Value="12"/>
+      <Setter Property="Padding"    Value="0,0,4,0"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
   </Window.Resources>
 
   <Grid>
@@ -59,6 +68,10 @@
     <!-- ══════════ CONTENT ══════════ -->
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <Grid Margin="18,16,18,16">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
           <ColumnDefinition Width="18"/>
@@ -66,7 +79,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- ════ LEFT COLUMN ════ -->
-        <StackPanel Grid.Column="0">
+        <StackPanel Grid.Row="0" Grid.Column="0">
 
           <!-- Tabs -->
           <Border Background="{StaticResource BrushSurface2}"
@@ -187,7 +200,93 @@
                         Padding="13,7" FontSize="13"
                         Visibility="{Binding IsRealizationTab, Converter={StaticResource BoolVis}}"
                         Command="{Binding ImportExcelCommand}"/>
+                <Button Content="🔗  Загрузить из 1С"
+                        Style="{StaticResource BtnSecondary}"
+                        Padding="13,7" FontSize="13" Margin="8,0,0,0"
+                        Visibility="{Binding IsRealizationTab, Converter={StaticResource BoolVis}}"
+                        Command="{Binding ToggleOneCPanelCommand}"/>
               </WrapPanel>
+
+              <!-- 1C settings panel -->
+              <Border Visibility="{Binding OneCPanelVisible, Converter={StaticResource BoolVis}}"
+                      Background="{StaticResource BrushSurface2}"
+                      BorderBrush="{StaticResource BrushBorder}"
+                      BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,10,0,0">
+                <StackPanel>
+                  <TextBlock Text="ПОДКЛЮЧЕНИЕ К 1С" FontSize="11" FontWeight="Bold"
+                             Foreground="{StaticResource BrushAccent2}" Margin="0,0,0,10"/>
+
+                  <!-- V83 not found warning -->
+                  <Border Background="#1AFF6B00" BorderBrush="#44FF6B00"
+                          BorderThickness="1" CornerRadius="6" Padding="10,7" Margin="0,0,0,10"
+                          Visibility="{Binding IsOneCAvailable, Converter={StaticResource InvBoolVis}}">
+                    <TextBlock Text="⚠️ Компонент V83.COMConnector не найден. Установите клиент 1С на этот компьютер."
+                               FontSize="12" Foreground="{StaticResource BrushOrange}" TextWrapping="Wrap"/>
+                  </Border>
+
+                  <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                      <TextBlock Text="Сервер 1С" Style="{StaticResource FieldLabel}"/>
+                      <TextBox Text="{Binding OneCServer, UpdateSourceTrigger=PropertyChanged}"
+                               Tag="server1c"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                      <TextBlock Text="Имя базы (Ref)" Style="{StaticResource FieldLabel}"/>
+                      <TextBox Text="{Binding OneCDatabase, UpdateSourceTrigger=PropertyChanged}"
+                               Tag="ut_new"/>
+                    </StackPanel>
+                  </Grid>
+                  <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                      <TextBlock Text="Пользователь" Style="{StaticResource FieldLabel}"/>
+                      <TextBox Text="{Binding OneCUser, UpdateSourceTrigger=PropertyChanged}"
+                               Tag="Администратор"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                      <TextBlock Text="Пароль" Style="{StaticResource FieldLabel}"/>
+                      <PasswordBox Tag="••••••"
+                                   cv:PasswordHelper.Attach="True"
+                                   cv:PasswordHelper.Password="{Binding OneCPassword, Mode=TwoWay}"/>
+                    </StackPanel>
+                  </Grid>
+                  <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                      <TextBlock Text="Дата от" Style="{StaticResource FieldLabel}"/>
+                      <TextBox Text="{Binding OneCFromDate, UpdateSourceTrigger=PropertyChanged}"
+                               Tag="дд.мм.гггг"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                      <TextBlock Text="Дата до" Style="{StaticResource FieldLabel}"/>
+                      <TextBox Text="{Binding OneCToDate, UpdateSourceTrigger=PropertyChanged}"
+                               Tag="дд.мм.гггг"/>
+                    </StackPanel>
+                  </Grid>
+
+                  <WrapPanel>
+                    <Button Content="🔌  Проверить подключение"
+                            Style="{StaticResource BtnSecondary}"
+                            Padding="11,6" FontSize="12"
+                            Command="{Binding TestOneCCommand}"/>
+                    <Button Content="⬇  Загрузить реализации"
+                            Style="{StaticResource BtnPrimary}"
+                            Padding="11,6" FontSize="12" Margin="8,0,0,0"
+                            Command="{Binding LoadFromOneCCommand}"/>
+                  </WrapPanel>
+                  <TextBlock Text="{Binding OneCStatus}"
+                             FontSize="12" Foreground="{StaticResource BrushText2}"
+                             Margin="0,8,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+              </Border>
+
             </StackPanel>
           </Border>
 
@@ -333,7 +432,7 @@
         </StackPanel>
 
         <!-- ════ RIGHT COLUMN ════ -->
-        <StackPanel Grid.Column="2">
+        <StackPanel Grid.Row="0" Grid.Column="2">
 
           <!-- Orders list card -->
           <Border Style="{StaticResource Card}" Margin="0,0,0,14">
@@ -534,6 +633,229 @@
           </Border>
 
         </StackPanel>
+
+        <!-- ════ 1С РЕАЛИЗАЦИИ — полноширинная таблица ════ -->
+        <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                Background="{StaticResource BrushSurface1}"
+                BorderBrush="{StaticResource BrushBorder}"
+                BorderThickness="1" CornerRadius="10" Padding="16"
+                Margin="0,14,0,0"
+                Visibility="{Binding ShowLoadedRealizations, Converter={StaticResource BoolVis}}">
+          <StackPanel>
+
+            <!-- Заголовок + кнопки -->
+            <Grid Margin="0,0,0,12">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+
+              <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                        CornerRadius="2" Margin="0,0,7,0"/>
+                <TextBlock Style="{StaticResource SectionTitle}" Margin="0">
+                  <Run Text="РЕАЛИЗАЦИИ ИЗ 1С"/>
+                </TextBlock>
+                <TextBlock FontSize="12" Foreground="{StaticResource BrushText3}" Margin="8,0,0,0"
+                           VerticalAlignment="Center">
+                  <Run Text="{Binding TotalOneCLoaded, Mode=OneWay}"/>
+                  <Run Text=" записей · выбрано: "/>
+                  <Run Text="{Binding SelectedOneCCount, Mode=OneWay}" FontWeight="Bold"
+                       Foreground="{StaticResource BrushAccent2}"/>
+                </TextBlock>
+              </StackPanel>
+
+              <WrapPanel Grid.Column="2" Orientation="Horizontal">
+                <Button Content="Выбрать все"
+                        Style="{StaticResource BtnGhost}"
+                        Padding="10,5" FontSize="12" Margin="0,0,6,0"
+                        Command="{Binding SelectAllOneCCommand}"/>
+                <Button Content="Снять все"
+                        Style="{StaticResource BtnGhost}"
+                        Padding="10,5" FontSize="12" Margin="0,0,6,0"
+                        Command="{Binding DeselectAllOneCCommand}"/>
+                <Button Style="{StaticResource BtnPrimary}"
+                        Padding="12,5" FontSize="12"
+                        Command="{Binding AddSelectedToOrdersCommand}">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="➕  Добавить выбранные (" Margin="0"/>
+                    <TextBlock Text="{Binding SelectedOneCCount, Mode=OneWay}" FontWeight="Bold"/>
+                    <TextBlock Text=")" Margin="0"/>
+                  </StackPanel>
+                </Button>
+              </WrapPanel>
+            </Grid>
+
+            <!-- DataGrid -->
+            <DataGrid ItemsSource="{Binding LoadedRealizations}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      CanUserReorderColumns="False"
+                      CanUserResizeRows="False"
+                      SelectionMode="Single"
+                      SelectionUnit="FullRow"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="Horizontal"
+                      RowHeaderWidth="0"
+                      MaxHeight="420"
+                      BorderThickness="1"
+                      BorderBrush="{StaticResource BrushBorder}"
+                      Background="{StaticResource BrushSurface2}"
+                      RowBackground="{StaticResource BrushSurface1}"
+                      AlternatingRowBackground="{StaticResource BrushSurface2}"
+                      Foreground="{StaticResource BrushText}"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto">
+
+              <DataGrid.Resources>
+                <Style TargetType="DataGridColumnHeader">
+                  <Setter Property="Background"   Value="{StaticResource BrushSurface2}"/>
+                  <Setter Property="Foreground"   Value="{StaticResource BrushText3}"/>
+                  <Setter Property="FontSize"     Value="11"/>
+                  <Setter Property="FontWeight"   Value="Bold"/>
+                  <Setter Property="Padding"      Value="8,6"/>
+                  <Setter Property="BorderBrush"  Value="{StaticResource BrushBorder}"/>
+                  <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                </Style>
+                <Style TargetType="DataGridCell">
+                  <Setter Property="BorderThickness" Value="0"/>
+                  <Setter Property="Padding"         Value="8,5"/>
+                  <Setter Property="Template">
+                    <Setter.Value>
+                      <ControlTemplate TargetType="DataGridCell">
+                        <Border Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}">
+                          <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                      </ControlTemplate>
+                    </Setter.Value>
+                  </Setter>
+                </Style>
+              </DataGrid.Resources>
+
+              <!-- Строки: уже пробитые — приглушённый фон -->
+              <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                  <Setter Property="Background" Value="Transparent"/>
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding HasCheck}" Value="True">
+                      <Setter Property="Opacity" Value="0.45"/>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </DataGrid.RowStyle>
+
+              <DataGrid.Columns>
+
+                <!-- Галочка -->
+                <DataGridTemplateColumn Width="36" CanUserSort="False">
+                  <DataGridTemplateColumn.Header>
+                    <TextBlock Text="✓" FontSize="12" HorizontalAlignment="Center"/>
+                  </DataGridTemplateColumn.Header>
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                IsEnabled="{Binding HasCheck, Converter={StaticResource InvBool}}"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Реализация -->
+                <DataGridTextColumn Header="Реализация" Binding="{Binding DocNumber}"
+                                    Width="130" IsReadOnly="True"
+                                    ElementStyle="{StaticResource DataGridTextStyle}"/>
+
+                <!-- Дата -->
+                <DataGridTextColumn Header="Дата" Binding="{Binding DocDate}"
+                                    Width="88" IsReadOnly="True"
+                                    ElementStyle="{StaticResource DataGridTextStyle}"/>
+
+                <!-- Заказ -->
+                <DataGridTextColumn Header="Заказ покупателя" Binding="{Binding OrderNumber}"
+                                    Width="130" IsReadOnly="True"
+                                    ElementStyle="{StaticResource DataGridTextStyle}"/>
+
+                <!-- Покупатель -->
+                <DataGridTextColumn Header="Покупатель" Binding="{Binding CustomerName}"
+                                    Width="*" IsReadOnly="True"
+                                    ElementStyle="{StaticResource DataGridTextStyle}"/>
+
+                <!-- Город -->
+                <DataGridTextColumn Header="Город" Binding="{Binding City}"
+                                    Width="110" IsReadOnly="True"
+                                    ElementStyle="{StaticResource DataGridTextStyle}"/>
+
+                <!-- Сумма -->
+                <DataGridTextColumn Header="Сумма, ₽"
+                                    Binding="{Binding Amount, StringFormat={}{0:N2}}"
+                                    Width="90" IsReadOnly="True">
+                  <DataGridTextColumn.ElementStyle>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="FontWeight"         Value="SemiBold"/>
+                      <Setter Property="HorizontalAlignment" Value="Right"/>
+                      <Setter Property="Foreground"         Value="{StaticResource BrushGreen}"/>
+                      <Setter Property="Padding"            Value="0,0,8,0"/>
+                    </Style>
+                  </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+
+                <!-- Агент -->
+                <DataGridTemplateColumn Header="Агент" Width="52" CanUserSort="False">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <TextBlock HorizontalAlignment="Center" FontSize="13"
+                                 ToolTip="Агентский договор (НДС: нет)">
+                        <TextBlock.Style>
+                          <Style TargetType="TextBlock">
+                            <Setter Property="Text"       Value=""/>
+                            <Setter Property="Foreground" Value="Transparent"/>
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsService}" Value="True">
+                                <Setter Property="Text"       Value="🔧"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushText}"/>
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </TextBlock.Style>
+                      </TextBlock>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Чек -->
+                <DataGridTemplateColumn Header="Чек" Width="58" CanUserSort="False">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                              CornerRadius="4" Padding="5,2">
+                        <Border.Style>
+                          <Style TargetType="Border">
+                            <Setter Property="Background"  Value="#1A4C8AF5"/>
+                            <Setter Property="Visibility"  Value="Collapsed"/>
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding HasCheck}" Value="True">
+                                <Setter Property="Background" Value="#1AFF4444"/>
+                                <Setter Property="Visibility" Value="Visible"/>
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Border.Style>
+                        <TextBlock Text="пробит" FontSize="10" FontWeight="Bold"
+                                   Foreground="{StaticResource BrushRed}"
+                                   ToolTip="{Binding CheckDate}"/>
+                      </Border>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+              </DataGrid.Columns>
+            </DataGrid>
+
+          </StackPanel>
+        </Border>
 
       </Grid>
     </ScrollViewer>

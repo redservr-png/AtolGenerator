@@ -24,6 +24,7 @@ public class MainViewModel : BaseViewModel
             OnPropertyChanged(nameof(ShowPaymentType));
             OnPropertyChanged(nameof(ShowItemsSection));
             OnPropertyChanged(nameof(ShowBuyRefundOption));
+            OnPropertyChanged(nameof(OneCPanelVisible));
             // Reset to sell on tab switch
             if (CheckType is "buy_refund" && value == "payment")
                 CheckType = "sell";
@@ -158,6 +159,17 @@ public class MainViewModel : BaseViewModel
     // ── Order list ───────────────────────────────────────────────────────────
     public ObservableCollection<OrderEntry> Orders { get; } = new();
 
+    // ── 1C staging table ─────────────────────────────────────────────────────
+    public ObservableCollection<OneCRealizationViewModel> LoadedRealizations { get; } = new();
+    private bool _showLoadedRealizations;
+    public bool ShowLoadedRealizations
+    {
+        get => _showLoadedRealizations;
+        set => Set(ref _showLoadedRealizations, value);
+    }
+    public int SelectedOneCCount => LoadedRealizations.Count(r => r.IsSelected && !r.HasCheck);
+    public int TotalOneCLoaded   => LoadedRealizations.Count;
+
     // ── Results ──────────────────────────────────────────────────────────────
     public ObservableCollection<GenerationResult> Results { get; } = new();
 
@@ -175,6 +187,33 @@ public class MainViewModel : BaseViewModel
     public bool   ToastVisible { get => _toastVisible; set => Set(ref _toastVisible, value); }
     public bool   ToastIsError { get => _toastIsError; set => Set(ref _toastIsError, value); }
 
+    // ── 1C Connection ────────────────────────────────────────────────────────
+    private string _oneCServer   = string.Empty;
+    private string _oneCDatabase = string.Empty;
+    private string _oneCUser     = string.Empty;
+    private string _oneCPassword = string.Empty;
+    private string _oneCFromDate = DateTime.Today.AddDays(-7).ToString("dd.MM.yyyy");
+    private string _oneCToDate   = DateTime.Today.ToString("dd.MM.yyyy");
+    private string _oneCStatus   = string.Empty;
+    private bool   _showOneCPanel;
+
+    public string OneCServer   { get => _oneCServer;   set => Set(ref _oneCServer,   value); }
+    public string OneCDatabase { get => _oneCDatabase; set => Set(ref _oneCDatabase, value); }
+    public string OneCUser     { get => _oneCUser;     set => Set(ref _oneCUser,     value); }
+    public string OneCPassword { get => _oneCPassword; set => Set(ref _oneCPassword, value); }
+    public string OneCFromDate { get => _oneCFromDate; set => Set(ref _oneCFromDate, value); }
+    public string OneCToDate   { get => _oneCToDate;   set => Set(ref _oneCToDate,   value); }
+    public string OneCStatus   { get => _oneCStatus;   set => Set(ref _oneCStatus,   value); }
+
+    public bool ShowOneCPanel
+    {
+        get => _showOneCPanel;
+        set { Set(ref _showOneCPanel, value); OnPropertyChanged(nameof(OneCPanelVisible)); }
+    }
+    public bool OneCPanelVisible => ShowOneCPanel && IsRealizationTab;
+
+    public bool IsOneCAvailable => OneCService.IsAvailable();
+
     // ── Commands ─────────────────────────────────────────────────────────────
     public ICommand ParseBulkCommand       { get; }
     public ICommand AddSingleCommand       { get; }
@@ -185,6 +224,12 @@ public class MainViewModel : BaseViewModel
     public ICommand DeleteItemCommand      { get; }
     public ICommand SwitchTabCommand       { get; }
     public ICommand ImportExcelCommand     { get; }
+    public ICommand ToggleOneCPanelCommand     { get; }
+    public ICommand TestOneCCommand            { get; }
+    public ICommand LoadFromOneCCommand        { get; }
+    public ICommand SelectAllOneCCommand       { get; }
+    public ICommand DeselectAllOneCCommand     { get; }
+    public ICommand AddSelectedToOrdersCommand { get; }
 
     // ── Skipped rows from Excel import ───────────────────────────────────────
     public ObservableCollection<SkippedRow> SkippedRows { get; } = new();
@@ -200,8 +245,14 @@ public class MainViewModel : BaseViewModel
         OpenFolderCommand  = new RelayCommand(_ => FileHelper.OpenFolder(FileHelper.OutputDir));
         AddItemCommand     = new RelayCommand(_ => CurrentItems.Add(new OrderItemViewModel()));
         DeleteItemCommand  = new RelayCommand(o => { if (o is OrderItemViewModel vm) CurrentItems.Remove(vm); });
-        SwitchTabCommand   = new RelayCommand(t => { if (t is string s) Tab = s; });
-        ImportExcelCommand = new RelayCommand(_ => ImportExcel());
+        SwitchTabCommand       = new RelayCommand(t => { if (t is string s) Tab = s; });
+        ImportExcelCommand     = new RelayCommand(_ => ImportExcel());
+        ToggleOneCPanelCommand     = new RelayCommand(_ => ShowOneCPanel = !ShowOneCPanel);
+        TestOneCCommand            = new AsyncRelayCommand(TestOneCAsync);
+        LoadFromOneCCommand        = new AsyncRelayCommand(LoadFromOneCAsync);
+        SelectAllOneCCommand       = new RelayCommand(_ => SetAllOneCSelected(true));
+        DeselectAllOneCCommand     = new RelayCommand(_ => SetAllOneCSelected(false));
+        AddSelectedToOrdersCommand = new RelayCommand(_ => AddSelectedToOrders());
     }
 
     // ── Logic ─────────────────────────────────────────────────────────────────
@@ -319,6 +370,120 @@ public class MainViewModel : BaseViewModel
         {
             ShowToast($"Ошибка импорта: {ex.Message}", true);
         }
+    }
+
+    private OneCConnectionSettings BuildOneCSettings() => new()
+    {
+        Server   = OneCServer.Trim(),
+        Database = OneCDatabase.Trim(),
+        User     = OneCUser.Trim(),
+        Password = OneCPassword,
+    };
+
+    private async Task TestOneCAsync()
+    {
+        if (string.IsNullOrWhiteSpace(OneCServer) || string.IsNullOrWhiteSpace(OneCDatabase))
+        { OneCStatus = "Заполните сервер и базу данных"; return; }
+
+        OneCStatus = "Подключение...";
+        var settings = BuildOneCSettings();
+        var result = await Task.Run(() => OneCService.TestConnection(settings));
+        OneCStatus = result;
+    }
+
+    private async Task LoadFromOneCAsync()
+    {
+        if (string.IsNullOrWhiteSpace(OneCServer) || string.IsNullOrWhiteSpace(OneCDatabase))
+        { ShowToast("Заполните настройки 1С", true); return; }
+
+        if (!DateTime.TryParseExact(OneCFromDate, "dd.MM.yyyy",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var from))
+        { ShowToast("Неверный формат даты «от»", true); return; }
+
+        if (!DateTime.TryParseExact(OneCToDate, "dd.MM.yyyy",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var to))
+        { ShowToast("Неверный формат даты «до»", true); return; }
+
+        OneCStatus = "Загрузка данных из 1С...";
+        StatusText = "Загрузка из 1С...";
+        var settings = BuildOneCSettings();
+
+        List<OneCRealization> realizations;
+        try
+        {
+            realizations = await Task.Run(() => OneCService.LoadRealizations(settings, from, to));
+        }
+        catch (Exception ex)
+        {
+            OneCStatus = $"Ошибка: {ex.Message}";
+            ShowToast($"Ошибка загрузки из 1С: {ex.Message}", true);
+            StatusText = "Готов к работе";
+            return;
+        }
+
+        // Fill staging table
+        LoadedRealizations.Clear();
+        foreach (var r in realizations)
+        {
+            var vm = new OneCRealizationViewModel(r);
+            // Already-checked rows — pre-deselect so user can see them but won't add them
+            if (r.HasCheck) vm.IsSelected = false;
+            vm.PropertyChanged += (_, _) =>
+            {
+                OnPropertyChanged(nameof(SelectedOneCCount));
+            };
+            LoadedRealizations.Add(vm);
+        }
+
+        ShowLoadedRealizations = LoadedRealizations.Count > 0;
+        OnPropertyChanged(nameof(SelectedOneCCount));
+        OnPropertyChanged(nameof(TotalOneCLoaded));
+
+        var withCheck    = realizations.Count(r => r.HasCheck);
+        var withoutCheck = realizations.Count - withCheck;
+        OneCStatus = $"Загружено {realizations.Count}: без чека — {withoutCheck}, уже пробиты — {withCheck}";
+        ShowToast(OneCStatus, false);
+        StatusText = "Готов к работе";
+    }
+
+    private void SetAllOneCSelected(bool value)
+    {
+        foreach (var r in LoadedRealizations)
+            if (!r.HasCheck) r.IsSelected = value;
+        OnPropertyChanged(nameof(SelectedOneCCount));
+    }
+
+    private void AddSelectedToOrders()
+    {
+        var existing = new HashSet<string>(Orders.Select(o => o.OrderNum));
+        var added = 0;
+
+        foreach (var r in LoadedRealizations.Where(r => r.IsSelected && !r.HasCheck))
+        {
+            var key = string.IsNullOrEmpty(r.OrderNumber) ? r.DocNumber : r.OrderNumber;
+            if (existing.Contains(key)) continue;
+
+            Orders.Add(new OrderEntry
+            {
+                OrderNum         = r.OrderNumber,
+                OrderDate        = r.OrderDate,
+                Amount           = r.Amount,
+                CustomerName     = r.CustomerName,
+                CorrectionDate   = r.DocDate,
+                CorrectionNumber = r.DocNumber,
+                IsService        = r.IsService,
+            });
+            existing.Add(key);
+            added++;
+        }
+
+        OnPropertyChanged(nameof(OrderCount));
+        if (added > 0)
+            ShowToast($"Добавлено {added} реализаций в очередь", false);
+        else
+            ShowToast("Нет новых реализаций для добавления", true);
     }
 
     private async Task GenerateChecksAsync()
