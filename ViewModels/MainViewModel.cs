@@ -236,6 +236,7 @@ public class MainViewModel : BaseViewModel
     public ICommand ParseBulkCommand       { get; }
     public ICommand AddSingleCommand       { get; }
     public ICommand DeleteOrderCommand     { get; }
+    public ICommand ClearOrdersCommand     { get; }
     public ICommand GenerateCommand        { get; }
     public ICommand OpenFolderCommand      { get; }
     public ICommand AddItemCommand         { get; }
@@ -262,6 +263,7 @@ public class MainViewModel : BaseViewModel
         ParseBulkCommand   = new RelayCommand(ParseBulk);
         AddSingleCommand   = new RelayCommand(AddSingleOrder);
         DeleteOrderCommand = new RelayCommand(o => DeleteOrder(o as OrderEntry));
+        ClearOrdersCommand = new RelayCommand(_ => ClearOrders());
         GenerateCommand    = new AsyncRelayCommand(GenerateChecksAsync);
         OpenFolderCommand  = new RelayCommand(_ => FileHelper.OpenFolder(FileHelper.OutputDir));
         AddItemCommand     = new RelayCommand(_ => CurrentItems.Add(new OrderItemViewModel()));
@@ -363,6 +365,12 @@ public class MainViewModel : BaseViewModel
             Orders.Remove(order);
             OnPropertyChanged(nameof(OrderCount));
         }
+    }
+
+    private void ClearOrders()
+    {
+        Orders.Clear();
+        OnPropertyChanged(nameof(OrderCount));
     }
 
     private void ImportExcel()
@@ -615,7 +623,13 @@ public class MainViewModel : BaseViewModel
         foreach (var r in results) Results.Add(r);
         ShowResults = Results.Count > 0;
         StatusText  = $"Сформировано {Results.Count} чек(ов)";
-        ShowToast($"Готово! Создано {Results.Count} XML + {Results.Count} DOCX", false);
+
+        var xmlCount  = Results.Select(r => r.XmlPath).Where(p => !string.IsNullOrEmpty(p)).Distinct().Count();
+        var docxCount = Results.Count(r => r.HasDocx);
+        var toastMsg  = docxCount > 0
+            ? $"Готово! Создано {xmlCount} XML + {docxCount} DOCX"
+            : $"Готово! Создано {xmlCount} XML";
+        ShowToast(toastMsg, false);
     }
 
     public int OrderCount => Orders.Count;
