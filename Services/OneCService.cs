@@ -1,3 +1,4 @@
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace AtolGenerator.Services;
@@ -70,31 +71,65 @@ public static class OneCService
         }
     }
 
+    // Путь к лог-файлу (рядом с exe)
+    public static string LogPath { get; } = Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory, "1c_log.txt");
+
+    private static void Log(string message)
+    {
+        try
+        {
+            File.AppendAllText(LogPath,
+                $"[{DateTime.Now:dd.MM.yyyy HH:mm:ss}] {message}{Environment.NewLine}");
+        }
+        catch { /* логирование не должно ронять приложение */ }
+    }
+
     public static List<OneCRealization> LoadRealizations(
         OneCConnectionSettings s, DateTime from, DateTime to)
     {
         dynamic? conn = null;
         dynamic? connector = null;
-        var result = new List<OneCRealization>();
+        var result     = new List<OneCRealization>();
+        var skipped    = 0;
+
+        Log($"=== LoadRealizations start: {from:dd.MM.yyyy} – {to:dd.MM.yyyy} ===");
+        Log($"Строка подключения: {s.ConnectionString}");
 
         try
         {
+            Log("Создаём коннектор...");
             connector = CreateConnector();
+
+            Log("Подключаемся...");
             conn = connector.Connect(s.ConnectionString);
 
+            Log("Создаём запрос...");
             var query = conn.NewObject("Запрос");
             query.Текст = BuildQuery();
             query.УстановитьПараметр("НачалоПериода", from.Date);
             query.УстановитьПараметр("КонецПериода",  to.Date.AddDays(1).AddSeconds(-1));
 
+            Log("Выполняем запрос...");
             var queryResult = query.Выполнить();
             var selection   = queryResult.Выбрать();
+            Log("Запрос выполнен, читаем строки...");
 
-            while ((bool)selection.Следующий())
+            int row = 0;
+            bool hasNext;
+            while (true)
             {
+                try { hasNext = (bool)selection.Следующий(); }
+                catch (Exception ex)
+                {
+                    Log($"Ошибка при вызове Следующий() на строке {row}: {ex}");
+                    throw;
+                }
+                if (!hasNext) break;
+                row++;
+
                 try
                 {
-                    // Ссылка и Сделка теперь строки (ПРЕДСТАВЛЕНИЕ в запросе)
                     var ssylka    = Str(selection.Ссылка);
                     var sdelka    = Str(selection.Сделка);
                     var docNumber = ExtractDocNumber(ssylka);
@@ -102,17 +137,15 @@ public static class OneCService
                     var orderNum  = ExtractDocNumber(sdelka);
                     var orderDate = ExtractDate(sdelka);
 
-                    // Дата чека — может быть null если чек не пробит
                     var checkDt  = ToDateTime(selection.ДатаПечатиЧека);
                     var checkNum = Str(selection.НомерЧекаККМ);
                     var hasCheck = !string.IsNullOrEmpty(checkNum)
                                 && checkDt > new DateTime(2000, 1, 1);
 
-                    // Договор: если содержит "агент" → IsService
                     var dogovor   = Str(selection.Договор);
                     var isService = dogovor.IndexOf("агент", StringComparison.OrdinalIgnoreCase) >= 0;
 
-                    var r = new OneCRealization
+                    result.Add(new OneCRealization
                     {
                         DocNumber    = docNumber,
                         DocDate      = docDate,
@@ -128,15 +161,21 @@ public static class OneCService
                         CheckDate    = hasCheck
                                         ? checkDt.ToString("dd.MM.yyyy HH:mm:ss")
                                         : string.Empty,
-                    };
-                    result.Add(r);
+                    });
                 }
                 catch (Exception rowEx)
                 {
-                    // Пропускаем строку с ошибкой, не прерывая всю выгрузку
-                    System.Diagnostics.Debug.WriteLine($"[1С] пропущена строка: {rowEx.Message}");
+                    skipped++;
+                    Log($"Строка {row} пропущена: {rowEx.GetType().Name}: {rowEx.Message}{Environment.NewLine}{rowEx.StackTrace}");
                 }
             }
+
+            Log($"Готово: загружено {result.Count}, пропущено {skipped}");
+        }
+        catch (Exception ex)
+        {
+            Log($"КРИТИЧЕСКАЯ ОШИБКА: {ex.GetType().Name}: {ex.Message}{Environment.NewLine}{ex.StackTrace}");
+            throw;
         }
         finally
         {

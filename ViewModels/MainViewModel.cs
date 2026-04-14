@@ -417,8 +417,8 @@ public class MainViewModel : BaseViewModel
         }
         catch (Exception ex)
         {
-            OneCStatus = $"Ошибка: {ex.Message}";
-            ShowToast($"Ошибка загрузки из 1С: {ex.Message}", true);
+            OneCStatus = $"Ошибка: {ex.Message} — подробности в {OneCService.LogPath}";
+            ShowToast($"Ошибка загрузки из 1С. См. лог: {OneCService.LogPath}", true);
             StatusText = "Готов к работе";
             return;
         }
