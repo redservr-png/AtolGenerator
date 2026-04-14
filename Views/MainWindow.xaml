@@ -480,6 +480,28 @@
               <TextBlock Text="{Binding AtolStatus}"
                          FontSize="12" Foreground="{StaticResource BrushText2}"
                          Margin="0,8,0,0" TextWrapping="Wrap"/>
+              <!-- Блок ошибок (показывается когда есть ошибки) -->
+              <Border Background="#1AFF4444" BorderBrush="#44FF4444"
+                      BorderThickness="1" CornerRadius="6" Padding="10,8"
+                      Margin="0,8,0,0"
+                      Visibility="{Binding HasAtolError, Converter={StaticResource BoolVis}}">
+                <StackPanel>
+                  <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <TextBlock Text="❌  Ошибки пробития:"
+                               FontSize="11" FontWeight="Bold"
+                               Foreground="{StaticResource BrushRed}"/>
+                    <TextBlock Text="{Binding AtolLogPath, StringFormat='  (лог: {0})'}"
+                               FontSize="10" Foreground="{StaticResource BrushText3}"
+                               VerticalAlignment="Center"/>
+                  </StackPanel>
+                  <ScrollViewer MaxHeight="100" VerticalScrollBarVisibility="Auto"
+                                HorizontalScrollBarVisibility="Disabled">
+                    <TextBlock Text="{Binding AtolLastError}"
+                               FontSize="11" Foreground="{StaticResource BrushRed}"
+                               TextWrapping="Wrap" FontFamily="Consolas"/>
+                  </ScrollViewer>
+                </StackPanel>
+              </Border>
             </StackPanel>
           </Border>
 
@@ -579,6 +601,21 @@
                 <StackPanel Orientation="Horizontal">
                   <TextBlock Text="⚡" FontSize="15" Margin="0,0,8,0"/>
                   <TextBlock Text="Сформировать документы" FontSize="15" FontWeight="Bold"/>
+                </StackPanel>
+              </Button>
+              <Button Style="{StaticResource BtnPrimary}"
+                      Command="{Binding PunchOrdersViaAtolCommand}"
+                      IsEnabled="{Binding OrderCount, Mode=OneWay, Converter={StaticResource NonZeroBool}}"
+                      Margin="0,8,0,0" Padding="0,11">
+                <Button.Background>
+                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#1E6BD4" Offset="0"/>
+                    <GradientStop Color="#7040FF" Offset="1"/>
+                  </LinearGradientBrush>
+                </Button.Background>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                  <TextBlock Text="🔥" FontSize="15" Margin="0,0,8,0"/>
+                  <TextBlock Text="Пробить в АТОЛ Online" FontSize="15" FontWeight="Bold" Foreground="White"/>
                 </StackPanel>
               </Button>
               <TextBlock Text="Файлы сохраняются в папку atol_output/"
@@ -959,7 +996,8 @@
                           </Style>
                         </Border.Style>
                         <TextBlock Text="{Binding PunchStatus}" FontSize="11"
-                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis">
+                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding PunchStatus}">
                           <TextBlock.Style>
                             <Style TargetType="TextBlock">
                               <Setter Property="Foreground" Value="{StaticResource BrushText3}"/>

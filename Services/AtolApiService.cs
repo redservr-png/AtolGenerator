@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AtolGenerator.Constants;
+using AtolGenerator.Models;
 
 namespace AtolGenerator.Services;
 
@@ -114,7 +115,17 @@ public static class AtolApiService
 
     public static void InvalidateToken() => _cachedToken = null;
 
-    // ── Пробить чек коррекции (sell-correction) ───────────────────────────────
+    // ── Лог-файл ─────────────────────────────────────────────────────────────
+    public static string LogPath { get; } = Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory, "atol_log.txt");
+
+    private static void Log(string msg)
+    {
+        try { File.AppendAllText(LogPath, $"[{DateTime.Now:dd.MM.yyyy HH:mm:ss}] {msg}{Environment.NewLine}"); }
+        catch { }
+    }
+
+    // ── Пробить чек коррекции (sell-correction) — из 1С-таблицы ─────────────
     public static async Task<AtolPunchResult> PunchCorrectionAsync(
         AtolCredentials creds, OneCRealization r)
     {
@@ -173,6 +184,8 @@ public static class AtolApiService
             var body    = await resp.Content.ReadAsStringAsync();
             var result  = JsonSerializer.Deserialize<AtolReceiptResponse>(body, JsonOpts);
 
+            Log($"PunchCorrection [{r.DocNumber}]: HTTP {(int)resp.StatusCode} → {(body.Length > 400 ? body[..400] + "…" : body)}");
+
             if (result?.Error is { Code: not 0 } err)
             {
                 // Токен мог устареть — сбрасываем
@@ -188,6 +201,146 @@ public static class AtolApiService
         }
         catch (Exception ex)
         {
+            Log($"PunchCorrection [{r.DocNumber}]: Exception: {ex.Message}");
+            return new AtolPunchResult { Error = ex.Message };
+        }
+    }
+
+    // ── Пробить произвольный чек из списка заказов ────────────────────────────
+    // checkType: sell | sell_correction | buy_correction | sell_refund | buy_refund
+    // paymentType: cash | card | advance
+    public static async Task<AtolPunchResult> PunchOrderAsync(
+        AtolCredentials creds, OrderEntry order, string checkType, string paymentType)
+    {
+        var (token, tokenErr) = await GetTokenAsync(creds);
+        if (token is null)
+            return new AtolPunchResult { Error = $"Нет токена: {tokenErr}" };
+
+        // НДС
+        string vatType;
+        double vatSum;
+        if (order.IsService || checkType is "buy_correction" or "buy_refund")
+        {
+            vatType = "none";
+            vatSum  = order.Amount;
+        }
+        else
+        {
+            vatType = "vat22";
+            vatSum  = Math.Round(order.Amount * 22.0 / 100.0, 2);
+        }
+
+        // Тип оплаты: 0=наличные, 1=безналичные, 2=аванс
+        int payType = paymentType switch
+        {
+            "cash"    => 0,
+            "advance" => 2,
+            _         => 1,   // card по умолчанию
+        };
+
+        string   endpoint;
+        object   requestBody;
+
+        if (checkType is "sell_correction" or "buy_correction")
+        {
+            endpoint = checkType == "sell_correction" ? "sell-correction" : "buy-correction";
+
+            var baseDate   = !string.IsNullOrEmpty(order.CorrectionDate)
+                                 ? order.CorrectionDate
+                                 : order.OrderDate.Split(' ')[0];   // берём только дату
+            var baseNumber = !string.IsNullOrEmpty(order.CorrectionNumber)
+                                 ? order.CorrectionNumber
+                                 : order.OrderNum;
+
+            requestBody = new
+            {
+                timestamp   = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"),
+                external_id = Guid.NewGuid().ToString("N"),
+                correction  = new
+                {
+                    company = new
+                    {
+                        email           = AppConstants.EmailOrg,
+                        sno             = AppConstants.Sno,
+                        inn             = AppConstants.InnOrg,
+                        payment_address = AppConstants.PaymentAddress,
+                    },
+                    correction_info = new
+                    {
+                        type        = "self",
+                        base_date   = baseDate,
+                        base_number = baseNumber,
+                    },
+                    payments = new[] { new { type = payType, sum = order.Amount } },
+                    vats     = new[] { new { type = vatType, sum = vatSum } },
+                    cashier  = AppConstants.CashierName,
+                }
+            };
+        }
+        else
+        {
+            // sell, sell_refund, buy_refund
+            endpoint = checkType;   // URL совпадает с именем операции
+
+            requestBody = new
+            {
+                timestamp   = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"),
+                external_id = Guid.NewGuid().ToString("N"),
+                receipt     = new
+                {
+                    client  = new { email = AppConstants.EmailOrg },
+                    company = new
+                    {
+                        email           = AppConstants.EmailOrg,
+                        sno             = AppConstants.Sno,
+                        inn             = AppConstants.InnOrg,
+                        payment_address = AppConstants.PaymentAddress,
+                    },
+                    items = new[]
+                    {
+                        new
+                        {
+                            name           = $"{(order.IsService ? "Услуга" : "Товар")} по заказу {order.OrderNum}",
+                            price          = order.Amount,
+                            quantity       = 1.0,
+                            sum            = order.Amount,
+                            payment_method = "full_payment",
+                            payment_object = order.IsService ? "service" : "commodity",
+                            vat            = new { type = vatType },
+                        }
+                    },
+                    payments = new[] { new { type = payType, sum = order.Amount } },
+                    vats     = new[] { new { type = vatType, sum = vatSum } },
+                    total    = order.Amount,
+                    cashier  = AppConstants.CashierName,
+                }
+            };
+        }
+
+        try
+        {
+            var json    = JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var resp    = await Http.PostAsync($"{creds.GroupCode}/{endpoint}?token={token}", content);
+            var body    = await resp.Content.ReadAsStringAsync();
+            Log($"PunchOrder [{checkType}] {order.OrderNum}: HTTP {(int)resp.StatusCode} → {(body.Length > 400 ? body[..400] + "…" : body)}");
+
+            var result = JsonSerializer.Deserialize<AtolReceiptResponse>(body, JsonOpts);
+
+            if (result?.Error is { Code: not 0 } err)
+            {
+                if (err.Code == 3 || err.Code == 4) InvalidateToken();
+                return new AtolPunchResult { Error = $"АТОЛ {err.Code}: {err.Text}" };
+            }
+
+            if (string.IsNullOrEmpty(result?.Uuid))
+                return new AtolPunchResult { Error = $"UUID не получен. Ответ: {body}" };
+
+            return await PollStatusAsync(creds.GroupCode, endpoint, result.Uuid, token);
+        }
+        catch (Exception ex)
+        {
+            Log($"PunchOrder [{checkType}] {order.OrderNum}: Exception: {ex.Message}");
             return new AtolPunchResult { Error = ex.Message };
         }
     }

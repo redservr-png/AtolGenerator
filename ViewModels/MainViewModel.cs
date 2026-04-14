@@ -226,6 +226,16 @@ public class MainViewModel : BaseViewModel
     public string AtolPassword  { get => _atolPassword;  set => Set(ref _atolPassword,  value); }
     public string AtolGroupCode { get => _atolGroupCode; set => Set(ref _atolGroupCode, value); }
     public string AtolStatus    { get => _atolStatus;    set => Set(ref _atolStatus,    value); }
+
+    private string _atolLastError = string.Empty;
+    public string AtolLastError
+    {
+        get => _atolLastError;
+        set { Set(ref _atolLastError, value); OnPropertyChanged(nameof(HasAtolError)); }
+    }
+    public bool   HasAtolError => !string.IsNullOrEmpty(_atolLastError);
+    public string AtolLogPath  => AtolApiService.LogPath;
+
     public bool   ShowAtolPanel
     {
         get => _showAtolPanel;
@@ -252,6 +262,7 @@ public class MainViewModel : BaseViewModel
     public ICommand ToggleAtolPanelCommand     { get; }
     public ICommand SaveAtolSettingsCommand    { get; }
     public ICommand PunchViaAtolCommand        { get; }
+    public ICommand PunchOrdersViaAtolCommand  { get; }
 
     // ── Skipped rows from Excel import ───────────────────────────────────────
     public ObservableCollection<SkippedRow> SkippedRows { get; } = new();
@@ -279,6 +290,7 @@ public class MainViewModel : BaseViewModel
         ToggleAtolPanelCommand     = new RelayCommand(_ => ShowAtolPanel = !ShowAtolPanel);
         SaveAtolSettingsCommand    = new RelayCommand(_ => SaveAtolSettings());
         PunchViaAtolCommand        = new AsyncRelayCommand(PunchViaAtolAsync);
+        PunchOrdersViaAtolCommand  = new AsyncRelayCommand(PunchOrdersViaAtolAsync);
 
         // Загружаем сохранённые настройки АТОЛ
         var saved = AtolCredentials.Load();
@@ -482,6 +494,58 @@ public class MainViewModel : BaseViewModel
         AtolStatus = $"Готово: пробито {ok}, ошибок {fail}";
         ShowToast($"Пробито через АТОЛ: {ok} чеков" + (fail > 0 ? $", ошибок: {fail}" : ""),
                   fail > 0 && ok == 0);
+    }
+
+    // ── Пробить заказы из основного списка ───────────────────────────────────
+    private async Task PunchOrdersViaAtolAsync()
+    {
+        if (Orders.Count == 0)
+        { ShowToast("Нет заказов для пробития", true); return; }
+
+        if (string.IsNullOrWhiteSpace(AtolGroupCode) || string.IsNullOrWhiteSpace(AtolLogin))
+        { ShowToast("Заполните настройки АТОЛ (кнопка 🔑 в шапке)", true); return; }
+
+        var creds = new AtolCredentials
+        {
+            Login     = AtolLogin.Trim(),
+            Password  = AtolPassword,
+            GroupCode = AtolGroupCode.Trim(),
+        };
+
+        var orders = Orders.ToList();
+        AtolLastError = string.Empty;
+        AtolStatus    = $"Пробиваем через АТОЛ 0 из {orders.Count}...";
+
+        var errors = new System.Text.StringBuilder();
+        int ok = 0, fail = 0;
+
+        for (int i = 0; i < orders.Count; i++)
+        {
+            var order = orders[i];
+            AtolStatus = $"Пробиваем {i + 1} из {orders.Count}: {order.OrderNum}...";
+            StatusText = AtolStatus;
+
+            var result = await AtolApiService.PunchOrderAsync(creds, order, CheckType, PaymentType);
+
+            if (result.Success)
+            {
+                ok++;
+            }
+            else
+            {
+                fail++;
+                errors.AppendLine($"❌ {order.OrderNum}: {result.Error}");
+            }
+        }
+
+        AtolStatus    = $"Готово: пробито {ok}, ошибок {fail}" +
+                        (fail > 0 ? $"  |  лог: {AtolApiService.LogPath}" : "");
+        AtolLastError = errors.ToString().TrimEnd();
+        StatusText    = "Готов к работе";
+
+        ShowToast(
+            $"АТОЛ Online: пробито {ok} из {orders.Count}" + (fail > 0 ? $", ошибок {fail}" : ""),
+            fail > 0 && ok == 0);
     }
 
     private OneCConnectionSettings BuildOneCSettings() => new()
