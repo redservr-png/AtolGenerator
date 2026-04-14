@@ -27,5 +27,14 @@ public class OneCRealizationViewModel : BaseViewModel
     public string CheckNumber  => Source.CheckNumber;
     public string FiscalNumber => Source.FiscalNumber;
 
+    // ── Статус пробития ───────────────────────────────────────────────────────
+    private string _punchStatus = string.Empty;
+    private bool   _punchOk;
+    private bool   _punchFail;
+
+    public string PunchStatus { get => _punchStatus; set { Set(ref _punchStatus, value); } }
+    public bool   PunchOk     { get => _punchOk;     set => Set(ref _punchOk,     value); }
+    public bool   PunchFail   { get => _punchFail;   set => Set(ref _punchFail,   value); }
+
     public OneCRealizationViewModel(OneCRealization r) => Source = r;
 }

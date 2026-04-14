@@ -216,14 +216,16 @@ public class MainViewModel : BaseViewModel
     public bool IsOneCAvailable => OneCService.IsAvailable();
 
     // ── АТОЛ Online ──────────────────────────────────────────────────────────
-    private string _atolLogin    = string.Empty;
-    private string _atolPassword = string.Empty;
-    private string _atolStatus   = string.Empty;
+    private string _atolLogin     = string.Empty;
+    private string _atolPassword  = string.Empty;
+    private string _atolGroupCode = string.Empty;
+    private string _atolStatus    = string.Empty;
     private bool   _showAtolPanel;
 
-    public string AtolLogin    { get => _atolLogin;    set => Set(ref _atolLogin,    value); }
-    public string AtolPassword { get => _atolPassword; set => Set(ref _atolPassword, value); }
-    public string AtolStatus   { get => _atolStatus;   set => Set(ref _atolStatus,   value); }
+    public string AtolLogin     { get => _atolLogin;     set => Set(ref _atolLogin,     value); }
+    public string AtolPassword  { get => _atolPassword;  set => Set(ref _atolPassword,  value); }
+    public string AtolGroupCode { get => _atolGroupCode; set => Set(ref _atolGroupCode, value); }
+    public string AtolStatus    { get => _atolStatus;    set => Set(ref _atolStatus,    value); }
     public bool   ShowAtolPanel
     {
         get => _showAtolPanel;
@@ -247,7 +249,8 @@ public class MainViewModel : BaseViewModel
     public ICommand DeselectAllOneCCommand     { get; }
     public ICommand AddSelectedToOrdersCommand { get; }
     public ICommand ToggleAtolPanelCommand     { get; }
-    public ICommand FindAtolGroupCommand       { get; }
+    public ICommand SaveAtolSettingsCommand    { get; }
+    public ICommand PunchViaAtolCommand        { get; }
 
     // ── Skipped rows from Excel import ───────────────────────────────────────
     public ObservableCollection<SkippedRow> SkippedRows { get; } = new();
@@ -272,7 +275,14 @@ public class MainViewModel : BaseViewModel
         DeselectAllOneCCommand     = new RelayCommand(_ => SetAllOneCSelected(false));
         AddSelectedToOrdersCommand = new RelayCommand(_ => AddSelectedToOrders());
         ToggleAtolPanelCommand     = new RelayCommand(_ => ShowAtolPanel = !ShowAtolPanel);
-        FindAtolGroupCommand       = new AsyncRelayCommand(FindAtolGroupAsync);
+        SaveAtolSettingsCommand    = new RelayCommand(_ => SaveAtolSettings());
+        PunchViaAtolCommand        = new AsyncRelayCommand(PunchViaAtolAsync);
+
+        // Загружаем сохранённые настройки
+        var saved = AtolCredentials.Load();
+        AtolLogin     = saved.Login;
+        AtolPassword  = saved.Password;
+        AtolGroupCode = saved.GroupCode;
     }
 
     // ── Logic ─────────────────────────────────────────────────────────────────
@@ -392,30 +402,68 @@ public class MainViewModel : BaseViewModel
         }
     }
 
-    private async Task FindAtolGroupAsync()
+    private void SaveAtolSettings()
     {
-        if (string.IsNullOrWhiteSpace(AtolLogin) || string.IsNullOrWhiteSpace(AtolPassword))
-        { AtolStatus = "Введите логин и пароль от АТОЛ Online"; return; }
+        var creds = new AtolCredentials
+        {
+            Login     = AtolLogin.Trim(),
+            Password  = AtolPassword,
+            GroupCode = AtolGroupCode.Trim(),
+        };
+        creds.Save();
+        AtolStatus = "Настройки сохранены";
+        ShowToast("Настройки АТОЛ сохранены", false);
+    }
 
-        AtolStatus = "Получаем токен...";
-        var creds = new AtolCredentials { Login = AtolLogin, Password = AtolPassword };
+    private async Task PunchViaAtolAsync()
+    {
+        var rows = LoadedRealizations
+            .Where(r => r.IsSelected && !r.HasCheck)
+            .ToList();
 
-        var (token, tokenErr) = await AtolApiService.GetTokenAsync(creds);
-        if (token is null)
-        { AtolStatus = tokenErr; return; }
+        if (rows.Count == 0)
+        { ShowToast("Нет выбранных реализаций для пробития", true); return; }
 
-        AtolStatus = $"Токен получен: {token[..Math.Min(12, token.Length)]}…  Ищем группы...";
+        if (string.IsNullOrWhiteSpace(AtolGroupCode) || string.IsNullOrWhiteSpace(AtolLogin))
+        { ShowToast("Заполните настройки АТОЛ (кнопка 🔑 в шапке)", true); return; }
 
-        var discovery = await AtolApiService.DiscoverGroupCodeAsync(token);
+        var creds = new AtolCredentials
+        {
+            Login     = AtolLogin.Trim(),
+            Password  = AtolPassword,
+            GroupCode = AtolGroupCode.Trim(),
+        };
 
-        // Сохраняем в файл рядом с exe для изучения
-        var logPath = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, "atol_discovery.txt");
-        await File.WriteAllTextAsync(logPath,
-            $"Токен: {token}\n\n{discovery}");
+        AtolStatus = $"Пробиваем 0 из {rows.Count}...";
+        int ok = 0, fail = 0;
 
-        AtolStatus = $"Готово. Результаты сохранены: {logPath}";
-        ShowToast("Откройте atol_discovery.txt рядом с exe", false);
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            AtolStatus = $"Пробиваем {i + 1} из {rows.Count}: {row.DocNumber}...";
+            row.PunchStatus = "⏳";
+
+            var result = await AtolApiService.PunchCorrectionAsync(creds, row.Source);
+
+            if (result.Success)
+            {
+                row.PunchOk     = true;
+                row.PunchFail   = false;
+                row.PunchStatus = $"✅ {result.Uuid?[..8]}…";
+                ok++;
+            }
+            else
+            {
+                row.PunchOk     = false;
+                row.PunchFail   = true;
+                row.PunchStatus = $"❌ {result.Error}";
+                fail++;
+            }
+        }
+
+        AtolStatus = $"Готово: пробито {ok}, ошибок {fail}";
+        ShowToast($"Пробито через АТОЛ: {ok} чеков" + (fail > 0 ? $", ошибок: {fail}" : ""),
+                  fail > 0 && ok == 0);
     }
 
     private OneCConnectionSettings BuildOneCSettings() => new()

@@ -447,30 +447,36 @@
                   Margin="0,0,0,14"
                   Visibility="{Binding ShowAtolPanel, Converter={StaticResource BoolVis}}">
             <StackPanel>
-              <TextBlock Text="🔑  АТОЛ ONLINE — ПОИСК GROUP CODE"
+              <TextBlock Text="🔑  АТОЛ ONLINE — НАСТРОЙКИ API"
                          FontSize="11" FontWeight="Bold"
-                         Foreground="{StaticResource BrushAccent2}"
-                         Margin="0,0,0,10"/>
+                         Foreground="{StaticResource BrushAccent2}" Margin="0,0,0,10"/>
               <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
-                  <TextBlock Text="Логин" Style="{StaticResource FieldLabel}"/>
+                  <TextBlock Text="Логин API" Style="{StaticResource FieldLabel}"/>
                   <TextBox Text="{Binding AtolLogin, UpdateSourceTrigger=PropertyChanged}"
-                           Tag="логин от online.atol.ru"/>
+                           Tag="ts-alleya-ru"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2">
-                  <TextBlock Text="Пароль" Style="{StaticResource FieldLabel}"/>
+                  <TextBlock Text="Пароль API" Style="{StaticResource FieldLabel}"/>
                   <PasswordBox Tag="••••••"
                                cv:PasswordHelper.Attach="True"
                                cv:PasswordHelper.Password="{Binding AtolPassword, Mode=TwoWay}"/>
                 </StackPanel>
               </Grid>
-              <Button Content="🔍  Получить токен и найти group_code"
-                      Style="{StaticResource BtnSecondary}"
-                      Padding="11,6" FontSize="12"
-                      Command="{Binding FindAtolGroupCommand}"/>
+              <StackPanel Margin="0,0,0,10">
+                <TextBlock Text="Group Code" Style="{StaticResource FieldLabel}"/>
+                <TextBox Text="{Binding AtolGroupCode, UpdateSourceTrigger=PropertyChanged}"
+                         Tag="ts-alleya-ru_11415"/>
+              </StackPanel>
+              <WrapPanel>
+                <Button Content="💾  Сохранить"
+                        Style="{StaticResource BtnSecondary}"
+                        Padding="11,6" FontSize="12" Margin="0,0,8,0"
+                        Command="{Binding SaveAtolSettingsCommand}"/>
+              </WrapPanel>
               <TextBlock Text="{Binding AtolStatus}"
                          FontSize="12" Foreground="{StaticResource BrushText2}"
                          Margin="0,8,0,0" TextWrapping="Wrap"/>
@@ -719,10 +725,28 @@
                         Padding="10,5" FontSize="12" Margin="0,0,6,0"
                         Command="{Binding DeselectAllOneCCommand}"/>
                 <Button Style="{StaticResource BtnPrimary}"
-                        Padding="12,5" FontSize="12"
+                        Padding="12,5" FontSize="12" Margin="0,0,6,0"
                         Command="{Binding AddSelectedToOrdersCommand}">
                   <StackPanel Orientation="Horizontal">
                     <TextBlock Text="➕  Добавить выбранные (" Margin="0"/>
+                    <TextBlock Text="{Binding SelectedOneCCount, Mode=OneWay}" FontWeight="Bold"/>
+                    <TextBlock Text=")" Margin="0"/>
+                  </StackPanel>
+                </Button>
+                <Button Padding="12,5" FontSize="12"
+                        Command="{Binding PunchViaAtolCommand}">
+                  <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource BtnPrimary}">
+                      <Setter Property="Background" Value="#CC2244AA"/>
+                      <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                          <Setter Property="Background" Value="#CC3355CC"/>
+                        </Trigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Button.Style>
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="🔥  Пробить через АТОЛ (" Margin="0"/>
                     <TextBlock Text="{Binding SelectedOneCCount, Mode=OneWay}" FontWeight="Bold"/>
                     <TextBlock Text=")" Margin="0"/>
                   </StackPanel>
@@ -899,6 +923,46 @@
                         <TextBlock Text="пробит" FontSize="10" FontWeight="Bold"
                                    Foreground="{StaticResource BrushRed}"
                                    ToolTip="{Binding CheckDate}"/>
+                      </Border>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Статус пробития -->
+                <DataGridTemplateColumn Header="АТОЛ" Width="130" CanUserSort="False">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <Border CornerRadius="4" Padding="5,2" HorizontalAlignment="Left"
+                              VerticalAlignment="Center">
+                        <Border.Style>
+                          <Style TargetType="Border">
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding PunchOk}" Value="True">
+                                <Setter Property="Background" Value="#1A44FF44"/>
+                              </DataTrigger>
+                              <DataTrigger Binding="{Binding PunchFail}" Value="True">
+                                <Setter Property="Background" Value="#1AFF4444"/>
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </Border.Style>
+                        <TextBlock Text="{Binding PunchStatus}" FontSize="11"
+                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis">
+                          <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                              <Setter Property="Foreground" Value="{StaticResource BrushText3}"/>
+                              <Style.Triggers>
+                                <DataTrigger Binding="{Binding PunchOk}" Value="True">
+                                  <Setter Property="Foreground" Value="{StaticResource BrushGreen}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding PunchFail}" Value="True">
+                                  <Setter Property="Foreground" Value="{StaticResource BrushRed}"/>
+                                </DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </TextBlock.Style>
+                        </TextBlock>
                       </Border>
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
