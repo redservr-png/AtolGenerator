@@ -352,7 +352,8 @@ public static class AtolApiService
         string groupCode, string operation, string uuid, string token,
         string logLabel = "")
     {
-        string tag = string.IsNullOrEmpty(logLabel) ? uuid[..8] : logLabel;
+        string tag     = string.IsNullOrEmpty(logLabel) ? uuid[..8] : logLabel;
+        string pollOp  = operation.Replace('_', '-');   // АТОЛ: GET использует дефис (sell-refund), POST принимает оба варианта
 
         for (int i = 0; i < 8; i++)
         {
@@ -360,8 +361,13 @@ public static class AtolApiService
             try
             {
                 var resp   = await Http.GetAsync(
-                    $"{groupCode}/{operation}/{uuid}?token={token}");
+                    $"{groupCode}/{pollOp}/{uuid}?token={token}");
                 var body   = await resp.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(body))
+                {
+                    Log($"Poll [{tag}] attempt {i + 1}: HTTP {(int)resp.StatusCode} — пустой ответ");
+                    continue;
+                }
                 var result = JsonSerializer.Deserialize<AtolReceiptResponse>(body, JsonOpts);
 
                 if (result?.Status == "done")
@@ -379,7 +385,7 @@ public static class AtolApiService
                 // "wait" — продолжаем ждать
                 Log($"Poll [{tag}] attempt {i + 1}: wait…");
             }
-            catch (Exception ex) { Log($"Poll [{tag}] attempt {i + 1}: exception {ex.Message}"); }
+            catch (Exception ex) { Log($"Poll [{tag}] attempt {i + 1}: exception HTTP→{ex.Message[..Math.Min(120,ex.Message.Length)]}"); }
         }
         // Статус не получен после 20 секунд — возвращаем предупреждение
         Log($"Poll [{tag}]: timeout — uuid={uuid}, проверьте статус вручную");
