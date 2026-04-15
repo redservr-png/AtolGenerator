@@ -733,6 +733,31 @@
             </StackPanel>
           </Border>
 
+          <!-- Предпросмотр сформированных чеков -->
+          <Border Background="{StaticResource BrushSurface1}"
+                  BorderBrush="{StaticResource BrushBorder}"
+                  BorderThickness="1" CornerRadius="10" Padding="16"
+                  Visibility="{Binding ShowResults, Converter={StaticResource BoolVis}}">
+            <StackPanel>
+              <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                        CornerRadius="2" Margin="0,0,7,0"/>
+                <TextBlock Text="ПРЕДПРОСМОТР" Style="{StaticResource SectionTitle}" Margin="0"/>
+              </StackPanel>
+              <Border Background="{StaticResource BrushSurface2}"
+                      BorderBrush="{StaticResource BrushBorder}"
+                      BorderThickness="1" CornerRadius="7" Padding="10">
+                <ScrollViewer MaxHeight="380" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Auto">
+                  <TextBlock Text="{Binding MainReceiptPreviewText}"
+                             FontFamily="Courier New" FontSize="12"
+                             Foreground="{StaticResource BrushText2}"
+                             TextWrapping="NoWrap"/>
+                </ScrollViewer>
+              </Border>
+            </StackPanel>
+          </Border>
+
         </StackPanel>
 
         <!-- ════ 1С РЕАЛИЗАЦИИ — полноширинная таблица ════ -->

@@ -192,6 +192,14 @@ public class MainViewModel : BaseViewModel
         set => Set(ref _receiptPreviewText, value);
     }
 
+    // Предпросмотр для основных (не исправительных) чеков
+    private string _mainReceiptPreviewText = string.Empty;
+    public string MainReceiptPreviewText
+    {
+        get => _mainReceiptPreviewText;
+        set => Set(ref _mainReceiptPreviewText, value);
+    }
+
     private string _statusText = "Готов к работе";
     public string StatusText { get => _statusText; set => Set(ref _statusText, value); }
 
@@ -818,6 +826,17 @@ public class MainViewModel : BaseViewModel
         foreach (var r in results) Results.Add(r);
         ShowResults = Results.Count > 0;
         StatusText  = $"Сформировано {Results.Count} чек(ов)";
+
+        // Предпросмотр — строим из CheckData всех результатов
+        if (results.Count > 0)
+        {
+            var checks = results
+                .Select(r => r.CheckData)
+                .Where(c => c is not null)
+                .Cast<CheckData>()
+                .ToList();
+            MainReceiptPreviewText = ReceiptPreviewService.Generate(checks);
+        }
 
         var xmlCount  = Results.Select(r => r.XmlPath).Where(p => !string.IsNullOrEmpty(p)).Distinct().Count();
         var docxCount = Results.Count(r => r.HasDocx);
