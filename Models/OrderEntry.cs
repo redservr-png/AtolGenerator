@@ -11,4 +11,5 @@ public class OrderEntry
     public string          CorrectionDate   { get; set; } = string.Empty;  // DD.MM.YYYY
     public string          CorrectionNumber { get; set; } = string.Empty;
     public bool            IsService        { get; set; }  // true = Агентский договор → без НДС
+    public string          City             { get; set; } = string.Empty;  // подразделение из 1С
 }

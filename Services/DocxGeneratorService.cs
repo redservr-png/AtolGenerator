@@ -52,16 +52,16 @@ public static class DocxGeneratorService
         // ── БЛОК 4: Проблема — не был пробит чек (курсив) ──
         body.Append(MakePara(
             $"Не был пробит кассовый чек на контрольно-кассовом аппарате " +
-            $"{AppConstants.KktModel}, заводской номер {AppConstants.KktSerial}, " +
-            $"регистрационный номер {AppConstants.KktReg}, режим передачи фискальных данных " +
-            $"(формат {AppConstants.FfdVersion}).",
+            $"{memo.KktModel}, заводской номер {memo.KktSerial}, " +
+            $"регистрационный номер {memo.KktReg}, режим передачи фискальных данных " +
+            $"(формат {memo.KktFfd}).",
             italic: true, spaceBefore: 0, spaceAfter: 60));
 
         // ── БЛОК 5: Дата пробития коррекции + описание (курсив) ──
         body.Append(MakePara(
-            $"{memo.TodayDate} на контрольно-кассовом аппарате {AppConstants.KktModel}, " +
-            $"заводской номер {AppConstants.KktSerial}, регистрационный номер {AppConstants.KktReg}, " +
-            $"режим передачи фискальных данных (формат {AppConstants.FfdVersion}) был сформирован " +
+            $"{memo.TodayDate} на контрольно-кассовом аппарате {memo.KktModel}, " +
+            $"заводской номер {memo.KktSerial}, регистрационный номер {memo.KktReg}, " +
+            $"режим передачи фискальных данных (формат {memo.KktFfd}) был сформирован " +
             $"{memo.CorrectionDesc} на сумму {FormatMoney(memo.Amount)} руб.",
             italic: true, spaceBefore: 0, spaceAfter: 100));
 
@@ -152,4 +152,9 @@ public class MemoData
     public double Amount         { get; set; }
     public string OrderInfo      { get; set; } = string.Empty;
     public string CorrectionDesc { get; set; } = string.Empty;
+    // ── ККТ (берётся по городу из 1С, иначе DefaultKkt) ──
+    public string KktModel  { get; set; } = AppConstants.KktModel;
+    public string KktSerial { get; set; } = AppConstants.KktSerial;
+    public string KktReg    { get; set; } = AppConstants.KktReg;
+    public string KktFfd    { get; set; } = AppConstants.FfdVersion;
 }

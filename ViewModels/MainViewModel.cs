@@ -651,6 +651,7 @@ public class MainViewModel : BaseViewModel
                 CorrectionDate   = r.DocDate,
                 CorrectionNumber = r.DocNumber,
                 IsService        = r.IsService,
+                City             = r.City,
             });
             existing.Add(key);
             added++;

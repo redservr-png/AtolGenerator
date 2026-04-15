@@ -137,15 +137,29 @@ public static class CheckGeneratorService
                         ? order.OrderDate.Split(' ')[0]
                         : DateTime.Today.ToString("dd.MM.yyyy");
 
+                // Текст «при ...»: для реализаций — по факту сделки, иначе — по типу операции
+                var operationDesc = p.Tab == "realization"
+                    ? (orderIsService
+                        ? "реализации услуги по перевозке/сборки товара покупателю"
+                        : "реализации товара покупателю")
+                    : AppConstants.OperationDescriptions.GetValueOrDefault(p.CheckType, "расчёте");
+
+                // ККТ по городу реализации
+                var kkt = AppConstants.GetKktByCity(order.City);
+
                 var memo = new MemoData
                 {
                     EventDate      = eventDate,
                     TodayDate      = DateTime.Today.ToString("dd.MM.yyyy"),
-                    OperationDesc  = AppConstants.OperationDescriptions.GetValueOrDefault(p.CheckType, "расчёте"),
+                    OperationDesc  = operationDesc,
                     CustomerName   = order.CustomerName,
                     Amount         = amount,
                     OrderInfo      = orderInfoStr,
                     CorrectionDesc = AppConstants.CorrectionDescriptions.GetValueOrDefault(p.CheckType, string.Empty),
+                    KktModel       = kkt.Model,
+                    KktSerial      = kkt.Serial,
+                    KktReg         = kkt.RegNum,
+                    KktFfd         = kkt.Ffd,
                 };
 
                 DocxGeneratorService.Generate(memo, docxPath);
