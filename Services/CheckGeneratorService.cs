@@ -137,15 +137,19 @@ public static class CheckGeneratorService
                         ? order.OrderDate.Split(' ')[0]
                         : DateTime.Today.ToString("dd.MM.yyyy");
 
-                // Текст «при ...»: для реализаций — по факту сделки, иначе — по типу операции
+                // Текст «при ...»
                 var operationDesc = p.Tab == "realization"
                     ? (orderIsService
                         ? "реализации услуги по перевозке/сборки товара покупателю"
                         : "реализации товара покупателю")
-                    : AppConstants.OperationDescriptions.GetValueOrDefault(p.CheckType, "расчёте");
+                    : p.CheckType == "buy_correction"
+                        ? "возврате безналичных денежных средств покупателю"
+                        : AppConstants.OperationDescriptions.GetValueOrDefault(p.CheckType, "расчёте");
 
-                // ККТ по городу реализации
-                var kkt = AppConstants.GetKktByCity(order.City);
+                // ККТ: для реализаций — по городу; для оплат — всегда Интернет-магазин
+                var kkt = p.Tab == "realization"
+                    ? AppConstants.GetKktByCity(order.City)
+                    : AppConstants.DefaultKkt;
 
                 var memo = new MemoData
                 {
