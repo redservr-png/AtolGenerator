@@ -1,4 +1,5 @@
 using System.IO;
+using AtolGenerator.Constants;
 using AtolGenerator.Helpers;
 using AtolGenerator.Models;
 
@@ -14,9 +15,11 @@ public static class CorrectiveCheckService
     public static List<GenerationResult> Generate(
         OneCRealization real,
         List<OneCRealizationItem> items,
-        string outputDir)
+        string outputDir,
+        CashierInfo? cashier = null)
     {
         Directory.CreateDirectory(outputDir);
+        cashier ??= AppConstants.DefaultCashier;
         var results = new List<GenerationResult>();
 
         var ts      = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")[..17];
@@ -52,6 +55,8 @@ public static class CorrectiveCheckService
             Items                = refundItems,
             IsService            = real.IsService,
             AdditionalCheckProps = real.FiscalNumber,
+            CashierName          = cashier.FullName,
+            CashierShort         = cashier.ShortName,
         };
 
         var refundName = $"{ts}_{safeNum}_sell_refund";
@@ -92,6 +97,8 @@ public static class CorrectiveCheckService
             IsService            = real.IsService,
             CorrectionBaseDate   = corrDateIso,
             CorrectionBaseNumber = corrNumber,
+            CashierName          = cashier.FullName,
+            CashierShort         = cashier.ShortName,
         };
 
         var corrName = $"{ts}_{safeNum}_sell_correction";

@@ -54,6 +54,16 @@ public class MainViewModel : BaseViewModel
     public bool ShowBuyRefundOption => IsRealizationTab;
     public bool ShowItemsSection  => IsRealizationTab && !IsCorrection;
 
+    // ── Кассир ───────────────────────────────────────────────────────────────
+    public IReadOnlyList<CashierInfo> AvailableCashiers => AppConstants.Cashiers;
+
+    private CashierInfo _selectedCashier = AppConstants.DefaultCashier;
+    public CashierInfo SelectedCashier
+    {
+        get => _selectedCashier;
+        set => Set(ref _selectedCashier, value);
+    }
+
     // ── Merge XML ────────────────────────────────────────────────────────────
     private bool _mergeXml = true;
     public bool MergeXml { get => _mergeXml; set => Set(ref _mergeXml, value); }
@@ -769,7 +779,7 @@ public class MainViewModel : BaseViewModel
                 }
 
                 var results = await Task.Run(() =>
-                    CorrectiveCheckService.Generate(row.Source, items, FileHelper.OutputDir));
+                    CorrectiveCheckService.Generate(row.Source, items, FileHelper.OutputDir, SelectedCashier));
 
                 allResults.AddRange(results);
 
@@ -824,6 +834,7 @@ public class MainViewModel : BaseViewModel
             MergeXml    = MergeXml,
             Orders      = Orders.ToList(),
             OutputDir   = FileHelper.OutputDir,
+            Cashier     = SelectedCashier,
         };
 
         List<GenerationResult> results;

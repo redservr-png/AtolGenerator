@@ -74,7 +74,7 @@ public static class ReceiptPreviewService
         sb.AppendLine(line);
 
         // ── Служебные поля ────────────────────────────────────────────────────
-        sb.AppendLine($"Кассир: {AppConstants.CashierShort}");
+        sb.AppendLine($"Кассир: {c.CashierShort}");
         if (!string.IsNullOrEmpty(c.AdditionalCheckProps))
             sb.AppendLine($"ФП исх. чека: {c.AdditionalCheckProps}");
         if (c.IsCorrection)

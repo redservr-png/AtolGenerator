@@ -100,7 +100,7 @@ public static class XmlGeneratorService
                 new XElement("sum",  Fmt(totalVat)))));
 
         receipt.Add(new XElement("total",   Fmt(c.Amount)));
-        receipt.Add(new XElement("cashier", AppConstants.CashierName));
+        receipt.Add(new XElement("cashier", c.CashierName));
 
         // Доп. реквизит чека (тег 1192) — ФП исходного чека для исправительного
         if (!string.IsNullOrWhiteSpace(c.AdditionalCheckProps))
@@ -151,7 +151,7 @@ public static class XmlGeneratorService
                 new XElement("vat",
                     new XElement("type", vatType),
                     new XElement("sum",  Fmt(vatSum)))),
-            new XElement("cashier", AppConstants.CashierName)
+            new XElement("cashier", c.CashierName)
         );
     }
 
@@ -174,6 +174,8 @@ public class CheckData
     public string          CorrectionBaseDate   { get; set; } = string.Empty;
     public string          CorrectionBaseNumber { get; set; } = "б/н";
     public string          AdditionalCheckProps { get; set; } = string.Empty;  // тег 1192: ФП исходного чека
+    public string          CashierName          { get; set; } = AppConstants.CashierName;
+    public string          CashierShort         { get; set; } = AppConstants.CashierShort;
 }
 
 public class CheckItem

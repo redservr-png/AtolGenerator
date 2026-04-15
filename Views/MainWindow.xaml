@@ -597,6 +597,19 @@
                      Foreground="{StaticResource BrushText}"/>
                 <Run Text=" служебных записок"/>
               </TextBlock>
+              <!-- Выбор кассира -->
+              <TextBlock Text="Кассир" FontSize="11"
+                         Foreground="{StaticResource BrushText3}" Margin="0,0,0,4"/>
+              <ComboBox ItemsSource="{Binding AvailableCashiers}"
+                        SelectedItem="{Binding SelectedCashier, Mode=TwoWay}"
+                        Margin="0,0,0,12" Padding="10,7" FontSize="12">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding Display}" FontSize="12"/>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+
               <CheckBox Content="Объединить все чеки в 1 XML-файл"
                         IsChecked="{Binding MergeXml}"
                         Margin="0,0,0,10" FontSize="13"/>

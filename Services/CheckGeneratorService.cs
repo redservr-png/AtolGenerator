@@ -89,6 +89,8 @@ public static class CheckGeneratorService
                 Items         = items,
                 Agent         = agentInfo,
                 IsService     = orderIsService,
+                CashierName   = p.Cashier.FullName,
+                CashierShort  = p.Cashier.ShortName,
             };
 
             if (isCorrection)
@@ -153,17 +155,20 @@ public static class CheckGeneratorService
 
                 var memo = new MemoData
                 {
-                    EventDate      = eventDate,
-                    TodayDate      = DateTime.Today.ToString("dd.MM.yyyy"),
-                    OperationDesc  = operationDesc,
-                    CustomerName   = order.CustomerName,
-                    Amount         = amount,
-                    OrderInfo      = orderInfoStr,
-                    CorrectionDesc = AppConstants.CorrectionDescriptions.GetValueOrDefault(p.CheckType, string.Empty),
-                    KktModel       = kkt.Model,
-                    KktSerial      = kkt.Serial,
-                    KktReg         = kkt.RegNum,
-                    KktFfd         = kkt.Ffd,
+                    EventDate       = eventDate,
+                    TodayDate       = DateTime.Today.ToString("dd.MM.yyyy"),
+                    OperationDesc   = operationDesc,
+                    CustomerName    = order.CustomerName,
+                    Amount          = amount,
+                    OrderInfo       = orderInfoStr,
+                    CorrectionDesc  = AppConstants.CorrectionDescriptions.GetValueOrDefault(p.CheckType, string.Empty),
+                    FromPosition    = p.Cashier.Position,
+                    FromNameGenitive = p.Cashier.NameGenitive,
+                    CashierShort    = p.Cashier.ShortName,
+                    KktModel        = kkt.Model,
+                    KktSerial       = kkt.Serial,
+                    KktReg          = kkt.RegNum,
+                    KktFfd          = kkt.Ffd,
                 };
 
                 DocxGeneratorService.Generate(memo, docxPath);
@@ -218,4 +223,5 @@ public class GenerationParams
     public bool              MergeXml    { get; set; } = false;
     public List<OrderEntry>  Orders      { get; set; } = new();
     public string            OutputDir   { get; set; } = FileHelper.OutputDir;
+    public CashierInfo       Cashier     { get; set; } = AppConstants.DefaultCashier;
 }

@@ -29,9 +29,9 @@ public static class DocxGeneratorService
             });
 
         // ── БЛОК 1: Шапка (правый угол) ──
-        body.Append(MakePara(AppConstants.RecipientName,      align: JustificationValues.Right, spaceAfter: 20));
-        body.Append(MakePara($"от {AppConstants.FromPosition}", align: JustificationValues.Right, spaceAfter: 20));
-        body.Append(MakePara(AppConstants.FromName,             align: JustificationValues.Right, spaceAfter: 20));
+        body.Append(MakePara(AppConstants.RecipientName,        align: JustificationValues.Right, spaceAfter: 20));
+        body.Append(MakePara($"от {memo.FromPosition}",         align: JustificationValues.Right, spaceAfter: 20));
+        body.Append(MakePara(memo.FromNameGenitive,             align: JustificationValues.Right, spaceAfter: 20));
         body.Append(MakePara(AppConstants.City,                 align: JustificationValues.Right, spaceAfter: 20));
 
         // ── Заголовок ──
@@ -69,7 +69,7 @@ public static class DocxGeneratorService
         body.Append(MakePara("Копию чека прилагаю к настоящей служебной записке.",
                               italic: true, spaceBefore: 0, spaceAfter: 180));
 
-        body.Append(MakeSignaturePara(memo.TodayDate));
+        body.Append(MakeSignaturePara(memo.TodayDate, memo.CashierShort));
 
         body.Append(sectPr);
 
@@ -77,8 +77,8 @@ public static class DocxGeneratorService
         mainPart.Document.Save();
     }
 
-    /// <summary>Строка подписи: "Дата: XX.XX.XXXX    ПОДПИСЬ    ФИО кассира  Полюшков К.Н."</summary>
-    private static Paragraph MakeSignaturePara(string date)
+    /// <summary>Строка подписи: "Дата: XX.XX.XXXX    ПОДПИСЬ    ФИО кассира  Фамилия И.О."</summary>
+    private static Paragraph MakeSignaturePara(string date, string cashierShort)
     {
         var ppr = new ParagraphProperties(
             new Justification { Val = JustificationValues.Left },
@@ -100,9 +100,9 @@ public static class DocxGeneratorService
         var run2 = new Run(rprUnderline,
             new Text("ФИО кассира") { Space = SpaceProcessingModeValues.Preserve });
 
-        // "  Полюшков К.Н."
+        // "  Фамилия И.О. кассира"
         var run3 = new Run((RunProperties)rprBase.CloneNode(true),
-            new Text($"  {AppConstants.CashierShort}") { Space = SpaceProcessingModeValues.Preserve });
+            new Text($"  {cashierShort}") { Space = SpaceProcessingModeValues.Preserve });
 
         return new Paragraph(ppr, run1, run2, run3);
     }
@@ -145,13 +145,17 @@ public static class DocxGeneratorService
 
 public class MemoData
 {
-    public string EventDate      { get; set; } = string.Empty;  // дата события (ввод пользователя)
-    public string TodayDate      { get; set; } = string.Empty;  // дата пробития коррекции (сегодня)
-    public string OperationDesc  { get; set; } = string.Empty;
-    public string CustomerName   { get; set; } = string.Empty;
-    public double Amount         { get; set; }
-    public string OrderInfo      { get; set; } = string.Empty;
-    public string CorrectionDesc { get; set; } = string.Empty;
+    public string EventDate       { get; set; } = string.Empty;  // дата события (ввод пользователя)
+    public string TodayDate       { get; set; } = string.Empty;  // дата пробития коррекции (сегодня)
+    public string OperationDesc   { get; set; } = string.Empty;
+    public string CustomerName    { get; set; } = string.Empty;
+    public double Amount          { get; set; }
+    public string OrderInfo       { get; set; } = string.Empty;
+    public string CorrectionDesc  { get; set; } = string.Empty;
+    // ── Кассир ──
+    public string FromPosition    { get; set; } = AppConstants.FromPosition;
+    public string FromNameGenitive { get; set; } = AppConstants.FromName;
+    public string CashierShort    { get; set; } = AppConstants.CashierShort;
     // ── ККТ (берётся по городу из 1С, иначе DefaultKkt) ──
     public string KktModel  { get; set; } = AppConstants.KktModel;
     public string KktSerial { get; set; } = AppConstants.KktSerial;

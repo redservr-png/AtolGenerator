@@ -2,6 +2,18 @@ using AtolGenerator.Models;
 
 namespace AtolGenerator.Constants;
 
+// ── Данные кассира ────────────────────────────────────────────────────────────
+public class CashierInfo
+{
+    public string FullName     { get; init; } = string.Empty;  // в XML и предпросмотре
+    public string ShortName    { get; init; } = string.Empty;  // "Фамилия И.О." — подпись
+    public string Position     { get; init; } = string.Empty;  // "от Должности" — DOCX шапка
+    public string NameGenitive { get; init; } = string.Empty;  // "Фамилии И.О." — DOCX шапка
+    public string Display      { get; init; } = string.Empty;  // для выпадающего списка
+
+    public override string ToString() => Display;
+}
+
 // ── Данные кассы (ККТ) ────────────────────────────────────────────────────────
 public class KktData
 {
@@ -13,6 +25,30 @@ public class KktData
 
 public static class AppConstants
 {
+    // ── Кассиры ──────────────────────────────────────────────────────────────
+    public static readonly IReadOnlyList<CashierInfo> Cashiers = new List<CashierInfo>
+    {
+        new()
+        {
+            FullName     = "Консультант-аналитик 1С Полюшков Константин Николаевич",
+            ShortName    = "Полюшков К.Н.",
+            Position     = "Консультанта-Аналитика 1С",
+            NameGenitive = "Полюшкова Константина Николаевича",
+            Display      = "Полюшков К.Н. — Консультант-аналитик 1С",
+        },
+        new()
+        {
+            FullName     = "Ст.менеджер отдела лидогенерации Бородкина Татьяна Александровна",
+            ShortName    = "Бородкина Т.А.",
+            Position     = "Ст.менеджера отдела лидогенерации",
+            NameGenitive = "Бородкиной Татьяны Александровны",
+            Display      = "Бородкина Т.А. — Ст.менеджер отдела лидогенерации",
+        },
+    };
+
+    public static CashierInfo DefaultCashier => Cashiers[0];
+
+    // Обратная совместимость
     public const string CashierName    = "Консультант-аналитик 1С Полюшков Константин Николаевич";
     public const string CashierShort   = "Полюшков К.Н.";
     public const string PhoneBuyer     = "+79005005016";
