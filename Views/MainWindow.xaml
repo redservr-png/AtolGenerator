@@ -803,6 +803,26 @@
                     <TextBlock Text=")" Margin="0"/>
                   </StackPanel>
                 </Button>
+
+                <!-- Исправительные чеки — только для строк с пробитым чеком -->
+                <Button Padding="12,5" FontSize="12" Margin="6,0,0,0"
+                        Command="{Binding GenerateCorrectiveCommand}">
+                  <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource BtnPrimary}">
+                      <Setter Property="Background" Value="#CC227744"/>
+                      <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                          <Setter Property="Background" Value="#CC338855"/>
+                        </Trigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Button.Style>
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="📋  Исправительный чек (" Margin="0"/>
+                    <TextBlock Text="{Binding SelectedHasCheckCount, Mode=OneWay}" FontWeight="Bold"/>
+                    <TextBlock Text=")" Margin="0"/>
+                  </StackPanel>
+                </Button>
               </WrapPanel>
             </Grid>
 
@@ -854,13 +874,13 @@
                 </Style>
               </DataGrid.Resources>
 
-              <!-- Строки: уже пробитые — приглушённый фон -->
+              <!-- Строки: уже пробитые — тонкий зелёный тон (теперь интерактивны для исправлений) -->
               <DataGrid.RowStyle>
                 <Style TargetType="DataGridRow">
                   <Setter Property="Background" Value="Transparent"/>
                   <Style.Triggers>
                     <DataTrigger Binding="{Binding HasCheck}" Value="True">
-                      <Setter Property="Opacity" Value="0.45"/>
+                      <Setter Property="Background" Value="#0A2DD4A0"/>
                     </DataTrigger>
                   </Style.Triggers>
                 </Style>
@@ -876,7 +896,6 @@
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
                       <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                IsEnabled="{Binding HasCheck, Converter={StaticResource InvBool}}"
                                 HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
@@ -1023,6 +1042,96 @@
 
               </DataGrid.Columns>
             </DataGrid>
+
+            <!-- ── Результаты исправительных чеков ── -->
+            <Border Margin="0,14,0,0"
+                    Background="{StaticResource BrushSurface2}"
+                    BorderBrush="{StaticResource BrushBorder}"
+                    BorderThickness="1" CornerRadius="8" Padding="14"
+                    Visibility="{Binding ShowCorrectiveResults, Converter={StaticResource BoolVis}}">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="220"/>
+                  <ColumnDefinition Width="12"/>
+                  <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Левая колонка: список файлов -->
+                <StackPanel Grid.Column="0">
+                  <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <Border Width="3" Height="13" Background="{StaticResource BrushGreen}"
+                            CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="СФОРМИРОВАНО" Style="{StaticResource SectionTitle}" Margin="0"/>
+                  </StackPanel>
+                  <ItemsControl ItemsSource="{Binding CorrectiveResults}" MaxHeight="340">
+                    <ItemsControl.Template>
+                      <ControlTemplate TargetType="ItemsControl">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                          <ItemsPresenter/>
+                        </ScrollViewer>
+                      </ControlTemplate>
+                    </ItemsControl.Template>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border Background="{StaticResource BrushSurface1}"
+                                BorderBrush="{StaticResource BrushBorder}"
+                                BorderThickness="1" CornerRadius="6"
+                                Padding="8" Margin="0,0,0,5">
+                          <StackPanel>
+                            <TextBlock Text="{Binding OrderNum}"
+                                       FontSize="11" Foreground="{StaticResource BrushAccent2}"
+                                       Margin="0,0,0,3"/>
+                            <Grid>
+                              <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="Auto"/>
+                              </Grid.ColumnDefinitions>
+                              <TextBlock Grid.Column="0" Text="{Binding XmlFilename}"
+                                         FontSize="11" Foreground="{StaticResource BrushText2}"
+                                         TextTrimming="CharacterEllipsis"/>
+                              <Border Grid.Column="1" Background="#21F0D020"
+                                      CornerRadius="3" Padding="4,1" Margin="4,0,0,0">
+                                <TextBlock Text="XML" FontSize="10" FontWeight="Bold"
+                                           Foreground="{StaticResource BrushYellow}"/>
+                              </Border>
+                            </Grid>
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <Button Content="📂  Открыть папку"
+                          Style="{StaticResource BtnSecondary}"
+                          Margin="0,8,0,0" Padding="0,7" FontSize="12"
+                          HorizontalAlignment="Stretch"
+                          Command="{Binding OpenFolderCommand}"/>
+                </StackPanel>
+
+                <!-- Разделитель -->
+                <Border Grid.Column="1" Width="1" Background="{StaticResource BrushBorder}"
+                        VerticalAlignment="Stretch" Margin="0,2"/>
+
+                <!-- Правая колонка: предпросмотр чеков -->
+                <StackPanel Grid.Column="2" Margin="0,0,0,0">
+                  <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                            CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="ПРЕДПРОСМОТР ЧЕКОВ" Style="{StaticResource SectionTitle}" Margin="0"/>
+                  </StackPanel>
+                  <Border Background="{StaticResource BrushSurface1}"
+                          BorderBrush="{StaticResource BrushBorder}"
+                          BorderThickness="1" CornerRadius="6" Padding="10">
+                    <ScrollViewer MaxHeight="340" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Auto">
+                      <TextBlock Text="{Binding ReceiptPreviewText}"
+                                 FontFamily="Courier New" FontSize="12"
+                                 Foreground="{StaticResource BrushText2}"
+                                 TextWrapping="NoWrap"/>
+                    </ScrollViewer>
+                  </Border>
+                </StackPanel>
+              </Grid>
+            </Border>
 
           </StackPanel>
         </Border>

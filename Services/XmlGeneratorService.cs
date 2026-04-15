@@ -102,6 +102,10 @@ public static class XmlGeneratorService
         receipt.Add(new XElement("total",   Fmt(c.Amount)));
         receipt.Add(new XElement("cashier", AppConstants.CashierName));
 
+        // Доп. реквизит чека (тег 1192) — ФП исходного чека для исправительного
+        if (!string.IsNullOrWhiteSpace(c.AdditionalCheckProps))
+            receipt.Add(new XElement("additional_check_props", c.AdditionalCheckProps));
+
         return receipt;
     }
 
@@ -169,6 +173,7 @@ public class CheckData
     public bool            IsService            { get; set; }
     public string          CorrectionBaseDate   { get; set; } = string.Empty;
     public string          CorrectionBaseNumber { get; set; } = "б/н";
+    public string          AdditionalCheckProps { get; set; } = string.Empty;  // тег 1192: ФП исходного чека
 }
 
 public class CheckItem

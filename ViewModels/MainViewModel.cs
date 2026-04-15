@@ -168,14 +168,29 @@ public class MainViewModel : BaseViewModel
         get => _showLoadedRealizations;
         set => Set(ref _showLoadedRealizations, value);
     }
-    public int SelectedOneCCount => LoadedRealizations.Count(r => r.IsSelected && !r.HasCheck);
-    public int TotalOneCLoaded   => LoadedRealizations.Count;
+    public int SelectedOneCCount     => LoadedRealizations.Count(r => r.IsSelected && !r.HasCheck);
+    public int SelectedHasCheckCount => LoadedRealizations.Count(r => r.IsSelected && r.HasCheck);
+    public int TotalOneCLoaded       => LoadedRealizations.Count;
 
     // ── Results ──────────────────────────────────────────────────────────────
-    public ObservableCollection<GenerationResult> Results { get; } = new();
+    public ObservableCollection<GenerationResult> Results          { get; } = new();
+    public ObservableCollection<GenerationResult> CorrectiveResults { get; } = new();
 
     private bool _showResults;
     public bool ShowResults { get => _showResults; set => Set(ref _showResults, value); }
+
+    private bool   _showCorrectiveResults;
+    private string _receiptPreviewText = string.Empty;
+    public bool   ShowCorrectiveResults
+    {
+        get => _showCorrectiveResults;
+        set => Set(ref _showCorrectiveResults, value);
+    }
+    public string ReceiptPreviewText
+    {
+        get => _receiptPreviewText;
+        set => Set(ref _receiptPreviewText, value);
+    }
 
     private string _statusText = "Готов к работе";
     public string StatusText { get => _statusText; set => Set(ref _statusText, value); }
@@ -262,8 +277,9 @@ public class MainViewModel : BaseViewModel
     public ICommand ToggleAtolPanelCommand     { get; }
     public ICommand SaveAtolSettingsCommand    { get; }
     public ICommand TestAtolConnectionCommand  { get; }
-    public ICommand PunchViaAtolCommand        { get; }
+    public ICommand PunchViaAtolCommand          { get; }
     public ICommand PunchOrdersViaAtolCommand  { get; }
+    public ICommand GenerateCorrectiveCommand  { get; }
 
     // ── Skipped rows from Excel import ───────────────────────────────────────
     public ObservableCollection<SkippedRow> SkippedRows { get; } = new();
@@ -293,6 +309,7 @@ public class MainViewModel : BaseViewModel
         TestAtolConnectionCommand  = new AsyncRelayCommand(TestAtolConnectionAsync);
         PunchViaAtolCommand        = new AsyncRelayCommand(PunchViaAtolAsync);
         PunchOrdersViaAtolCommand  = new AsyncRelayCommand(PunchOrdersViaAtolAsync);
+        GenerateCorrectiveCommand  = new AsyncRelayCommand(GenerateCorrectiveAsync);
 
         // Загружаем сохранённые настройки АТОЛ
         var saved = AtolCredentials.Load();
@@ -640,6 +657,7 @@ public class MainViewModel : BaseViewModel
             vm.PropertyChanged += (_, _) =>
             {
                 OnPropertyChanged(nameof(SelectedOneCCount));
+                OnPropertyChanged(nameof(SelectedHasCheckCount));
             };
             LoadedRealizations.Add(vm);
         }
@@ -692,6 +710,77 @@ public class MainViewModel : BaseViewModel
             ShowToast($"Добавлено {added} реализаций в очередь", false);
         else
             ShowToast("Нет новых реализаций для добавления", true);
+    }
+
+    // ── Исправительные чеки ───────────────────────────────────────────────────
+    private async Task GenerateCorrectiveAsync()
+    {
+        var selected = LoadedRealizations.Where(r => r.IsSelected && r.HasCheck).ToList();
+        if (selected.Count == 0)
+        { ShowToast("Выберите реализации с пробитым чеком (отметьте галочкой)", true); return; }
+
+        if (!OneCService.IsAvailable())
+        { ShowToast("Для исправительных чеков требуется подключение к 1С (V83.COMConnector)", true); return; }
+
+        if (string.IsNullOrWhiteSpace(OneCServer) || string.IsNullOrWhiteSpace(OneCDatabase))
+        { ShowToast("Заполните настройки 1С для загрузки позиций документов", true); return; }
+
+        CorrectiveResults.Clear();
+        ReceiptPreviewText = string.Empty;
+        ShowCorrectiveResults = false;
+        StatusText = $"Формирование исправительных чеков для {selected.Count} реализаций...";
+
+        var settings   = BuildOneCSettings();
+        var allResults = new List<GenerationResult>();
+        var previewSb  = new System.Text.StringBuilder();
+        var failCount  = 0;
+
+        foreach (var row in selected)
+        {
+            try
+            {
+                StatusText = $"Загрузка позиций: {row.DocNumber}...";
+                var items = await Task.Run(() =>
+                    OneCService.LoadRealizationItems(settings, row.DocNumber, row.IsService));
+
+                if (items.Count == 0)
+                {
+                    ShowToast($"Нет позиций в документе {row.DocNumber} — пропущено", true);
+                    failCount++;
+                    continue;
+                }
+
+                var results = await Task.Run(() =>
+                    CorrectiveCheckService.Generate(row.Source, items, FileHelper.OutputDir));
+
+                allResults.AddRange(results);
+
+                // ── Предпросмотр ──────────────────────────────────────────────
+                if (previewSb.Length > 0) previewSb.AppendLine();
+                previewSb.AppendLine(new string('═', 44));
+                previewSb.AppendLine($" {row.DocNumber}  {row.CustomerName}");
+                previewSb.AppendLine(new string('═', 44));
+                previewSb.AppendLine();
+                var previews = results.Select(r => r.CheckData!).ToList();
+                previewSb.AppendLine(ReceiptPreviewService.Generate(previews));
+            }
+            catch (Exception ex)
+            {
+                failCount++;
+                ShowToast($"Ошибка {row.DocNumber}: {ex.Message}", true);
+            }
+        }
+
+        foreach (var r in allResults) CorrectiveResults.Add(r);
+        ReceiptPreviewText    = previewSb.ToString().TrimEnd();
+        ShowCorrectiveResults = allResults.Count > 0 || failCount > 0;
+
+        var pairCount = allResults.Count / 2;
+        StatusText = $"Сформировано {pairCount} пар исправительных чеков" +
+                     (failCount > 0 ? $"  |  ошибок: {failCount}" : string.Empty);
+        ShowToast(
+            $"Исправительные чеки: {pairCount} пар" + (failCount > 0 ? $", ошибок {failCount}" : string.Empty),
+            failCount > 0 && pairCount == 0);
     }
 
     private async Task GenerateChecksAsync()

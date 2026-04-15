@@ -35,6 +35,13 @@ public class OneCConnectionSettings
     }
 }
 
+public class OneCRealizationItem
+{
+    public string Name     { get; set; } = string.Empty;
+    public double Quantity { get; set; } = 1;
+    public double Sum      { get; set; }
+}
+
 public class OneCRealization
 {
     public string DocNumber      { get; set; } = string.Empty;  // т0000025218
@@ -199,6 +206,66 @@ public static class OneCService
         catch (Exception ex)
         {
             Log($"КРИТИЧЕСКАЯ ОШИБКА: {ex.GetType().Name}: {ex.Message}{Environment.NewLine}{ex.StackTrace}");
+            throw;
+        }
+        finally
+        {
+            if (conn      is not null) Marshal.ReleaseComObject(conn);
+            if (connector is not null) Marshal.ReleaseComObject(connector);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Загружает табличную часть (Товары или Услуги) документа реализации по номеру документа.
+    /// </summary>
+    public static List<OneCRealizationItem> LoadRealizationItems(
+        OneCConnectionSettings s, string docNumber, bool isService)
+    {
+        dynamic? conn = null;
+        dynamic? connector = null;
+        var result = new List<OneCRealizationItem>();
+
+        Log($"=== LoadRealizationItems: docNumber={docNumber}, isService={isService} ===");
+
+        try
+        {
+            connector = CreateConnector();
+            conn      = connector.Connect(s.ConnectionString);
+
+            var tableName = isService ? "Услуги" : "Товары";
+            var query     = conn.NewObject("Запрос");
+            query.Текст = $"""
+                ВЫБРАТЬ
+                    Строки.Номенклатура.Наименование КАК Наименование,
+                    Строки.Количество                КАК Количество,
+                    Строки.Сумма                     КАК Сумма
+                ИЗ
+                    Документ.РеализацияТоваровУслуг.{tableName} КАК Строки
+                ГДЕ
+                    Строки.Ссылка.Номер = &НомерДок
+                """;
+            query.УстановитьПараметр("НомерДок", docNumber);
+
+            var queryResult = query.Выполнить();
+            var selection   = queryResult.Выбрать();
+
+            while ((bool)selection.Следующий())
+            {
+                result.Add(new OneCRealizationItem
+                {
+                    Name     = Str(selection.Наименование),
+                    Quantity = ToDouble(selection.Количество),
+                    Sum      = ToDouble(selection.Сумма),
+                });
+            }
+
+            Log($"LoadRealizationItems: загружено {result.Count} позиций");
+        }
+        catch (Exception ex)
+        {
+            Log($"LoadRealizationItems ERROR: {ex.GetType().Name}: {ex.Message}");
             throw;
         }
         finally
