@@ -173,36 +173,37 @@ public class MainViewModel : BaseViewModel
     public int TotalOneCLoaded       => LoadedRealizations.Count;
 
     // ── Results ──────────────────────────────────────────────────────────────
-    public ObservableCollection<GenerationResult> Results          { get; } = new();
-    public ObservableCollection<GenerationResult> CorrectiveResults { get; } = new();
+    public ObservableCollection<GenerationResult>    Results         { get; } = new();
+    public ObservableCollection<ResultDisplayEntry>  AllResultEntries { get; } = new();
 
     private bool _showResults;
     public bool ShowResults { get => _showResults; set => Set(ref _showResults, value); }
 
-    private bool   _showCorrectiveResults;
-    private string _receiptPreviewText = string.Empty;
-    public bool   ShowCorrectiveResults
+    // ── Выбранный элемент + предпросмотр ─────────────────────────────────────
+    private ResultDisplayEntry? _selectedEntry;
+    public ResultDisplayEntry? SelectedEntry
     {
-        get => _showCorrectiveResults;
-        set => Set(ref _showCorrectiveResults, value);
-    }
-    public string ReceiptPreviewText
-    {
-        get => _receiptPreviewText;
-        set => Set(ref _receiptPreviewText, value);
-    }
-
-    // Выбранный результат и его предпросмотр
-    private GenerationResult? _selectedResult;
-    public GenerationResult? SelectedResult
-    {
-        get => _selectedResult;
+        get => _selectedEntry;
         set
         {
-            Set(ref _selectedResult, value);
-            SelectedReceiptPreview = value?.CheckData is not null
-                ? ReceiptPreviewService.Generate(new[] { value.CheckData })
-                : string.Empty;
+            Set(ref _selectedEntry, value);
+            if (value is null)
+            {
+                SelectedReceiptPreview = string.Empty;
+            }
+            else if (value.IsPair)
+            {
+                var checks = new List<CheckData>();
+                if (value.Refund?.CheckData     is not null) checks.Add(value.Refund.CheckData);
+                if (value.Correction?.CheckData is not null) checks.Add(value.Correction.CheckData);
+                SelectedReceiptPreview = ReceiptPreviewService.Generate(checks);
+            }
+            else
+            {
+                SelectedReceiptPreview = value.Single?.CheckData is not null
+                    ? ReceiptPreviewService.Generate(new[] { value.Single.CheckData })
+                    : string.Empty;
+            }
         }
     }
 
@@ -746,14 +747,13 @@ public class MainViewModel : BaseViewModel
         if (string.IsNullOrWhiteSpace(OneCServer) || string.IsNullOrWhiteSpace(OneCDatabase))
         { ShowToast("Заполните настройки 1С для загрузки позиций документов", true); return; }
 
-        CorrectiveResults.Clear();
-        ReceiptPreviewText = string.Empty;
-        ShowCorrectiveResults = false;
-        StatusText = $"Формирование исправительных чеков для {selected.Count} реализаций...";
+        AllResultEntries.Clear();
+        SelectedEntry = null;
+        ShowResults   = false;
+        StatusText    = $"Формирование исправительных чеков для {selected.Count} реализаций...";
 
         var settings   = BuildOneCSettings();
         var allResults = new List<GenerationResult>();
-        var previewSb  = new System.Text.StringBuilder();
         var failCount  = 0;
 
         foreach (var row in selected)
@@ -776,14 +776,14 @@ public class MainViewModel : BaseViewModel
 
                 allResults.AddRange(results);
 
-                // ── Предпросмотр ──────────────────────────────────────────────
-                if (previewSb.Length > 0) previewSb.AppendLine();
-                previewSb.AppendLine(new string('═', 44));
-                previewSb.AppendLine($" {row.DocNumber}  {row.CustomerName}");
-                previewSb.AppendLine(new string('═', 44));
-                previewSb.AppendLine();
-                var previews = results.Select(r => r.CheckData!).ToList();
-                previewSb.AppendLine(ReceiptPreviewService.Generate(previews));
+                // Добавляем пару в единый список результатов
+                var entry = new ResultDisplayEntry
+                {
+                    Refund     = results.Count > 0 ? results[0] : null,
+                    Correction = results.Count > 1 ? results[1] : null,
+                    PairLabel  = $"{row.DocNumber}  {row.CustomerName}",
+                };
+                AllResultEntries.Add(entry);
             }
             catch (Exception ex)
             {
@@ -792,9 +792,9 @@ public class MainViewModel : BaseViewModel
             }
         }
 
-        foreach (var r in allResults) CorrectiveResults.Add(r);
-        ReceiptPreviewText    = previewSb.ToString().TrimEnd();
-        ShowCorrectiveResults = allResults.Count > 0 || failCount > 0;
+        ShowResults = AllResultEntries.Count > 0;
+        if (AllResultEntries.Count > 0 && SelectedEntry is null)
+            SelectedEntry = AllResultEntries[0];
 
         var pairCount = allResults.Count / 2;
         StatusText = $"Сформировано {pairCount} пар исправительных чеков" +
@@ -836,14 +836,19 @@ public class MainViewModel : BaseViewModel
             return;
         }
 
-        SelectedResult = null;
-        foreach (var r in results) Results.Add(r);
-        ShowResults = Results.Count > 0;
+        SelectedEntry = null;
+        AllResultEntries.Clear();
+        foreach (var r in results)
+        {
+            Results.Add(r);
+            AllResultEntries.Add(new ResultDisplayEntry { Single = r });
+        }
+        ShowResults = AllResultEntries.Count > 0;
         StatusText  = $"Сформировано {Results.Count} чек(ов)";
 
-        // Авто-выбор первого результата → предпросмотр
-        if (Results.Count > 0)
-            SelectedResult = Results[0];
+        // Авто-выбор первого → предпросмотр
+        if (AllResultEntries.Count > 0)
+            SelectedEntry = AllResultEntries[0];
 
         var xmlCount  = Results.Select(r => r.XmlPath).Where(p => !string.IsNullOrEmpty(p)).Distinct().Count();
         var docxCount = Results.Count(r => r.HasDocx);

@@ -713,8 +713,8 @@
                       Command="{Binding OpenFolderCommand}"/>
 
               <!-- Список (прокручиваемый) -->
-              <ListBox ItemsSource="{Binding Results}"
-                       SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
+              <ListBox ItemsSource="{Binding AllResultEntries}"
+                       SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
                        Background="Transparent"
                        BorderThickness="0"
                        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -722,9 +722,9 @@
                 <ListBox.ItemContainerStyle>
                   <Style TargetType="ListBoxItem">
                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                    <Setter Property="Padding"  Value="0"/>
-                    <Setter Property="Margin"   Value="0,0,0,7"/>
-                    <Setter Property="Cursor"   Value="Hand"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="Margin"  Value="0,0,0,8"/>
+                    <Setter Property="Cursor"  Value="Hand"/>
                     <Setter Property="Template">
                       <Setter.Value>
                         <ControlTemplate TargetType="ListBoxItem">
@@ -736,14 +736,17 @@
                             <ContentPresenter/>
                           </Border>
                           <ControlTemplate.Triggers>
+                            <!-- Пара исправительных: зелёная рамка -->
+                            <DataTrigger Binding="{Binding IsPair}" Value="True">
+                              <Setter TargetName="card" Property="BorderBrush" Value="#502DD4A0"/>
+                              <Setter TargetName="card" Property="Background"  Value="#0A1A2A1F"/>
+                            </DataTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                              <Setter TargetName="card" Property="BorderBrush"
-                                      Value="{StaticResource BrushAccent2}"/>
+                              <Setter TargetName="card" Property="BorderBrush" Value="{StaticResource BrushAccent2}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                              <Setter TargetName="card" Property="BorderBrush"
-                                      Value="{StaticResource BrushAccent}"/>
-                              <Setter TargetName="card" Property="Background" Value="#12203A"/>
+                              <Setter TargetName="card" Property="BorderBrush" Value="{StaticResource BrushAccent}"/>
+                              <Setter TargetName="card" Property="Background"  Value="#12203A"/>
                             </Trigger>
                           </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -753,41 +756,122 @@
                 </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                   <DataTemplate>
-                    <StackPanel>
-                      <TextBlock Text="{Binding OrderNum}"
-                                 FontFamily="Courier New" FontSize="12"
-                                 Foreground="{StaticResource BrushAccent2}"
-                                 Margin="0,0,0,5"/>
-                      <!-- XML -->
-                      <Grid>
-                        <Grid.ColumnDefinitions>
-                          <ColumnDefinition/><ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{Binding XmlFilename}"
-                                   FontSize="11" Foreground="{StaticResource BrushText2}"
-                                   TextTrimming="CharacterEllipsis"/>
-                        <Border Grid.Column="1" Background="#21F0D020"
-                                CornerRadius="3" Padding="5,1" Margin="5,0,0,0">
-                          <TextBlock Text="XML" FontSize="10" FontWeight="Bold"
-                                     Foreground="{StaticResource BrushYellow}"/>
+                    <Grid>
+                      <!-- ── Одиночный чек ── -->
+                      <StackPanel>
+                        <StackPanel.Style>
+                          <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsPair}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </StackPanel.Style>
+                        <TextBlock Text="{Binding DisplayOrderNum}"
+                                   FontFamily="Courier New" FontSize="12"
+                                   Foreground="{StaticResource BrushAccent2}"
+                                   Margin="0,0,0,5"/>
+                        <Grid>
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition/><ColumnDefinition Width="Auto"/>
+                          </Grid.ColumnDefinitions>
+                          <TextBlock Grid.Column="0" Text="{Binding Single.XmlFilename}"
+                                     FontSize="11" Foreground="{StaticResource BrushText2}"
+                                     TextTrimming="CharacterEllipsis"/>
+                          <Border Grid.Column="1" Background="#21F0D020"
+                                  CornerRadius="3" Padding="5,1" Margin="5,0,0,0">
+                            <TextBlock Text="XML" FontSize="10" FontWeight="Bold"
+                                       Foreground="{StaticResource BrushYellow}"/>
+                          </Border>
+                        </Grid>
+                        <Grid Margin="0,4,0,0"
+                              Visibility="{Binding Single.HasDocx, Converter={StaticResource BoolVis}}">
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition/><ColumnDefinition Width="Auto"/>
+                          </Grid.ColumnDefinitions>
+                          <TextBlock Grid.Column="0" Text="{Binding Single.DocxFilename}"
+                                     FontSize="11" Foreground="{StaticResource BrushText2}"
+                                     TextTrimming="CharacterEllipsis"/>
+                          <Border Grid.Column="1" Background="#212DD4A0"
+                                  CornerRadius="3" Padding="5,1" Margin="5,0,0,0">
+                            <TextBlock Text="DOCX" FontSize="10" FontWeight="Bold"
+                                       Foreground="{StaticResource BrushGreen}"/>
+                          </Border>
+                        </Grid>
+                      </StackPanel>
+
+                      <!-- ── Исправительная пара ── -->
+                      <StackPanel>
+                        <StackPanel.Style>
+                          <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                              <DataTrigger Binding="{Binding IsPair}" Value="True">
+                                <Setter Property="Visibility" Value="Visible"/>
+                              </DataTrigger>
+                            </Style.Triggers>
+                          </Style>
+                        </StackPanel.Style>
+
+                        <!-- Заголовок пары -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
+                          <Border Background="#202DD4A0" CornerRadius="4" Padding="5,2" Margin="0,0,7,0">
+                            <TextBlock Text="📋 ИСПРАВЛЕНИЕ" FontSize="10" FontWeight="Bold"
+                                       Foreground="{StaticResource BrushGreen}"/>
+                          </Border>
+                          <TextBlock Text="{Binding PairLabel}" FontSize="11"
+                                     Foreground="{StaticResource BrushText3}"
+                                     VerticalAlignment="Center"
+                                     TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+
+                        <!-- sell_refund -->
+                        <Border Background="#0A2DD4A0" CornerRadius="5" Padding="7,5" Margin="0,0,0,3">
+                          <Grid>
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition/><ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                              <TextBlock Text="Возврат прихода" FontSize="10"
+                                         Foreground="{StaticResource BrushGreen}" Margin="0,0,0,2"/>
+                              <TextBlock Text="{Binding RefundXmlFilename}" FontSize="11"
+                                         Foreground="{StaticResource BrushText2}"
+                                         TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                            <Border Grid.Column="1" Background="#21F0D020"
+                                    CornerRadius="3" Padding="5,1" Margin="5,0,0,0"
+                                    VerticalAlignment="Center">
+                              <TextBlock Text="XML" FontSize="10" FontWeight="Bold"
+                                         Foreground="{StaticResource BrushYellow}"/>
+                            </Border>
+                          </Grid>
                         </Border>
-                      </Grid>
-                      <!-- DOCX (только если есть) -->
-                      <Grid Margin="0,4,0,0"
-                            Visibility="{Binding HasDocx, Converter={StaticResource BoolVis}}">
-                        <Grid.ColumnDefinitions>
-                          <ColumnDefinition/><ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{Binding DocxFilename}"
-                                   FontSize="11" Foreground="{StaticResource BrushText2}"
-                                   TextTrimming="CharacterEllipsis"/>
-                        <Border Grid.Column="1" Background="#212DD4A0"
-                                CornerRadius="3" Padding="5,1" Margin="5,0,0,0">
-                          <TextBlock Text="DOCX" FontSize="10" FontWeight="Bold"
-                                     Foreground="{StaticResource BrushGreen}"/>
+
+                        <!-- sell_correction -->
+                        <Border Background="#0A4C8AF5" CornerRadius="5" Padding="7,5">
+                          <Grid>
+                            <Grid.ColumnDefinitions>
+                              <ColumnDefinition/><ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                              <TextBlock Text="Коррекция прихода" FontSize="10"
+                                         Foreground="{StaticResource BrushAccent2}" Margin="0,0,0,2"/>
+                              <TextBlock Text="{Binding CorrectionXmlFilename}" FontSize="11"
+                                         Foreground="{StaticResource BrushText2}"
+                                         TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                            <Border Grid.Column="1" Background="#21F0D020"
+                                    CornerRadius="3" Padding="5,1" Margin="5,0,0,0"
+                                    VerticalAlignment="Center">
+                              <TextBlock Text="XML" FontSize="10" FontWeight="Bold"
+                                         Foreground="{StaticResource BrushYellow}"/>
+                            </Border>
+                          </Grid>
                         </Border>
-                      </Grid>
-                    </StackPanel>
+                      </StackPanel>
+                    </Grid>
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
@@ -813,7 +897,7 @@
                   <Style TargetType="TextBlock">
                     <Setter Property="Visibility" Value="Collapsed"/>
                     <Style.Triggers>
-                      <DataTrigger Binding="{Binding SelectedResult}" Value="{x:Null}">
+                      <DataTrigger Binding="{Binding SelectedEntry}" Value="{x:Null}">
                         <Setter Property="Visibility" Value="Visible"/>
                       </DataTrigger>
                     </Style.Triggers>
@@ -829,7 +913,7 @@
                   <Style TargetType="Border">
                     <Setter Property="Visibility" Value="Visible"/>
                     <Style.Triggers>
-                      <DataTrigger Binding="{Binding SelectedResult}" Value="{x:Null}">
+                      <DataTrigger Binding="{Binding SelectedEntry}" Value="{x:Null}">
                         <Setter Property="Visibility" Value="Collapsed"/>
                       </DataTrigger>
                     </Style.Triggers>
@@ -1154,96 +1238,6 @@
 
               </DataGrid.Columns>
             </DataGrid>
-
-            <!-- ── Результаты исправительных чеков ── -->
-            <Border Margin="0,14,0,0"
-                    Background="{StaticResource BrushSurface2}"
-                    BorderBrush="{StaticResource BrushBorder}"
-                    BorderThickness="1" CornerRadius="8" Padding="14"
-                    Visibility="{Binding ShowCorrectiveResults, Converter={StaticResource BoolVis}}">
-              <Grid>
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="220"/>
-                  <ColumnDefinition Width="12"/>
-                  <ColumnDefinition/>
-                </Grid.ColumnDefinitions>
-
-                <!-- Левая колонка: список файлов -->
-                <StackPanel Grid.Column="0">
-                  <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                    <Border Width="3" Height="13" Background="{StaticResource BrushGreen}"
-                            CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="СФОРМИРОВАНО" Style="{StaticResource SectionTitle}" Margin="0"/>
-                  </StackPanel>
-                  <ItemsControl ItemsSource="{Binding CorrectiveResults}" MaxHeight="340">
-                    <ItemsControl.Template>
-                      <ControlTemplate TargetType="ItemsControl">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                          <ItemsPresenter/>
-                        </ScrollViewer>
-                      </ControlTemplate>
-                    </ItemsControl.Template>
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate>
-                        <Border Background="{StaticResource BrushSurface1}"
-                                BorderBrush="{StaticResource BrushBorder}"
-                                BorderThickness="1" CornerRadius="6"
-                                Padding="8" Margin="0,0,0,5">
-                          <StackPanel>
-                            <TextBlock Text="{Binding OrderNum}"
-                                       FontSize="11" Foreground="{StaticResource BrushAccent2}"
-                                       Margin="0,0,0,3"/>
-                            <Grid>
-                              <Grid.ColumnDefinitions>
-                                <ColumnDefinition/>
-                                <ColumnDefinition Width="Auto"/>
-                              </Grid.ColumnDefinitions>
-                              <TextBlock Grid.Column="0" Text="{Binding XmlFilename}"
-                                         FontSize="11" Foreground="{StaticResource BrushText2}"
-                                         TextTrimming="CharacterEllipsis"/>
-                              <Border Grid.Column="1" Background="#21F0D020"
-                                      CornerRadius="3" Padding="4,1" Margin="4,0,0,0">
-                                <TextBlock Text="XML" FontSize="10" FontWeight="Bold"
-                                           Foreground="{StaticResource BrushYellow}"/>
-                              </Border>
-                            </Grid>
-                          </StackPanel>
-                        </Border>
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                  <Button Content="📂  Открыть папку"
-                          Style="{StaticResource BtnSecondary}"
-                          Margin="0,8,0,0" Padding="0,7" FontSize="12"
-                          HorizontalAlignment="Stretch"
-                          Command="{Binding OpenFolderCommand}"/>
-                </StackPanel>
-
-                <!-- Разделитель -->
-                <Border Grid.Column="1" Width="1" Background="{StaticResource BrushBorder}"
-                        VerticalAlignment="Stretch" Margin="0,2"/>
-
-                <!-- Правая колонка: предпросмотр чеков -->
-                <StackPanel Grid.Column="2" Margin="0,0,0,0">
-                  <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                    <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
-                            CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="ПРЕДПРОСМОТР ЧЕКОВ" Style="{StaticResource SectionTitle}" Margin="0"/>
-                  </StackPanel>
-                  <Border Background="{StaticResource BrushSurface1}"
-                          BorderBrush="{StaticResource BrushBorder}"
-                          BorderThickness="1" CornerRadius="6" Padding="10">
-                    <ScrollViewer MaxHeight="340" VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Auto">
-                      <TextBlock Text="{Binding ReceiptPreviewText}"
-                                 FontFamily="Courier New" FontSize="12"
-                                 Foreground="{StaticResource BrushText2}"
-                                 TextWrapping="NoWrap"/>
-                    </ScrollViewer>
-                  </Border>
-                </StackPanel>
-              </Grid>
-            </Border>
 
           </StackPanel>
         </Border>
