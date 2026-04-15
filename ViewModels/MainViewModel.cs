@@ -261,6 +261,7 @@ public class MainViewModel : BaseViewModel
     public ICommand AddSelectedToOrdersCommand { get; }
     public ICommand ToggleAtolPanelCommand     { get; }
     public ICommand SaveAtolSettingsCommand    { get; }
+    public ICommand TestAtolConnectionCommand  { get; }
     public ICommand PunchViaAtolCommand        { get; }
     public ICommand PunchOrdersViaAtolCommand  { get; }
 
@@ -289,6 +290,7 @@ public class MainViewModel : BaseViewModel
         AddSelectedToOrdersCommand = new RelayCommand(_ => AddSelectedToOrders());
         ToggleAtolPanelCommand     = new RelayCommand(_ => ShowAtolPanel = !ShowAtolPanel);
         SaveAtolSettingsCommand    = new RelayCommand(_ => SaveAtolSettings());
+        TestAtolConnectionCommand  = new AsyncRelayCommand(TestAtolConnectionAsync);
         PunchViaAtolCommand        = new AsyncRelayCommand(PunchViaAtolAsync);
         PunchOrdersViaAtolCommand  = new AsyncRelayCommand(PunchOrdersViaAtolAsync);
 
@@ -443,6 +445,34 @@ public class MainViewModel : BaseViewModel
         creds.Save();
         AtolStatus = "Настройки сохранены";
         ShowToast("Настройки АТОЛ сохранены", false);
+    }
+
+    private async Task TestAtolConnectionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(AtolLogin) || string.IsNullOrWhiteSpace(AtolGroupCode))
+        { AtolStatus = "⚠️ Заполните логин и group code"; return; }
+
+        AtolStatus = "Проверяем подключение...";
+        AtolApiService.InvalidateToken();   // сбрасываем кэш, чтобы проверить реально
+
+        var creds = new AtolCredentials
+        {
+            Login     = AtolLogin.Trim(),
+            Password  = AtolPassword,
+            GroupCode = AtolGroupCode.Trim(),
+        };
+
+        var (token, err) = await AtolApiService.GetTokenAsync(creds);
+        if (token is not null)
+        {
+            AtolStatus = $"✅ Подключение успешно. Токен: {token[..Math.Min(12, token.Length)]}…";
+            ShowToast("АТОЛ Online: подключение успешно", false);
+        }
+        else
+        {
+            AtolStatus = $"❌ Ошибка: {err}";
+            ShowToast($"АТОЛ Online: {err}", true);
+        }
     }
 
     private async Task PunchViaAtolAsync()

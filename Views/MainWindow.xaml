@@ -476,6 +476,10 @@
                         Style="{StaticResource BtnSecondary}"
                         Padding="11,6" FontSize="12" Margin="0,0,8,0"
                         Command="{Binding SaveAtolSettingsCommand}"/>
+                <Button Content="🔌  Проверить подключение"
+                        Style="{StaticResource BtnSecondary}"
+                        Padding="11,6" FontSize="12"
+                        Command="{Binding TestAtolConnectionCommand}"/>
               </WrapPanel>
               <TextBlock Text="{Binding AtolStatus}"
                          FontSize="12" Foreground="{StaticResource BrushText2}"
