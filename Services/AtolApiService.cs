@@ -352,16 +352,16 @@ public static class AtolApiService
         string groupCode, string operation, string uuid, string token,
         string logLabel = "")
     {
-        string tag     = string.IsNullOrEmpty(logLabel) ? uuid[..8] : logLabel;
-        string pollOp  = operation.Replace('_', '-');   // АТОЛ: GET использует дефис (sell-refund), POST принимает оба варианта
+        string tag = string.IsNullOrEmpty(logLabel) ? uuid[..8] : logLabel;
 
         for (int i = 0; i < 8; i++)
         {
             await Task.Delay(2500);
             try
             {
+                // АТОЛ API v4: статус всегда через /report/{uuid}, не через /{operation}/{uuid}
                 var resp   = await Http.GetAsync(
-                    $"{groupCode}/{pollOp}/{uuid}?token={token}");
+                    $"{groupCode}/report/{uuid}?token={token}");
                 var body   = await resp.Content.ReadAsStringAsync();
                 if (string.IsNullOrWhiteSpace(body))
                 {
