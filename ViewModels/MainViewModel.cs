@@ -613,7 +613,8 @@ public class MainViewModel : BaseViewModel
             else
             {
                 fail++;
-                errors.AppendLine($"❌ {order.OrderNum}: {result.Error}");
+                var uuidHint = !string.IsNullOrEmpty(result.Uuid) ? $" [UUID: {result.Uuid}]" : "";
+                errors.AppendLine($"❌ {order.OrderNum}: {result.Error}{uuidHint}");
             }
         }
 

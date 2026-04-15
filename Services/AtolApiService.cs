@@ -197,7 +197,8 @@ public static class AtolApiService
                 return new AtolPunchResult { Error = $"UUID не получен. Ответ: {body}" };
 
             // 5. Ждём финального статуса (до 10 секунд)
-            return await PollStatusAsync(creds.GroupCode, "sell-correction", result.Uuid, token);
+            return await PollStatusAsync(creds.GroupCode, "sell_correction", result.Uuid, token,
+                $"sell_correction/{r.DocNumber}");
         }
         catch (Exception ex)
         {
@@ -243,7 +244,7 @@ public static class AtolApiService
 
         if (checkType is "sell_correction" or "buy_correction")
         {
-            endpoint = checkType == "sell_correction" ? "sell-correction" : "buy-correction";
+            endpoint = checkType;   // sell_correction / buy_correction (подчёркивание, как sell_refund)
 
             var baseDate   = !string.IsNullOrEmpty(order.CorrectionDate)
                                  ? order.CorrectionDate
@@ -306,7 +307,7 @@ public static class AtolApiService
                             sum            = order.Amount,
                             payment_method = "full_payment",
                             payment_object = order.IsService ? "service" : "commodity",
-                            vat            = new { type = vatType },
+                            vat            = new { type = vatType, sum = vatSum },
                         }
                     },
                     payments = new[] { new { type = payType, sum = order.Amount } },
@@ -336,7 +337,8 @@ public static class AtolApiService
             if (string.IsNullOrEmpty(result?.Uuid))
                 return new AtolPunchResult { Error = $"UUID не получен. Ответ: {body}" };
 
-            return await PollStatusAsync(creds.GroupCode, endpoint, result.Uuid, token);
+            return await PollStatusAsync(creds.GroupCode, endpoint, result.Uuid, token,
+                $"{checkType}/{order.OrderNum}");
         }
         catch (Exception ex)
         {
@@ -347,11 +349,14 @@ public static class AtolApiService
 
     // ── Опрос статуса ─────────────────────────────────────────────────────────
     private static async Task<AtolPunchResult> PollStatusAsync(
-        string groupCode, string operation, string uuid, string token)
+        string groupCode, string operation, string uuid, string token,
+        string logLabel = "")
     {
-        for (int i = 0; i < 5; i++)
+        string tag = string.IsNullOrEmpty(logLabel) ? uuid[..8] : logLabel;
+
+        for (int i = 0; i < 8; i++)
         {
-            await Task.Delay(2000);
+            await Task.Delay(2500);
             try
             {
                 var resp   = await Http.GetAsync(
@@ -360,19 +365,26 @@ public static class AtolApiService
                 var result = JsonSerializer.Deserialize<AtolReceiptResponse>(body, JsonOpts);
 
                 if (result?.Status == "done")
+                {
+                    Log($"Poll [{tag}] attempt {i + 1}: done ✓");
                     return new AtolPunchResult { Success = true, Uuid = uuid, Status = "done" };
+                }
 
                 if (result?.Status == "fail")
                 {
                     var errText = result.Error is { } e ? $"{e.Code}: {e.Text}" : body;
+                    Log($"Poll [{tag}] attempt {i + 1}: fail → {errText}");
                     return new AtolPunchResult { Error = errText, Uuid = uuid, Status = "fail" };
                 }
                 // "wait" — продолжаем ждать
+                Log($"Poll [{tag}] attempt {i + 1}: wait…");
             }
-            catch { /* ждём ещё */ }
+            catch (Exception ex) { Log($"Poll [{tag}] attempt {i + 1}: exception {ex.Message}"); }
         }
-        // Статус не получен — считаем отправленным (UUID есть)
-        return new AtolPunchResult { Success = true, Uuid = uuid, Status = "wait" };
+        // Статус не получен после 20 секунд — возвращаем предупреждение
+        Log($"Poll [{tag}]: timeout — uuid={uuid}, проверьте статус вручную");
+        return new AtolPunchResult { Success = false, Uuid = uuid, Status = "wait",
+            Error = $"Статус не получен за 20 сек. UUID: {uuid}" };
     }
 
     // ── Поиск group_code (диагностика) ────────────────────────────────────────
