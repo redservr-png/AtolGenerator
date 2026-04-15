@@ -25,3 +25,6 @@ Thumbs.db
 
 # Claude
 .claude/settings.local.json
+publish_out/
+gh_release.py
+github_script.py
