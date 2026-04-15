@@ -75,8 +75,9 @@
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
       <Grid Margin="18,16,18,16">
         <Grid.RowDefinitions>
-          <RowDefinition Height="Auto"/>
-          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>  <!-- Row 0: основной контент -->
+          <RowDefinition Height="Auto"/>  <!-- Row 1: результаты + предпросмотр -->
+          <RowDefinition Height="Auto"/>  <!-- Row 2: 1С реализации -->
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
@@ -672,96 +673,182 @@
             </StackPanel>
           </Border>
 
-          <!-- Results panel -->
-          <Border Background="{StaticResource BrushSurface1}"
-                  BorderBrush="{StaticResource BrushBorder}"
-                  BorderThickness="1" CornerRadius="10" Padding="16"
-                  Visibility="{Binding ShowResults, Converter={StaticResource BoolVis}}">
-            <StackPanel>
-              <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+        </StackPanel>
+
+        <!-- ════ РЕЗУЛЬТАТЫ + ПРЕДПРОСМОТР (Row 1, полноширинный мастер-деталь) ════ -->
+        <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                Background="{StaticResource BrushSurface1}"
+                BorderBrush="{StaticResource BrushBorder}"
+                BorderThickness="1" CornerRadius="10" Padding="16"
+                Margin="0,14,0,0"
+                Visibility="{Binding ShowResults, Converter={StaticResource BoolVis}}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="300"/>   <!-- список файлов -->
+              <ColumnDefinition Width="1"/>     <!-- разделитель -->
+              <ColumnDefinition Width="*"/>     <!-- предпросмотр -->
+            </Grid.ColumnDefinitions>
+
+            <!-- ── Левая панель: список результатов ── -->
+            <DockPanel Grid.Column="0" Margin="0,0,16,0">
+
+              <!-- Заголовок -->
+              <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
                 <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
-                        CornerRadius="2" Margin="0,0,7,0"/>
-                <TextBlock Text="РЕЗУЛЬТАТЫ" Style="{StaticResource SectionTitle}" Margin="0"/>
+                        CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                <TextBlock Style="{StaticResource SectionTitle}" Margin="0">
+                  <Run Text="РЕЗУЛЬТАТЫ"/>
+                  <Run Text=" · " Foreground="{StaticResource BrushText3}"/>
+                  <Run Text="{Binding Results.Count, Mode=OneWay}"
+                       Foreground="{StaticResource BrushText3}" FontWeight="Normal"/>
+                </TextBlock>
               </StackPanel>
-              <ItemsControl ItemsSource="{Binding Results}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Border Background="{StaticResource BrushSurface2}"
-                            BorderBrush="{StaticResource BrushBorder}"
-                            BorderThickness="1" CornerRadius="8"
-                            Padding="11" Margin="0,0,0,7">
-                      <StackPanel>
-                        <TextBlock Text="{Binding OrderNum}"
-                                   FontFamily="Courier New" FontSize="12"
-                                   Foreground="{StaticResource BrushAccent2}"
-                                   Margin="0,0,0,4"/>
-                        <Grid>
-                          <Grid.ColumnDefinitions>
-                            <ColumnDefinition/><ColumnDefinition Width="Auto"/>
-                          </Grid.ColumnDefinitions>
-                          <TextBlock Grid.Column="0" Text="{Binding XmlFilename}"
-                                     FontSize="12" Foreground="{StaticResource BrushText2}"/>
-                          <Border Grid.Column="1" Background="#21F0D020"
-                                  CornerRadius="4" Padding="6,2">
-                            <TextBlock Text="XML" FontSize="11" FontWeight="Bold"
-                                       Foreground="{StaticResource BrushYellow}"/>
-                          </Border>
-                        </Grid>
-                        <Grid Margin="0,3,0,0"
-                              Visibility="{Binding HasDocx, Mode=OneWay, Converter={StaticResource BoolVis}}">
-                          <Grid.ColumnDefinitions>
-                            <ColumnDefinition/><ColumnDefinition Width="Auto"/>
-                          </Grid.ColumnDefinitions>
-                          <TextBlock Grid.Column="0" Text="{Binding DocxFilename}"
-                                     FontSize="12" Foreground="{StaticResource BrushText2}"/>
-                          <Border Grid.Column="1" Background="#212DD4A0"
-                                  CornerRadius="4" Padding="6,2">
-                            <TextBlock Text="DOCX" FontSize="11" FontWeight="Bold"
-                                       Foreground="{StaticResource BrushGreen}"/>
-                          </Border>
-                        </Grid>
-                      </StackPanel>
-                    </Border>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-              <Button Content="📂  Открыть папку с файлами"
+
+              <!-- Кнопка внизу -->
+              <Button DockPanel.Dock="Bottom"
+                      Content="📂  Открыть папку с файлами"
                       Style="{StaticResource BtnSecondary}"
                       Margin="0,10,0,0" Padding="0,9"
                       HorizontalAlignment="Stretch"
                       Command="{Binding OpenFolderCommand}"/>
-            </StackPanel>
-          </Border>
 
-          <!-- Предпросмотр сформированных чеков -->
-          <Border Background="{StaticResource BrushSurface1}"
-                  BorderBrush="{StaticResource BrushBorder}"
-                  BorderThickness="1" CornerRadius="10" Padding="16"
-                  Visibility="{Binding ShowResults, Converter={StaticResource BoolVis}}">
-            <StackPanel>
-              <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
-                        CornerRadius="2" Margin="0,0,7,0"/>
-                <TextBlock Text="ПРЕДПРОСМОТР" Style="{StaticResource SectionTitle}" Margin="0"/>
+              <!-- Список (прокручиваемый) -->
+              <ListBox ItemsSource="{Binding Results}"
+                       SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
+                       Background="Transparent"
+                       BorderThickness="0"
+                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                       VirtualizingStackPanel.IsVirtualizing="False">
+                <ListBox.ItemContainerStyle>
+                  <Style TargetType="ListBoxItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Padding"  Value="0"/>
+                    <Setter Property="Margin"   Value="0,0,0,7"/>
+                    <Setter Property="Cursor"   Value="Hand"/>
+                    <Setter Property="Template">
+                      <Setter.Value>
+                        <ControlTemplate TargetType="ListBoxItem">
+                          <Border x:Name="card"
+                                  Background="{StaticResource BrushSurface2}"
+                                  BorderBrush="{StaticResource BrushBorder}"
+                                  BorderThickness="1.5" CornerRadius="8"
+                                  Padding="11">
+                            <ContentPresenter/>
+                          </Border>
+                          <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                              <Setter TargetName="card" Property="BorderBrush"
+                                      Value="{StaticResource BrushAccent2}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                              <Setter TargetName="card" Property="BorderBrush"
+                                      Value="{StaticResource BrushAccent}"/>
+                              <Setter TargetName="card" Property="Background" Value="#12203A"/>
+                            </Trigger>
+                          </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                      </Setter.Value>
+                    </Setter>
+                  </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel>
+                      <TextBlock Text="{Binding OrderNum}"
+                                 FontFamily="Courier New" FontSize="12"
+                                 Foreground="{StaticResource BrushAccent2}"
+                                 Margin="0,0,0,5"/>
+                      <!-- XML -->
+                      <Grid>
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding XmlFilename}"
+                                   FontSize="11" Foreground="{StaticResource BrushText2}"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <Border Grid.Column="1" Background="#21F0D020"
+                                CornerRadius="3" Padding="5,1" Margin="5,0,0,0">
+                          <TextBlock Text="XML" FontSize="10" FontWeight="Bold"
+                                     Foreground="{StaticResource BrushYellow}"/>
+                        </Border>
+                      </Grid>
+                      <!-- DOCX (только если есть) -->
+                      <Grid Margin="0,4,0,0"
+                            Visibility="{Binding HasDocx, Converter={StaticResource BoolVis}}">
+                        <Grid.ColumnDefinitions>
+                          <ColumnDefinition/><ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{Binding DocxFilename}"
+                                   FontSize="11" Foreground="{StaticResource BrushText2}"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <Border Grid.Column="1" Background="#212DD4A0"
+                                CornerRadius="3" Padding="5,1" Margin="5,0,0,0">
+                          <TextBlock Text="DOCX" FontSize="10" FontWeight="Bold"
+                                     Foreground="{StaticResource BrushGreen}"/>
+                        </Border>
+                      </Grid>
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </DockPanel>
+
+            <!-- ── Вертикальный разделитель ── -->
+            <Border Grid.Column="1" Background="{StaticResource BrushBorder}" Margin="0,2"/>
+
+            <!-- ── Правая панель: предпросмотр выбранного чека ── -->
+            <DockPanel Grid.Column="2" Margin="16,0,0,0">
+              <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                <Border Width="3" Height="13" Background="{StaticResource BrushAccent2}"
+                        CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                <TextBlock Text="ПРЕДПРОСМОТР ЧЕКА" Style="{StaticResource SectionTitle}" Margin="0"/>
               </StackPanel>
+
+              <!-- Подсказка, если ничего не выбрано -->
+              <TextBlock DockPanel.Dock="Top"
+                         Text="Выберите чек из списка слева"
+                         FontSize="13" Foreground="{StaticResource BrushText3}"
+                         HorizontalAlignment="Center" Margin="0,40,0,0">
+                <TextBlock.Style>
+                  <Style TargetType="TextBlock">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding SelectedResult}" Value="{x:Null}">
+                        <Setter Property="Visibility" Value="Visible"/>
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </TextBlock.Style>
+              </TextBlock>
+
+              <!-- Кассовая лента -->
               <Border Background="{StaticResource BrushSurface2}"
                       BorderBrush="{StaticResource BrushBorder}"
-                      BorderThickness="1" CornerRadius="7" Padding="10">
-                <ScrollViewer MaxHeight="380" VerticalScrollBarVisibility="Auto"
+                      BorderThickness="1" CornerRadius="7" Padding="14">
+                <Border.Style>
+                  <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Visible"/>
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding SelectedResult}" Value="{x:Null}">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Border.Style>
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Auto">
-                  <TextBlock Text="{Binding MainReceiptPreviewText}"
-                             FontFamily="Courier New" FontSize="12"
+                  <TextBlock Text="{Binding SelectedReceiptPreview}"
+                             FontFamily="Courier New" FontSize="12.5"
                              Foreground="{StaticResource BrushText2}"
-                             TextWrapping="NoWrap"/>
+                             TextWrapping="NoWrap" LineHeight="20"/>
                 </ScrollViewer>
               </Border>
-            </StackPanel>
-          </Border>
-
-        </StackPanel>
+            </DockPanel>
+          </Grid>
+        </Border>
 
         <!-- ════ 1С РЕАЛИЗАЦИИ — полноширинная таблица ════ -->
-        <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+        <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
                 Background="{StaticResource BrushSurface1}"
                 BorderBrush="{StaticResource BrushBorder}"
                 BorderThickness="1" CornerRadius="10" Padding="16"
