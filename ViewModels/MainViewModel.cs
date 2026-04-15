@@ -747,10 +747,7 @@ public class MainViewModel : BaseViewModel
         if (string.IsNullOrWhiteSpace(OneCServer) || string.IsNullOrWhiteSpace(OneCDatabase))
         { ShowToast("Заполните настройки 1С для загрузки позиций документов", true); return; }
 
-        AllResultEntries.Clear();
-        SelectedEntry = null;
-        ShowResults   = false;
-        StatusText    = $"Формирование исправительных чеков для {selected.Count} реализаций...";
+        StatusText = $"Формирование исправительных чеков для {selected.Count} реализаций...";
 
         var settings   = BuildOneCSettings();
         var allResults = new List<GenerationResult>();
@@ -793,8 +790,13 @@ public class MainViewModel : BaseViewModel
         }
 
         ShowResults = AllResultEntries.Count > 0;
-        if (AllResultEntries.Count > 0 && SelectedEntry is null)
-            SelectedEntry = AllResultEntries[0];
+
+        // Выделяем первую новую пару в предпросмотре (не сбрасываем уже выбранное)
+        if (allResults.Count > 0)
+        {
+            var lastAdded = AllResultEntries.LastOrDefault(e => e.IsPair);
+            if (lastAdded is not null) SelectedEntry = lastAdded;
+        }
 
         var pairCount = allResults.Count / 2;
         StatusText = $"Сформировано {pairCount} пар исправительных чеков" +
