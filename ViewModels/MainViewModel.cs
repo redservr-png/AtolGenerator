@@ -44,12 +44,19 @@ public class MainViewModel : BaseViewModel
             Set(ref _checkType, value);
             OnPropertyChanged(nameof(IsCorrection));
             OnPropertyChanged(nameof(ShowCorrectionBox));
+            OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
+            OnPropertyChanged(nameof(CorrectionPunchHint));
             OnPropertyChanged(nameof(ShowPaymentType));
             OnPropertyChanged(nameof(ShowItemsSection));
         }
     }
-    public bool IsCorrection      => CheckType is "sell_correction" or "buy_correction";
-    public bool ShowCorrectionBox => IsCorrection;
+    public bool IsCorrection         => CheckType is "sell_correction" or "buy_correction";
+    public bool ShowCorrectionBox    => IsCorrection;
+    // Пробитие через API: коррекции не поддерживаются (ошибка 31)
+    public bool CanPunchOrdersViaAtol => OrderCount > 0 && !IsCorrection;
+    public string CorrectionPunchHint => IsCorrection
+        ? "Коррекция не поддерживается через АТОЛ API.\nИспользуйте сформированный XML-файл."
+        : string.Empty;
     public bool ShowPaymentType   => IsPaymentTab;  // на вкладке реализации тип оплаты всегда 14 (аванс)
     public bool ShowBuyRefundOption => IsRealizationTab;
     public bool ShowItemsSection  => IsRealizationTab && !IsCorrection;
@@ -395,6 +402,7 @@ public class MainViewModel : BaseViewModel
             { ApplyCorrectionFields(o); Orders.Add(o); added++; }
         }
         OnPropertyChanged(nameof(OrderCount));
+        OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
         ShowToast($"Добавлено {added} из {parsed.Count} заказ(ов)", added > 0);
     }
 
@@ -419,6 +427,7 @@ public class MainViewModel : BaseViewModel
         ApplyCorrectionFields(order);
         Orders.Add(order);
         OnPropertyChanged(nameof(OrderCount));
+        OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
         ShowToast($"Добавлен {order.OrderNum}", false);
     }
 
@@ -437,6 +446,7 @@ public class MainViewModel : BaseViewModel
         {
             Orders.Remove(order);
             OnPropertyChanged(nameof(OrderCount));
+        OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
         }
     }
 
@@ -444,6 +454,7 @@ public class MainViewModel : BaseViewModel
     {
         Orders.Clear();
         OnPropertyChanged(nameof(OrderCount));
+        OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
     }
 
     private void ImportExcel()
@@ -467,6 +478,7 @@ public class MainViewModel : BaseViewModel
                 { Orders.Add(order); added++; }
             }
             OnPropertyChanged(nameof(OrderCount));
+        OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
 
             SkippedRows.Clear();
             foreach (var s in result.SkippedRows) SkippedRows.Add(s);
@@ -755,6 +767,7 @@ public class MainViewModel : BaseViewModel
         }
 
         OnPropertyChanged(nameof(OrderCount));
+        OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
         if (added > 0)
             ShowToast($"Добавлено {added} реализаций в очередь", false);
         else

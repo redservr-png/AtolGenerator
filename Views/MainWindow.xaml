@@ -124,9 +124,11 @@
                 <RadioButton Style="{StaticResource RadioChip}" Content="↩ Возврат прихода"
                              IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=sell_refund, Mode=TwoWay}"/>
                 <RadioButton Style="{StaticResource RadioChip}" Content="⚡ Корр. Приход"
-                             IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=sell_correction, Mode=TwoWay}"/>
+                             IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=sell_correction, Mode=TwoWay}"
+                             ToolTip="Коррекция не поддерживается через АТОЛ API — пробейте вручную через XML"/>
                 <RadioButton Style="{StaticResource RadioChip}" Content="⚡ Корр. Расход"
-                             IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=buy_correction, Mode=TwoWay}"/>
+                             IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=buy_correction, Mode=TwoWay}"
+                             ToolTip="Коррекция не поддерживается через АТОЛ API — пробейте вручную через XML"/>
                 <RadioButton Style="{StaticResource RadioChip}" Content="🔄 Корр. Возврат прихода"
                              IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=buy_refund, Mode=TwoWay}"
                              Visibility="{Binding ShowBuyRefundOption, Converter={StaticResource BoolVis}}"/>
@@ -623,7 +625,8 @@
               </Button>
               <Button Style="{StaticResource BtnPrimary}"
                       Command="{Binding PunchOrdersViaAtolCommand}"
-                      IsEnabled="{Binding OrderCount, Mode=OneWay, Converter={StaticResource NonZeroBool}}"
+                      IsEnabled="{Binding CanPunchOrdersViaAtol, Mode=OneWay}"
+                      ToolTip="{Binding CorrectionPunchHint}"
                       Margin="0,8,0,0" Padding="0,11">
                 <Button.Background>
                   <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
@@ -636,6 +639,12 @@
                   <TextBlock Text="Пробить в АТОЛ Online" FontSize="15" FontWeight="Bold" Foreground="White"/>
                 </StackPanel>
               </Button>
+              <!-- Подсказка при выборе коррекции -->
+              <TextBlock Text="{Binding CorrectionPunchHint}"
+                         FontSize="11" Foreground="#FFAA44"
+                         HorizontalAlignment="Center" Margin="0,4,0,0"
+                         TextWrapping="Wrap" TextAlignment="Center"
+                         Visibility="{Binding IsCorrection, Converter={StaticResource BoolVis}}"/>
               <TextBlock Text="Файлы сохраняются в папку atol_output/"
                          FontSize="11" Foreground="{StaticResource BrushText3}"
                          HorizontalAlignment="Center" Margin="0,8,0,0"/>
