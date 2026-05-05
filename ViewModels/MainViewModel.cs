@@ -498,11 +498,14 @@ public class MainViewModel : BaseViewModel
 
     private async Task TestAtolConnectionAsync()
     {
-        if (string.IsNullOrWhiteSpace(AtolLogin) || string.IsNullOrWhiteSpace(AtolGroupCode))
-        { AtolStatus = "⚠️ Заполните логин и group code"; return; }
+        if (string.IsNullOrWhiteSpace(AtolLogin))
+        { AtolStatus = "⚠️ Заполните логин"; return; }
+        if (string.IsNullOrWhiteSpace(AtolPassword))
+        { AtolStatus = "⚠️ Заполните пароль"; return; }
+        if (string.IsNullOrWhiteSpace(AtolGroupCode))
+        { AtolStatus = "⚠️ Заполните Group Code"; return; }
 
-        AtolStatus = "Проверяем подключение...";
-        AtolApiService.InvalidateToken();   // сбрасываем кэш, чтобы проверить реально
+        AtolApiService.InvalidateToken();   // сбрасываем кэш
 
         var creds = new AtolCredentials
         {
@@ -511,16 +514,28 @@ public class MainViewModel : BaseViewModel
             GroupCode = AtolGroupCode.Trim(),
         };
 
-        var (token, err) = await AtolApiService.GetTokenAsync(creds);
-        if (token is not null)
+        // Шаг 1: токен (логин + пароль)
+        AtolStatus = "⏳ Шаг 1/2: проверяем логин и пароль…";
+        var (token, tokenErr) = await AtolApiService.GetTokenAsync(creds);
+        if (token is null)
         {
-            AtolStatus = $"✅ Подключение успешно. Токен: {token[..Math.Min(12, token.Length)]}…";
+            AtolStatus = $"❌ Ошибка авторизации: {tokenErr}";
+            ShowToast($"АТОЛ: {tokenErr}", true);
+            return;
+        }
+
+        // Шаг 2: group_code
+        AtolStatus = "⏳ Шаг 2/2: проверяем Group Code…";
+        var (gcOk, gcDetail) = await AtolApiService.TestGroupCodeAsync(creds.GroupCode, token);
+        if (gcOk)
+        {
+            AtolStatus = $"✅ Подключено успешно. Логин и Group Code корректны.";
             ShowToast("АТОЛ Online: подключение успешно", false);
         }
         else
         {
-            AtolStatus = $"❌ Ошибка: {err}";
-            ShowToast($"АТОЛ Online: {err}", true);
+            AtolStatus = $"⚠️ Логин/пароль верны, но Group Code недоступен.\n{gcDetail}";
+            ShowToast("АТОЛ: неверный Group Code", true);
         }
     }
 
@@ -543,22 +558,23 @@ public class MainViewModel : BaseViewModel
             GroupCode = AtolGroupCode.Trim(),
         };
 
-        AtolStatus = $"Пробиваем 0 из {rows.Count}...";
+        AtolStatus = $"Пробиваем возвраты 0 из {rows.Count}… (коррекция — через XML)";
         int ok = 0, fail = 0;
 
         for (int i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
-            AtolStatus = $"Пробиваем {i + 1} из {rows.Count}: {row.DocNumber}...";
+            AtolStatus = $"Возврат {i + 1}/{rows.Count}: {row.DocNumber}…";
             row.PunchStatus = "⏳";
 
-            var result = await AtolApiService.PunchCorrectionAsync(creds, row.Source);
+            var result = await AtolApiService.PunchCorrectionAsync(creds, row.Source,
+                SelectedCashier?.FullName ?? AppConstants.CashierName);
 
             if (result.Success)
             {
                 row.PunchOk     = true;
                 row.PunchFail   = false;
-                row.PunchStatus = $"✅ {result.Uuid?[..8]}…";
+                row.PunchStatus = $"✅ возврат {result.Uuid?[..8]}…";
                 ok++;
             }
             else
@@ -570,8 +586,8 @@ public class MainViewModel : BaseViewModel
             }
         }
 
-        AtolStatus = $"Готово: пробито {ok}, ошибок {fail}";
-        ShowToast($"Пробито через АТОЛ: {ok} чеков" + (fail > 0 ? $", ошибок: {fail}" : ""),
+        AtolStatus = $"Готово: возвратов {ok}, ошибок {fail}. Коррекцию пробейте вручную через сформированные XML.";
+        ShowToast($"Возвраты через АТОЛ: {ok}" + (fail > 0 ? $", ошибок: {fail}" : ""),
                   fail > 0 && ok == 0);
     }
 

@@ -125,16 +125,48 @@ public static class AtolApiService
         catch { }
     }
 
-    // ── Пробить чек коррекции (sell-correction) — из 1С-таблицы ─────────────
-    public static async Task<AtolPunchResult> PunchCorrectionAsync(
-        AtolCredentials creds, OneCRealization r)
+    // ── Проверка group_code через фиктивный запрос статуса ──────────────────
+    /// <summary>
+    /// Возвращает (true, detail) если group_code отвечает JSON-ом (значит он валиден),
+    /// иначе (false, detail) — пустой ответ = неверный group_code.
+    /// </summary>
+    public static async Task<(bool ok, string detail)> TestGroupCodeAsync(string groupCode, string token)
     {
-        // 1. Получаем токен
+        try
+        {
+            var resp = await Http.GetAsync($"{groupCode}/report/00000000000000000000000000000000?token={token}");
+            var body = await resp.Content.ReadAsStringAsync();
+            var http = (int)resp.StatusCode;
+
+            if (!string.IsNullOrWhiteSpace(body))
+            {
+                // Любой JSON-ответ = group_code валиден (АТОЛ вернул ошибку "задание не найдено" — это нормально)
+                Log($"TestGroupCode [{groupCode}]: HTTP {http} → {body[..Math.Min(200, body.Length)]}");
+                return (true, $"Group Code доступен (HTTP {http})");
+            }
+            Log($"TestGroupCode [{groupCode}]: HTTP {http} — пустой ответ (неверный Group Code?)");
+            return (false, $"Group Code недоступен — пустой ответ сервера (HTTP {http}). Проверьте правильность Group Code.");
+        }
+        catch (Exception ex)
+        {
+            Log($"TestGroupCode [{groupCode}]: Exception {ex.Message}");
+            return (false, ex.Message);
+        }
+    }
+
+    // ── Пробить возврат прихода из 1С-таблицы (sell_refund) ─────────────────
+    // Примечание: sell_correction через АТОЛ Online API не поддерживается (ошибка 31).
+    // Для коррекции используйте кнопку «Сформировать XML» — она создаёт пару файлов.
+    public static async Task<AtolPunchResult> PunchCorrectionAsync(
+        AtolCredentials creds, OneCRealization r, string cashierName = "")
+    {
         var (token, tokenErr) = await GetTokenAsync(creds);
         if (token is null)
             return new AtolPunchResult { Error = $"Нет токена: {tokenErr}" };
 
-        // 2. Считаем НДС
+        if (string.IsNullOrEmpty(cashierName))
+            cashierName = AppConstants.CashierName;
+
         string vatType;
         double vatSum;
         if (r.IsService)
@@ -148,13 +180,15 @@ public static class AtolApiService
             vatSum  = Math.Round(r.Amount * 22.0 / 100.0, 2);
         }
 
-        // 3. Формируем тело запроса
+        // sell_refund (возврат прихода) — единственная из пары, которую поддерживает API.
+        // sell_correction нужно пробивать вручную через сформированный XML-файл.
         var requestBody = new
         {
             timestamp   = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"),
             external_id = Guid.NewGuid().ToString("N"),
-            correction  = new
+            receipt     = new
             {
+                client  = new { email = AppConstants.EmailOrg },
                 company = new
                 {
                     email           = AppConstants.EmailOrg,
@@ -162,47 +196,52 @@ public static class AtolApiService
                     inn             = AppConstants.InnOrg,
                     payment_address = AppConstants.PaymentAddress,
                 },
-                correction_info = new
+                items = new[]
                 {
-                    type        = "self",
-                    base_date   = r.DocDate,
-                    base_number = r.DocNumber,
+                    new
+                    {
+                        name           = $"{(r.IsService ? "Услуга" : "Товар/услуга")} по реализации {r.DocNumber}",
+                        price          = r.Amount,
+                        quantity       = 1.0,
+                        sum            = r.Amount,
+                        payment_method = "full_payment",
+                        payment_object = r.IsService ? "service" : "commodity",
+                        vat            = new { type = vatType, sum = vatSum },
+                    }
                 },
-                payments = new[] { new { type = 2, sum = r.Amount } },
+                payments = new[] { new { type = 2, sum = r.Amount } },  // 2 = аванс/предоплата
                 vats     = new[] { new { type = vatType, sum = vatSum } },
-                cashier  = AppConstants.CashierName,
+                total    = r.Amount,
+                cashier  = cashierName,
+                // Тег 1192 — ФП исходного чека (если есть)
+                additional_check_props = string.IsNullOrEmpty(r.FiscalNumber) ? null : r.FiscalNumber,
             }
         };
 
-        // 4. Отправляем
         try
         {
-            var json    = JsonSerializer.Serialize(requestBody);
+            var json    = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions
+                          { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var resp    = await Http.PostAsync(
-                $"{creds.GroupCode}/sell-correction?token={token}", content);
+            var resp    = await Http.PostAsync($"{creds.GroupCode}/sell_refund?token={token}", content);
             var body    = await resp.Content.ReadAsStringAsync();
-            var result  = JsonSerializer.Deserialize<AtolReceiptResponse>(body, JsonOpts);
+            Log($"PunchRefund [{r.DocNumber}]: HTTP {(int)resp.StatusCode} → {(body.Length > 400 ? body[..400] + "…" : body)}");
 
-            Log($"PunchCorrection [{r.DocNumber}]: HTTP {(int)resp.StatusCode} → {(body.Length > 400 ? body[..400] + "…" : body)}");
-
+            var result = JsonSerializer.Deserialize<AtolReceiptResponse>(body, JsonOpts);
             if (result?.Error is { Code: not 0 } err)
             {
-                // Токен мог устареть — сбрасываем
                 if (err.Code == 3 || err.Code == 4) InvalidateToken();
                 return new AtolPunchResult { Error = $"АТОЛ {err.Code}: {err.Text}" };
             }
-
             if (string.IsNullOrEmpty(result?.Uuid))
                 return new AtolPunchResult { Error = $"UUID не получен. Ответ: {body}" };
 
-            // 5. Ждём финального статуса (до 10 секунд)
-            return await PollStatusAsync(creds.GroupCode, "sell_correction", result.Uuid, token,
-                $"sell_correction/{r.DocNumber}");
+            return await PollStatusAsync(creds.GroupCode, "sell_refund", result.Uuid, token,
+                $"sell_refund/{r.DocNumber}");
         }
         catch (Exception ex)
         {
-            Log($"PunchCorrection [{r.DocNumber}]: Exception: {ex.Message}");
+            Log($"PunchRefund [{r.DocNumber}]: Exception: {ex.Message}");
             return new AtolPunchResult { Error = ex.Message };
         }
     }
