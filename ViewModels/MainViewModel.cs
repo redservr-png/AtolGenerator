@@ -394,15 +394,17 @@ public class MainViewModel : BaseViewModel
         if (parsed.Count == 0)
         { ShowToast("Заказы не распознаны. Проверьте формат.", true); return; }
 
-        // Обогащаем из 1С если подключение настроено: получаем город → поставщик
+        // Обогащаем из 1С ТОЛЬКО для услуг (IsService=true но агент не определён).
+        // Обычные чеки (sell) обогащение не требуют — не запрашиваем 1С без нужды.
         var hasOneC = !string.IsNullOrWhiteSpace(OneCServer) && !string.IsNullOrWhiteSpace(OneCDatabase);
-        if (hasOneC && parsed.Any(o => o.IsService || o.AgentInfo is null))
+        var serviceOrdersWithoutAgent = parsed.Where(o => o.IsService && o.AgentInfo is null).ToList();
+        if (hasOneC && serviceOrdersWithoutAgent.Count > 0)
         {
-            StatusText = "Запрашиваем подразделения из 1С…";
+            StatusText = $"Запрашиваем подразделение из 1С для {serviceOrdersWithoutAgent.Count} услуг…";
             try
             {
                 var oneCSettings = BuildOneCSettings();
-                await Task.Run(() => OneCService.EnrichOrdersFromOneC(oneCSettings, parsed));
+                await Task.Run(() => OneCService.EnrichOrdersFromOneC(oneCSettings, serviceOrdersWithoutAgent));
             }
             catch { /* если 1С недоступна — продолжаем без обогащения */ }
             StatusText = "Готов к работе";
@@ -418,8 +420,7 @@ public class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(OrderCount));
         OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
 
-        var hint = hasOneC ? "" : " (1С не настроена — город/поставщик не определены)";
-        ShowToast($"Добавлено {added} из {parsed.Count} заказ(ов){hint}", added > 0);
+        ShowToast($"Добавлено {added} из {parsed.Count} заказ(ов)", added > 0);
     }
 
     private void AddSingleOrder()

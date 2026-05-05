@@ -325,12 +325,11 @@ public static class OneCService
                     var dogovor   = Str(selection.Договор);
                     var customer  = Str(selection.Покупатель);
 
-                    var isService = dogovor.IndexOf("агент", StringComparison.OrdinalIgnoreCase) >= 0;
-
-                    if (!string.IsNullOrEmpty(city))     order.City = city;
-                    if (isService)                        order.IsService = true;
+                    if (!string.IsNullOrEmpty(city))
+                        order.City = city;
                     if (string.IsNullOrEmpty(order.CustomerName) && !string.IsNullOrEmpty(customer))
                         order.CustomerName = customer;
+                    // IsService не меняем — метод вызывается только для уже помеченных услуг
 
                     // Ищем поставщика по городу + типу услуги
                     if (order.IsService && !string.IsNullOrEmpty(order.City))
