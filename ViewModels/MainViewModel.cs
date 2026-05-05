@@ -327,7 +327,7 @@ public class MainViewModel : BaseViewModel
 
     public MainViewModel()
     {
-        ParseBulkCommand   = new RelayCommand(ParseBulk);
+        ParseBulkCommand   = new AsyncRelayCommand(ParseBulkAsync);
         AddSingleCommand   = new RelayCommand(AddSingleOrder);
         DeleteOrderCommand = new RelayCommand(o => DeleteOrder(o as OrderEntry));
         ClearOrdersCommand = new RelayCommand(_ => ClearOrders());
@@ -385,7 +385,7 @@ public class MainViewModel : BaseViewModel
             .FirstOrDefault(p => p.Service == SelectedServiceType && p.City == SelectedCity);
     }
 
-    private void ParseBulk()
+    private async Task ParseBulkAsync()
     {
         if (string.IsNullOrWhiteSpace(BulkText))
         { ShowToast("Введите текст с заказами", true); return; }
@@ -393,6 +393,20 @@ public class MainViewModel : BaseViewModel
         var parsed = OrderParserService.Parse(BulkText);
         if (parsed.Count == 0)
         { ShowToast("Заказы не распознаны. Проверьте формат.", true); return; }
+
+        // Обогащаем из 1С если подключение настроено: получаем город → поставщик
+        var hasOneC = !string.IsNullOrWhiteSpace(OneCServer) && !string.IsNullOrWhiteSpace(OneCDatabase);
+        if (hasOneC && parsed.Any(o => o.IsService || o.AgentInfo is null))
+        {
+            StatusText = "Запрашиваем подразделения из 1С…";
+            try
+            {
+                var oneCSettings = BuildOneCSettings();
+                await Task.Run(() => OneCService.EnrichOrdersFromOneC(oneCSettings, parsed));
+            }
+            catch { /* если 1С недоступна — продолжаем без обогащения */ }
+            StatusText = "Готов к работе";
+        }
 
         var existing = new HashSet<string>(Orders.Select(o => o.OrderNum));
         int added = 0;
@@ -403,7 +417,9 @@ public class MainViewModel : BaseViewModel
         }
         OnPropertyChanged(nameof(OrderCount));
         OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
-        ShowToast($"Добавлено {added} из {parsed.Count} заказ(ов)", added > 0);
+
+        var hint = hasOneC ? "" : " (1С не настроена — город/поставщик не определены)";
+        ShowToast($"Добавлено {added} из {parsed.Count} заказ(ов){hint}", added > 0);
     }
 
     private void AddSingleOrder()

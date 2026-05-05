@@ -277,6 +277,103 @@ public static class OneCService
         return result;
     }
 
+    /// <summary>
+    /// Обогащает список заказов из текста данными из 1С:
+    /// Подразделение (город) → IsService (из договора) → AgentInfo (из AppConstants).
+    /// Запрашивает каждый заказ из Документ.ЗаказПокупателя.
+    /// </summary>
+    public static void EnrichOrdersFromOneC(
+        OneCConnectionSettings s, List<Models.OrderEntry> orders)
+    {
+        if (orders.Count == 0) return;
+
+        dynamic? conn      = null;
+        dynamic? connector = null;
+
+        Log($"=== EnrichOrdersFromOneC: {orders.Count} заказов ===");
+        try
+        {
+            connector = CreateConnector();
+            conn      = connector.Connect(s.ConnectionString);
+
+            foreach (var order in orders)
+            {
+                // Пропускаем если агент уже определён (например из текста)
+                if (order.AgentInfo is not null) continue;
+
+                try
+                {
+                    var query = conn.NewObject("Запрос");
+                    query.Текст = """
+                        ВЫБРАТЬ ПЕРВЫЕ 1
+                            Заказ.Подразделение.Наименование КАК Подразделение,
+                            Заказ.ДоговорКонтрагента.Наименование КАК Договор,
+                            Заказ.КонтактноеЛицоКонтрагента.Наименование КАК Покупатель
+                        ИЗ
+                            Документ.ЗаказПокупателя КАК Заказ
+                        ГДЕ
+                            Заказ.Номер = &НомерЗаказа
+                            И Заказ.ПометкаУдаления = ЛОЖЬ
+                        """;
+                    query.УстановитьПараметр("НомерЗаказа", order.OrderNum);
+
+                    var result    = query.Выполнить();
+                    var selection = result.Выбрать();
+                    if (!(bool)selection.Следующий()) continue;
+
+                    var city      = Str(selection.Подразделение);
+                    var dogovor   = Str(selection.Договор);
+                    var customer  = Str(selection.Покупатель);
+
+                    var isService = dogovor.IndexOf("агент", StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    if (!string.IsNullOrEmpty(city))     order.City = city;
+                    if (isService)                        order.IsService = true;
+                    if (string.IsNullOrEmpty(order.CustomerName) && !string.IsNullOrEmpty(customer))
+                        order.CustomerName = customer;
+
+                    // Ищем поставщика по городу + типу услуги
+                    if (order.IsService && !string.IsNullOrEmpty(order.City))
+                    {
+                        // Определяем тип: (сборка) / (доставка) — берём из уже распознанных данных
+                        // или пробуем оба варианта по очерёдности
+                        var svcTypes = new[] { "Сборка", "Доставка" };
+                        foreach (var svcType in svcTypes)
+                        {
+                            var agent = AtolGenerator.Constants.AppConstants.ServiceProviders
+                                .FirstOrDefault(p =>
+                                    string.Equals(p.Service, svcType, StringComparison.OrdinalIgnoreCase) &&
+                                    order.City.Contains(p.City, StringComparison.OrdinalIgnoreCase));
+                            if (agent is not null)
+                            {
+                                order.AgentInfo = agent;
+                                Log($"  {order.OrderNum}: город={order.City}, агент={agent.Name}");
+                                break;
+                            }
+                        }
+                        if (order.AgentInfo is null)
+                            Log($"  {order.OrderNum}: город={order.City} — агент не найден в списке");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log($"  {order.OrderNum}: ошибка запроса — {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"EnrichOrdersFromOneC ERROR: {ex.Message}");
+        }
+        finally
+        {
+            if (conn      is not null) Marshal.ReleaseComObject(conn);
+            if (connector is not null) Marshal.ReleaseComObject(connector);
+        }
+
+        Log($"EnrichOrdersFromOneC done");
+    }
+
     private static dynamic CreateConnector()
     {
         var t = Type.GetTypeFromProgID("V83.COMConnector")
