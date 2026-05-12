@@ -115,12 +115,12 @@ public static class XmlGeneratorService
         var payCode = c.Tab == "realization" ? "2"
                     : c.PaymentType == "cash" ? "0" : "1";
 
-        // НДС: с агентом → none; без агента: оплата → vat122, реализация → vat22
+        // НДС: с агентом/услуга → vat5 (5%); оплата → vat122; реализация → vat22
         string vatType; double vatSum;
         if (c.Agent is not null || c.IsService)
         {
-            vatType = "none";
-            vatSum  = c.Amount;  // при "без НДС" указывается полная сумма
+            vatType = "vat5";
+            vatSum  = Math.Round(c.Amount * 5.0 / 100.0, 2);
         }
         else if (c.Tab == "realization")
         {

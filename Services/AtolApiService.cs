@@ -171,8 +171,8 @@ public static class AtolApiService
         double vatSum;
         if (r.IsService)
         {
-            vatType = "none";
-            vatSum  = r.Amount;
+            vatType = "vat5";
+            vatSum  = Math.Round(r.Amount * 5.0 / 100.0, 2);
         }
         else
         {
@@ -261,8 +261,8 @@ public static class AtolApiService
         double vatSum;
         if (order.IsService || checkType is "buy_correction" or "buy_refund")
         {
-            vatType = "none";
-            vatSum  = order.Amount;
+            vatType = "vat5";
+            vatSum  = Math.Round(order.Amount * 5.0 / 100.0, 2);
         }
         else
         {

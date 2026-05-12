@@ -102,6 +102,8 @@ public static class ReceiptPreviewService
 
     private static string VatTypeName(string vat) => vat switch
     {
+        "vat5"   => "НДС 5%",
+        "vat105" => "НДС 5% (вкл.)",
         "vat22"  => "НДС 22%",
         "vat122" => "НДС 22% (вкл.)",
         "none"   => "Без НДС",
@@ -116,6 +118,8 @@ public static class ReceiptPreviewService
 
     private static double CalcVat(string vatType, double amount) => vatType switch
     {
+        "vat5"   => Math.Round(amount * 5.0  / 100.0, 2),
+        "vat105" => Math.Round(amount * 5.0  / 105.0, 2),
         "vat22"  => Math.Round(amount * 22.0 / 100.0, 2),
         "vat122" => Math.Round(amount * 22.0 / 122.0, 2),
         _        => 0,

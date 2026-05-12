@@ -38,8 +38,8 @@ public static class CorrectiveCheckService
                 Sum           = i.Sum,
                 PaymentMethod = "full_payment",
                 PaymentObject = real.IsService ? "service" : "commodity",
-                VatType       = real.IsService ? "none" : "vat22",
-                VatSum        = real.IsService ? 0 : Math.Round(i.Sum * 22.0 / 122.0, 2),
+                VatType       = real.IsService ? "vat5" : "vat22",
+                VatSum        = real.IsService ? Math.Round(i.Sum * 5.0 / 100.0, 2) : Math.Round(i.Sum * 22.0 / 122.0, 2),
                 IsService     = real.IsService,
             };
         }).ToList();
@@ -51,7 +51,7 @@ public static class CorrectiveCheckService
             Tab                  = "realization",
             Amount               = real.Amount,
             PaymentType          = "card",
-            CheckVatType         = real.IsService ? "none" : "vat22",
+            CheckVatType         = real.IsService ? "vat5" : "vat22",
             Items                = refundItems,
             IsService            = real.IsService,
             AdditionalCheckProps = real.FiscalNumber,
