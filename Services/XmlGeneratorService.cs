@@ -115,22 +115,24 @@ public static class XmlGeneratorService
         var payCode = c.Tab == "realization" ? "2"
                     : c.PaymentType == "cash" ? "0" : "1";
 
-        // НДС: с агентом/услуга → vat5 (5%); оплата → vat122; реализация → vat22
+        // НДС: агент/услуга — берём из CheckVatType (задаётся при генерации); оплата → vat122; реализация → vat22
         string vatType; double vatSum;
         if (c.Agent is not null || c.IsService)
         {
-            vatType = "vat5";
-            vatSum  = Math.Round(c.Amount * 5.0 / 100.0, 2);
+            vatType = c.CheckVatType;  // "vat5" для Страхова, "none" для остальных
+            vatSum  = vatType == "vat5"
+                ? Math.Round(c.Amount * 5.0 / 100.0, 2)
+                : c.Amount;
         }
         else if (c.Tab == "realization")
         {
-            vatType = "vat22";
-            vatSum  = Math.Round(c.Amount * 22.0 / 100.0, 2);  // 22% сверху
+            vatType = "vat20";
+            vatSum  = Math.Round(c.Amount * 20.0 / 100.0, 2);  // 20% сверху
         }
         else
         {
-            vatType = "vat122";
-            vatSum  = Math.Round(c.Amount * 22.0 / 122.0, 2);  // 22/122 включено в цену
+            vatType = "vat120";
+            vatSum  = Math.Round(c.Amount * 20.0 / 120.0, 2);  // 20/120 включено в цену
         }
 
         return new XElement("correction",
@@ -167,7 +169,7 @@ public class CheckData
     public string          Tab                  { get; set; } = "payment";
     public double          Amount               { get; set; }
     public string          PaymentType          { get; set; } = "card";
-    public string          CheckVatType         { get; set; } = "vat122";
+    public string          CheckVatType         { get; set; } = "vat120";
     public List<CheckItem> Items                { get; set; } = new();
     public ServiceProvider? Agent               { get; set; }
     public bool            IsService            { get; set; }
@@ -186,7 +188,7 @@ public class CheckItem
     public double Sum           { get; set; }
     public string PaymentMethod { get; set; } = "full_prepayment";
     public string PaymentObject { get; set; } = "payment";
-    public string VatType       { get; set; } = "vat122";
+    public string VatType       { get; set; } = "vat120";
     public double VatSum        { get; set; }
     public bool   IsService     { get; set; }
 }

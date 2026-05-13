@@ -171,13 +171,16 @@ public static class AtolApiService
         double vatSum;
         if (r.IsService)
         {
-            vatType = "vat5";
-            vatSum  = Math.Round(r.Amount * 5.0 / 100.0, 2);
+            // НДС по городу реализации: Страхов → vat5, остальные → none
+            vatType = AppConstants.GetServiceVatTypeByCity(r.City);
+            vatSum  = vatType == "vat5"
+                ? Math.Round(r.Amount * 5.0 / 100.0, 2)
+                : r.Amount;
         }
         else
         {
-            vatType = "vat22";
-            vatSum  = Math.Round(r.Amount * 22.0 / 100.0, 2);
+            vatType = "vat20";
+            vatSum  = Math.Round(r.Amount * 20.0 / 100.0, 2);
         }
 
         // sell_refund (возврат прихода) — единственная из пары, которую поддерживает API.
@@ -259,15 +262,22 @@ public static class AtolApiService
         // НДС
         string vatType;
         double vatSum;
-        if (order.IsService || checkType is "buy_correction" or "buy_refund")
+        if (order.IsService)
         {
-            vatType = "vat5";
-            vatSum  = Math.Round(order.Amount * 5.0 / 100.0, 2);
+            vatType = order.AgentInfo?.VatType ?? "none";
+            vatSum  = vatType == "vat5"
+                ? Math.Round(order.Amount * 5.0 / 100.0, 2)
+                : order.Amount;
+        }
+        else if (checkType is "buy_correction" or "buy_refund")
+        {
+            vatType = "none";
+            vatSum  = order.Amount;
         }
         else
         {
-            vatType = "vat22";
-            vatSum  = Math.Round(order.Amount * 22.0 / 100.0, 2);
+            vatType = "vat20";
+            vatSum  = Math.Round(order.Amount * 20.0 / 100.0, 2);
         }
 
         // Тип оплаты: 0=наличные, 1=безналичные, 2=аванс

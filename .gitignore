@@ -28,3 +28,4 @@ Thumbs.db
 publish_out/
 gh_release.py
 github_script.py
+publish/

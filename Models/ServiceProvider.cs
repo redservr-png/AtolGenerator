@@ -5,4 +5,5 @@ public record ServiceProvider(
     string City,
     string Name,
     string Inn,
-    string Phone);
+    string Phone,
+    string VatType = "none");   // "vat5" для агентов на УСН 5%, "none" для остальных
