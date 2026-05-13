@@ -49,7 +49,7 @@ public static class DocxGeneratorService
         if (!string.IsNullOrEmpty(memo.OrderInfo))
             body.Append(MakePara($"Документ: {memo.OrderInfo}", italic: true, spaceAfter: 60));
 
-        // ── БЛОК 4: Проблема — не был пробит чек (курсив) ──
+        // ── БЛОК 4: Проблема — не был пробит чек (касса магазина) ──
         body.Append(MakePara(
             $"Не был пробит кассовый чек на контрольно-кассовом аппарате " +
             $"{memo.KktModel}, заводской номер {memo.KktSerial}, " +
@@ -57,11 +57,11 @@ public static class DocxGeneratorService
             $"(формат {memo.KktFfd}).",
             italic: true, spaceBefore: 0, spaceAfter: 60));
 
-        // ── БЛОК 5: Дата пробития коррекции + описание (курсив) ──
+        // ── БЛОК 5: Дата пробития коррекции + описание (касса интернет-магазина) ──
         body.Append(MakePara(
-            $"{memo.TodayDate} на контрольно-кассовом аппарате {memo.KktModel}, " +
-            $"заводской номер {memo.KktSerial}, регистрационный номер {memo.KktReg}, " +
-            $"режим передачи фискальных данных (формат {memo.KktFfd}) был сформирован " +
+            $"{memo.TodayDate} на контрольно-кассовом аппарате {memo.KktModelOnline}, " +
+            $"заводской номер {memo.KktSerialOnline}, регистрационный номер {memo.KktRegOnline}, " +
+            $"режим передачи фискальных данных (формат {memo.KktFfdOnline}) был сформирован " +
             $"{memo.CorrectionDesc} на сумму {FormatMoney(memo.Amount)} руб.",
             italic: true, spaceBefore: 0, spaceAfter: 100));
 
@@ -156,9 +156,14 @@ public class MemoData
     public string FromPosition    { get; set; } = AppConstants.FromPosition;
     public string FromNameGenitive { get; set; } = AppConstants.FromName;
     public string CashierShort    { get; set; } = AppConstants.CashierShort;
-    // ── ККТ (берётся по городу из 1С, иначе DefaultKkt) ──
+    // ── ККТ магазина (блок 4: не пробит чек — по городу/подразделению) ──
     public string KktModel  { get; set; } = AppConstants.KktModel;
     public string KktSerial { get; set; } = AppConstants.KktSerial;
     public string KktReg    { get; set; } = AppConstants.KktReg;
     public string KktFfd    { get; set; } = AppConstants.FfdVersion;
+    // ── ККТ интернет-магазина (блок 5: здесь пробита коррекция) ──
+    public string KktModelOnline  { get; set; } = AppConstants.KktModel;
+    public string KktSerialOnline { get; set; } = AppConstants.KktSerial;
+    public string KktRegOnline    { get; set; } = AppConstants.KktReg;
+    public string KktFfdOnline    { get; set; } = AppConstants.FfdVersion;
 }

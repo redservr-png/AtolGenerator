@@ -148,27 +148,36 @@ public static class CheckGeneratorService
                         ? "возврате безналичных денежных средств покупателю"
                         : AppConstants.OperationDescriptions.GetValueOrDefault(p.CheckType, "расчёте");
 
-                // ККТ: для реализаций — по городу; для оплат — всегда Интернет-магазин
-                var kkt = p.Tab == "realization"
+                // ККТ блок 4 (не пробит чек): по городу/подразделению для реализаций,
+                //   для оплат — Интернет-магазин (DefaultKkt).
+                // ККТ блок 5 (пробита коррекция): всегда Интернет-магазин (DefaultKkt).
+                var storeKkt  = p.Tab == "realization"
                     ? AppConstants.GetKktByCity(order.City)
                     : AppConstants.DefaultKkt;
+                var onlineKkt = AppConstants.DefaultKkt;
 
                 var memo = new MemoData
                 {
-                    EventDate       = eventDate,
-                    TodayDate       = DateTime.Today.ToString("dd.MM.yyyy"),
-                    OperationDesc   = operationDesc,
-                    CustomerName    = order.CustomerName,
-                    Amount          = amount,
-                    OrderInfo       = orderInfoStr,
-                    CorrectionDesc  = AppConstants.CorrectionDescriptions.GetValueOrDefault(p.CheckType, string.Empty),
-                    FromPosition    = p.Cashier.Position,
+                    EventDate        = eventDate,
+                    TodayDate        = DateTime.Today.ToString("dd.MM.yyyy"),
+                    OperationDesc    = operationDesc,
+                    CustomerName     = order.CustomerName,
+                    Amount           = amount,
+                    OrderInfo        = orderInfoStr,
+                    CorrectionDesc   = AppConstants.CorrectionDescriptions.GetValueOrDefault(p.CheckType, string.Empty),
+                    FromPosition     = p.Cashier.Position,
                     FromNameGenitive = p.Cashier.NameGenitive,
-                    CashierShort    = p.Cashier.ShortName,
-                    KktModel        = kkt.Model,
-                    KktSerial       = kkt.Serial,
-                    KktReg          = kkt.RegNum,
-                    KktFfd          = kkt.Ffd,
+                    CashierShort     = p.Cashier.ShortName,
+                    // Блок 4 — касса магазина
+                    KktModel         = storeKkt.Model,
+                    KktSerial        = storeKkt.Serial,
+                    KktReg           = storeKkt.RegNum,
+                    KktFfd           = storeKkt.Ffd,
+                    // Блок 5 — касса интернет-магазина
+                    KktModelOnline   = onlineKkt.Model,
+                    KktSerialOnline  = onlineKkt.Serial,
+                    KktRegOnline     = onlineKkt.RegNum,
+                    KktFfdOnline     = onlineKkt.Ffd,
                 };
 
                 DocxGeneratorService.Generate(memo, docxPath);
