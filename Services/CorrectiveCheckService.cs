@@ -38,11 +38,11 @@ public static class CorrectiveCheckService
                 Sum           = i.Sum,
                 PaymentMethod = "full_payment",
                 PaymentObject = real.IsService ? "service" : "commodity",
-                VatType       = real.IsService ? AtolGenerator.Constants.AppConstants.GetServiceVatTypeByCity(real.City) : "vat20",
+                VatType       = real.IsService ? AtolGenerator.Constants.AppConstants.GetServiceVatTypeByCity(real.City) : "vat122",
                 VatSum        = real.IsService
                     ? (AtolGenerator.Constants.AppConstants.GetServiceVatTypeByCity(real.City) == "vat5"
                         ? Math.Round(i.Sum * 5.0 / 100.0, 2) : 0)
-                    : Math.Round(i.Sum * 20.0 / 120.0, 2),
+                    : Math.Round(i.Sum * 22.0 / 122.0, 2),
                 IsService     = real.IsService,
             };
         }).ToList();
@@ -54,7 +54,7 @@ public static class CorrectiveCheckService
             Tab                  = "realization",
             Amount               = real.Amount,
             PaymentType          = "card",
-            CheckVatType         = real.IsService ? AtolGenerator.Constants.AppConstants.GetServiceVatTypeByCity(real.City) : "vat20",
+            CheckVatType         = real.IsService ? AtolGenerator.Constants.AppConstants.GetServiceVatTypeByCity(real.City) : "vat122",
             Items                = refundItems,
             IsService            = real.IsService,
             AdditionalCheckProps = real.FiscalNumber,
@@ -95,7 +95,7 @@ public static class CorrectiveCheckService
             Tab                  = "realization",
             Amount               = real.Amount,
             PaymentType          = "card",
-            CheckVatType         = real.IsService ? AtolGenerator.Constants.AppConstants.GetServiceVatTypeByCity(real.City) : "vat20",
+            CheckVatType         = real.IsService ? AtolGenerator.Constants.AppConstants.GetServiceVatTypeByCity(real.City) : "vat122",
             Items                = new List<CheckItem>(),
             IsService            = real.IsService,
             CorrectionBaseDate   = corrDateIso,

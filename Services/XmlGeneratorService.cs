@@ -126,13 +126,13 @@ public static class XmlGeneratorService
         }
         else if (c.Tab == "realization")
         {
-            vatType = "vat20";
-            vatSum  = Math.Round(c.Amount * 20.0 / 100.0, 2);  // 20% сверху
+            vatType = "vat22";
+            vatSum  = Math.Round(c.Amount * 22.0 / 122.0, 2);  // 22/122 включено в цену
         }
         else
         {
-            vatType = "vat120";
-            vatSum  = Math.Round(c.Amount * 20.0 / 120.0, 2);  // 20/120 включено в цену
+            vatType = "vat122";
+            vatSum  = Math.Round(c.Amount * 22.0 / 122.0, 2);  // 22/122 включено в цену
         }
 
         return new XElement("correction",
@@ -169,7 +169,7 @@ public class CheckData
     public string          Tab                  { get; set; } = "payment";
     public double          Amount               { get; set; }
     public string          PaymentType          { get; set; } = "card";
-    public string          CheckVatType         { get; set; } = "vat120";
+    public string          CheckVatType         { get; set; } = "vat122";
     public List<CheckItem> Items                { get; set; } = new();
     public ServiceProvider? Agent               { get; set; }
     public bool            IsService            { get; set; }
@@ -188,7 +188,7 @@ public class CheckItem
     public double Sum           { get; set; }
     public string PaymentMethod { get; set; } = "full_prepayment";
     public string PaymentObject { get; set; } = "payment";
-    public string VatType       { get; set; } = "vat120";
+    public string VatType       { get; set; } = "vat122";
     public double VatSum        { get; set; }
     public bool   IsService     { get; set; }
 }

@@ -179,8 +179,8 @@ public static class AtolApiService
         }
         else
         {
-            vatType = "vat20";
-            vatSum  = Math.Round(r.Amount * 20.0 / 100.0, 2);
+            vatType = "vat122";
+            vatSum  = Math.Round(r.Amount * 22.0 / 122.0, 2);
         }
 
         // sell_refund (возврат прихода) — единственная из пары, которую поддерживает API.
@@ -276,8 +276,8 @@ public static class AtolApiService
         }
         else
         {
-            vatType = "vat20";
-            vatSum  = Math.Round(order.Amount * 20.0 / 100.0, 2);
+            vatType = "vat122";
+            vatSum  = Math.Round(order.Amount * 22.0 / 122.0, 2);
         }
 
         // Тип оплаты: 0=наличные, 1=безналичные, 2=аванс

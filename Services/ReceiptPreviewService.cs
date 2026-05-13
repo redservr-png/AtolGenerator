@@ -104,8 +104,8 @@ public static class ReceiptPreviewService
     {
         "vat5"   => "НДС 5%",
         "vat105" => "НДС 5% (вкл.)",
-        "vat20"  => "НДС 20%",
-        "vat120" => "НДС 20% (вкл.)",
+        "vat22"  => "НДС 22%",
+        "vat122" => "НДС 22% (вкл.)",
         "none"   => "Без НДС",
         _        => vat,
     };
@@ -120,8 +120,8 @@ public static class ReceiptPreviewService
     {
         "vat5"   => Math.Round(amount * 5.0  / 100.0, 2),
         "vat105" => Math.Round(amount * 5.0  / 105.0, 2),
-        "vat20"  => Math.Round(amount * 20.0 / 100.0, 2),
-        "vat120" => Math.Round(amount * 20.0 / 120.0, 2),
+        "vat22"  => Math.Round(amount * 22.0 / 122.0, 2),
+        "vat122" => Math.Round(amount * 22.0 / 122.0, 2),
         _        => 0,
     };
 
