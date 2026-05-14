@@ -40,8 +40,7 @@ public static class CheckGeneratorService
                         Price         = amount,
                         Quantity      = 1,
                         Sum           = amount,
-                        // full_payment в итоге даёт только БЕЗНАЛИЧНЫМИ/НАЛИЧНЫМИ без строки АВАНС
-                        PaymentMethod = "full_payment",
+                        PaymentMethod = "full_prepayment",
                         PaymentObject = "payment",
                         VatType       = isService ? "none" : "vat122",
                         VatSum        = isService ? amount : CalcVat122(amount),
