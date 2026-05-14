@@ -85,8 +85,11 @@ public static class XmlGeneratorService
         receipt.Add(itemsEl);
 
         // Payment
+        // realization → 2 (аванс); cash → 0; услуга → 1 (безналичные); товар → 2 (аванс)
         var payType = c.Tab == "realization" ? "2"
-                    : c.PaymentType == "cash" ? "0" : "1";
+                    : c.PaymentType == "cash" ? "0"
+                    : !c.IsService ? "2"
+                    : "1";
         receipt.Add(new XElement("payments",
             new XElement("payment",
                 new XElement("type", payType),

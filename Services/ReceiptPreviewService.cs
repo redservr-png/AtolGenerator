@@ -58,6 +58,7 @@ public static class ReceiptPreviewService
 
         var payName = c.Tab == "realization" ? "Предоплата (аванс):"
                     : c.PaymentType == "cash" ? "Наличными:"
+                    : !c.IsService             ? "Аванс:"
                     : "Безналичными:";
         sb.AppendLine(PadRight(payName, FmtMoney(c.Amount) + " руб."));
         sb.AppendLine(line);

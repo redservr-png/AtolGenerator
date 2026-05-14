@@ -40,7 +40,7 @@ public static class CheckGeneratorService
                         Price         = amount,
                         Quantity      = 1,
                         Sum           = amount,
-                        PaymentMethod = "full_prepayment",
+                        PaymentMethod = isService ? "full_prepayment" : "advance",
                         PaymentObject = "payment",
                         VatType       = isService ? "none" : "vat122",
                         VatSum        = isService ? amount : CalcVat122(amount),
