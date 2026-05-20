@@ -308,7 +308,8 @@ public static class AtolApiService
     // checkType: sell | sell_correction | buy_correction | sell_refund | buy_refund
     // paymentType: cash | card | advance
     public static async Task<AtolPunchResult> PunchOrderAsync(
-        AtolCredentials creds, OrderEntry order, string checkType, string paymentType)
+        AtolCredentials creds, OrderEntry order, string checkType, string paymentType,
+        string tab = "payment")
     {
         var (token, tokenErr) = await GetTokenAsync(creds);
         if (token is null)
@@ -405,12 +406,21 @@ public static class AtolApiService
                     {
                         new
                         {
-                            name           = $"{(order.IsService ? "Услуга" : "Товар")} по заказу {order.OrderNum}",
+                            // Оплата (аванс от покупателя) → «Платёж»; Реализация → товар/услуга
+                            name           = tab == "payment"
+                                ? $"Аванс от покупателя по заказу № {order.OrderNum}"
+                                : $"{(order.IsService ? "Услуга" : "Товар")} по заказу {order.OrderNum}",
                             price          = order.Amount,
                             quantity       = 1.0,
                             sum            = order.Amount,
-                            payment_method = "full_payment",
-                            payment_object = order.IsService ? "service" : "commodity",
+                            // payment_method: оплата → advance/full_prepayment; реализация → full_payment
+                            payment_method = tab == "payment"
+                                ? (order.IsService ? "full_prepayment" : "advance")
+                                : "full_payment",
+                            // payment_object: оплата → payment; реализация → service/commodity
+                            payment_object = tab == "payment"
+                                ? "payment"
+                                : (order.IsService ? "service" : "commodity"),
                             vat            = new { type = vatType, sum = vatSum },
                         }
                     },

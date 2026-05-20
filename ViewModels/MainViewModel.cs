@@ -686,7 +686,7 @@ public class MainViewModel : BaseViewModel
             AtolStatus = $"Пробиваем {i + 1} из {orders.Count}: {order.OrderNum}...";
             StatusText = AtolStatus;
 
-            var result = await AtolApiService.PunchOrderAsync(creds, order, CheckType, PaymentType);
+            var result = await AtolApiService.PunchOrderAsync(creds, order, CheckType, PaymentType, Tab);
 
             if (result.Success)
             {
