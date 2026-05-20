@@ -270,6 +270,12 @@ public static class AtolApiService
                 cashier  = cashierName,
                 // Тег 1192 — ФП исходного чека (если есть)
                 additional_check_props = string.IsNullOrEmpty(r.FiscalNumber) ? null : r.FiscalNumber,
+                // Тег 1086 — доп.реквизит пользователя: номер реализации 1С
+                additional_user_attribute = string.IsNullOrEmpty(r.DocNumber) ? null : new
+                {
+                    name  = "Номер реализации",
+                    value = r.DocNumber,
+                },
             }
         };
 
@@ -380,6 +386,12 @@ public static class AtolApiService
                     payments = new[] { new { type = payType, sum = order.Amount } },
                     vats     = new[] { new { type = vatType, sum = vatSum } },
                     cashier  = AppConstants.CashierName,
+                    // Тег 1086 — доп.реквизит пользователя: номер реализации/основания
+                    additional_user_attribute = new
+                    {
+                        name  = "Номер реализации",
+                        value = baseNumber,
+                    },
                 }
             };
         }
@@ -428,6 +440,11 @@ public static class AtolApiService
                     vats     = new[] { new { type = vatType, sum = vatSum } },
                     total    = order.Amount,
                     cashier  = AppConstants.CashierName,
+                    // Тег 1086 — доп.реквизит пользователя: номер реализации (для sell_refund).
+                    // Для обычного sell — не добавляем (номер уже в названии позиции).
+                    additional_user_attribute = checkType == "sell_refund" && !string.IsNullOrEmpty(order.OrderNum)
+                        ? new { name = "Номер реализации", value = order.OrderNum }
+                        : null,
                 }
             };
         }
