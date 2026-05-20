@@ -531,6 +531,18 @@ public static class OneCService
                     }
                     obj.ДатаПечатиЧека = dt;
 
+                    // Комментарий: пустой → "Пробит чек коррекции \"Приход\"";
+                    //              непустой → дописываем через "   \\\   ".
+                    //              Если уже содержит «Пробит чек коррекции» — не дописываем.
+                    const string marker = "Пробит чек коррекции \"Приход\"";
+                    var existingComment = Str(obj.Комментарий);
+                    if (!existingComment.Contains("Пробит чек коррекции", StringComparison.OrdinalIgnoreCase))
+                    {
+                        obj.Комментарий = string.IsNullOrWhiteSpace(existingComment)
+                            ? marker
+                            : existingComment + "   \\\\\\   " + marker;
+                    }
+
                     obj.Записать();
                     res.Updated++;
                     Log($"  {rec.RealizationNum}: ФПД={rec.FiscalSign} №ФД={rec.FiscalDoc} → записано");
