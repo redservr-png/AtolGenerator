@@ -58,6 +58,8 @@ public static class CorrectiveCheckService
             Items                = refundItems,
             IsService            = real.IsService,
             AdditionalCheckProps = real.FiscalNumber,
+            UserAttributeName    = "Номер реализации",
+            UserAttributeValue   = real.DocNumber,
             CashierName          = cashier.FullName,
             CashierShort         = cashier.ShortName,
         };
@@ -100,6 +102,8 @@ public static class CorrectiveCheckService
             IsService            = real.IsService,
             CorrectionBaseDate   = corrDateIso,
             CorrectionBaseNumber = corrNumber,
+            UserAttributeName    = "Номер реализации",
+            UserAttributeValue   = real.DocNumber,
             CashierName          = cashier.FullName,
             CashierShort         = cashier.ShortName,
         };

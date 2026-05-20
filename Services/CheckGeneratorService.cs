@@ -108,6 +108,12 @@ public static class CheckGeneratorService
                     checkData.CorrectionBaseNumber = $"Основание_{order.OrderNum}";
                 else
                     checkData.CorrectionBaseNumber = "б/н";
+
+                // Тег 1086: номер реализации (или основание) — будет виден в отчёте ОФД
+                checkData.UserAttributeName  = "Номер реализации";
+                checkData.UserAttributeValue = !string.IsNullOrEmpty(corrNum) && corrNum != "б/н"
+                    ? corrNum
+                    : (order.OrderNum ?? string.Empty);
             }
 
             // ── Имена файлов (используются для DOCX и при раздельном XML) ──

@@ -106,6 +106,14 @@ public static class XmlGeneratorService
         if (!string.IsNullOrWhiteSpace(c.AdditionalCheckProps))
             receipt.Add(new XElement("additional_check_props", c.AdditionalCheckProps));
 
+        // Доп. реквизит пользователя (теги 1084/1085/1086) — например, № реализации
+        if (!string.IsNullOrWhiteSpace(c.UserAttributeValue))
+        {
+            receipt.Add(new XElement("additional_user_attribute",
+                new XElement("name",  string.IsNullOrWhiteSpace(c.UserAttributeName) ? "Номер реализации" : c.UserAttributeName),
+                new XElement("value", c.UserAttributeValue)));
+        }
+
         return receipt;
     }
 
@@ -135,7 +143,7 @@ public static class XmlGeneratorService
             vatSum  = Math.Round(c.Amount * 22.0 / 122.0, 2);  // 22/122 включено в цену
         }
 
-        return new XElement("correction",
+        var correction = new XElement("correction",
             new XElement("operation", c.OperationType),
             new XElement("company",
                 new XElement("sno",             AppConstants.Sno),
@@ -155,6 +163,16 @@ public static class XmlGeneratorService
                     new XElement("sum",  Fmt(vatSum)))),
             new XElement("cashier", c.CashierName)
         );
+
+        // Доп. реквизит пользователя (теги 1084/1085/1086) — например, № реализации
+        if (!string.IsNullOrWhiteSpace(c.UserAttributeValue))
+        {
+            correction.Add(new XElement("additional_user_attribute",
+                new XElement("name",  string.IsNullOrWhiteSpace(c.UserAttributeName) ? "Номер реализации" : c.UserAttributeName),
+                new XElement("value", c.UserAttributeValue)));
+        }
+
+        return correction;
     }
 
     private static string Fmt(double v) => v.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
@@ -176,6 +194,8 @@ public class CheckData
     public string          CorrectionBaseDate   { get; set; } = string.Empty;
     public string          CorrectionBaseNumber { get; set; } = "б/н";
     public string          AdditionalCheckProps { get; set; } = string.Empty;  // тег 1192: ФП исходного чека
+    public string          UserAttributeName    { get; set; } = string.Empty;  // тег 1085: наименование доп.реквизита
+    public string          UserAttributeValue   { get; set; } = string.Empty;  // тег 1086: значение (например, № реализации)
     public string          CashierName          { get; set; } = AppConstants.CashierName;
     public string          CashierShort         { get; set; } = AppConstants.CashierShort;
 }
