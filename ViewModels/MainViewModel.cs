@@ -321,6 +321,7 @@ public class MainViewModel : BaseViewModel
     public ICommand GenerateCorrectiveCommand  { get; }
     public ICommand MatchOfdReportCommand      { get; }
     public ICommand ApplyToOneCCommand         { get; }
+    public ICommand ApplyOfdReportToOneCCommand { get; }
 
     // ── Skipped rows from Excel import ───────────────────────────────────────
     public ObservableCollection<SkippedRow> SkippedRows { get; } = new();
@@ -353,6 +354,7 @@ public class MainViewModel : BaseViewModel
         GenerateCorrectiveCommand  = new AsyncRelayCommand(GenerateCorrectiveAsync);
         MatchOfdReportCommand      = new RelayCommand(_ => MatchOfdReport());
         ApplyToOneCCommand         = new AsyncRelayCommand(ApplyToOneCAsync);
+        ApplyOfdReportToOneCCommand = new AsyncRelayCommand(ApplyOfdReportToOneCAsync);
 
         // Загружаем сохранённые настройки АТОЛ
         var saved = AtolCredentials.Load();
@@ -653,6 +655,90 @@ public class MainViewModel : BaseViewModel
         StatusText = AtolStatus;
 
         System.Windows.MessageBox.Show(msg, "Применение к 1С завершено",
+            System.Windows.MessageBoxButton.OK,
+            result.Failed > 0 ? System.Windows.MessageBoxImage.Warning : System.Windows.MessageBoxImage.Information);
+    }
+
+    private async Task ApplyOfdReportToOneCAsync()
+    {
+        if (string.IsNullOrWhiteSpace(OneCServer) ||
+            string.IsNullOrWhiteSpace(OneCDatabase))
+        {
+            System.Windows.MessageBox.Show(
+                "Заполните настройки подключения к 1С (Сервер + База).",
+                "Применение отчёта ОФД", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title  = "Выберите сводный отчёт ОФД (Excel)",
+            Filter = "Excel-файлы|*.xlsx;*.xls",
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        List<OneCService.PunchedRecord> records;
+        try
+        {
+            records = OneCService.ReadOfdReport(dlg.FileName);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Не удалось прочитать отчёт: {ex.Message}",
+                "Применение отчёта ОФД", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+            return;
+        }
+
+        if (records.Count == 0)
+        {
+            System.Windows.MessageBox.Show(
+                "В отчёте не найдены строки с заполненным «Значением доп.реквизита пользователя».\n\n" +
+                "Чеки, пробитые до v1.7.4, не содержат тега 1086 (номер реализации) — их нужно " +
+                "переносить вручную или через локальный журнал punched_checks.jsonl.",
+                "Применение отчёта ОФД", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        var confirm = System.Windows.MessageBox.Show(
+            $"В отчёте найдено {records.Count} чеков с привязкой к реализации.\n\n" +
+            $"Программа подключится к 1С и для каждой реализации запишет:\n" +
+            $"  ЧекНомерФП    — ФПД\n" +
+            $"  НомерЧекаККМ  — № ФД\n" +
+            $"  ДатаПечатиЧека — дата чека из ОФД\n\n" +
+            $"Продолжить?",
+            "Подтверждение", System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Question);
+        if (confirm != System.Windows.MessageBoxResult.Yes) return;
+
+        AtolStatus = $"Применяем отчёт к 1С: 0/{records.Count}...";
+        StatusText = AtolStatus;
+
+        var settings = new OneCConnectionSettings
+        {
+            Server   = OneCServer,
+            Database = OneCDatabase,
+            User     = OneCUser,
+            Password = OneCPassword,
+        };
+
+        var result = await Task.Run(() => OneCService.ApplyPunchedChecks(settings, records));
+
+        var msg = $"Обновлено: {result.Updated}\n" +
+                  $"Пропущено: {result.Skipped}\n" +
+                  $"Ошибок:    {result.Failed}";
+        if (result.Errors.Count > 0)
+        {
+            msg += "\n\nПервые ошибки:\n" +
+                   string.Join("\n", result.Errors.Take(10));
+        }
+
+        AtolStatus = $"Отчёт ОФД применён: ✓ {result.Updated}, ✗ {result.Failed}";
+        StatusText = AtolStatus;
+
+        System.Windows.MessageBox.Show(msg, "Применение отчёта ОФД завершено",
             System.Windows.MessageBoxButton.OK,
             result.Failed > 0 ? System.Windows.MessageBoxImage.Warning : System.Windows.MessageBoxImage.Information);
     }

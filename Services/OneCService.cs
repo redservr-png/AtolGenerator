@@ -391,6 +391,72 @@ public static class OneCService
     }
 
     /// <summary>
+    /// Читает Excel-отчёт ОФД (Сводный отчёт по фискальным документам Такском),
+    /// для каждой строки извлекает: № реализации (тег 1086, колонка «Значение
+    /// дополнительного реквизита пользователя»), ФПД, № ФД, дату чека.
+    /// </summary>
+    public static List<PunchedRecord> ReadOfdReport(string ofdReportPath)
+    {
+        var records = new List<PunchedRecord>();
+        using var wb = new ClosedXML.Excel.XLWorkbook(ofdReportPath);
+        var ws = wb.Worksheets.First();
+
+        const int headerRow   = 11;
+        const int firstDataRow = 12;
+        var lastRow = ws.LastRowUsed()?.RowNumber() ?? headerRow;
+
+        // Находим колонки по заголовку (порядок может отличаться)
+        var colMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (int c = 1; c <= ws.LastColumnUsed()!.ColumnNumber(); c++)
+        {
+            var name = ws.Cell(headerRow, c).GetString().Trim();
+            if (!string.IsNullOrEmpty(name)) colMap[name] = c;
+        }
+
+        int colDate    = colMap.GetValueOrDefault("Дата и время", 1);
+        int colFd      = colMap.GetValueOrDefault("№ ФД",        28);
+        int colFp      = colMap.GetValueOrDefault("ФПД",         29);
+        int colUserVal = colMap.GetValueOrDefault(
+            "Значение дополнительного реквизита пользователя", 44);
+        int colUserName = colMap.GetValueOrDefault(
+            "Наименование дополнительного реквизита пользователя", 43);
+
+        for (int r = firstDataRow; r <= lastRow; r++)
+        {
+            var userVal = ws.Cell(r, colUserVal).GetString().Trim();
+            if (string.IsNullOrEmpty(userVal)) continue;
+
+            // Парсим ФПД и № ФД
+            var fpStr = ws.Cell(r, colFp).GetString().Trim();
+            var fdStr = ws.Cell(r, colFd).GetString().Trim();
+            if (!long.TryParse(fpStr, out var fp) || !long.TryParse(fdStr, out var fd))
+                continue;
+
+            // Дата
+            var dateCell = ws.Cell(r, colDate);
+            string dateStr;
+            try
+            {
+                if (dateCell.DataType == ClosedXML.Excel.XLDataType.DateTime)
+                    dateStr = dateCell.GetDateTime().ToString("dd.MM.yyyy HH:mm:ss");
+                else
+                    dateStr = dateCell.GetString().Trim();
+            }
+            catch { dateStr = dateCell.GetString().Trim(); }
+
+            records.Add(new PunchedRecord
+            {
+                RealizationNum = userVal,
+                FiscalDoc      = fd,
+                FiscalSign     = fp,
+                ReceiptDt      = dateStr,
+            });
+        }
+
+        return records;
+    }
+
+    /// <summary>
     /// Применяет данные из списка пробитых чеков к документам РеализацияТоваровУслуг в 1С.
     /// Реквизиты: ЧекНомерФП (ФПД), НомерЧекаККМ (№ ФД), ДатаПечатиЧека.
     /// </summary>
