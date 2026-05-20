@@ -41,7 +41,7 @@ public static class CheckGeneratorService
                         Quantity      = 1,
                         Sum           = amount,
                         PaymentMethod = isService ? "full_prepayment" : "advance",
-                        PaymentObject = "payment",
+                        PaymentObject = isService ? "service" : "commodity",
                         VatType       = isService ? "none" : "vat122",
                         VatSum        = isService ? amount : CalcVat122(amount),
                         IsService     = isService,
@@ -62,9 +62,9 @@ public static class CheckGeneratorService
                             Quantity      = qty,
                             Sum           = s,
                             PaymentMethod = "full_payment",
-                            PaymentObject = "commodity",
+                            PaymentObject = isService ? "service" : "commodity",
                             VatType       = isService ? "none" : "vat22",
-                            VatSum        = isService ? s : CalcVat20(s),
+                            VatSum        = isService ? s : CalcVat22(s),
                             IsService     = isService,
                         });
                     }
@@ -210,7 +210,8 @@ public static class CheckGeneratorService
     }
 
     private static double CalcVat122(double amount) => Math.Round(amount * 22.0 / 122.0, 2);
-    private static double CalcVat20(double amount)  => Math.Round(amount * 0.22, 2);
+    // НДС 22% — сумма уже включает налог в цену (22/122)
+    private static double CalcVat22(double amount)  => Math.Round(amount * 22.0 / 122.0, 2);
 
     private static string ToIsoDate(string ddMmYyyy)
     {
