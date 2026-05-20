@@ -459,9 +459,10 @@ public static class OneCService
     /// <summary>
     /// Применяет данные из списка пробитых чеков к документам РеализацияТоваровУслуг в 1С.
     /// Реквизиты: ЧекНомерФП (ФПД), НомерЧекаККМ (№ ФД), ДатаПечатиЧека.
+    /// skipFilled=true (по умолчанию) — пропускать документы, у которых ЧекНомерФП уже непустой.
     /// </summary>
     public static ApplyResult ApplyPunchedChecks(
-        OneCConnectionSettings s, List<PunchedRecord> records)
+        OneCConnectionSettings s, List<PunchedRecord> records, bool skipFilled = true)
     {
         var res = new ApplyResult { Total = records.Count };
         if (records.Count == 0) return res;
@@ -500,6 +501,19 @@ public static class OneCService
 
                     // 2. Получаем объект и пишем реквизиты
                     var obj = docRef.ПолучитьОбъект();
+
+                    // Пропускаем уже заполненные (например, заполненные вручную ранее)
+                    if (skipFilled)
+                    {
+                        var existing = Str(obj.ЧекНомерФП).Trim();
+                        if (!string.IsNullOrEmpty(existing) && existing != "0")
+                        {
+                            res.Skipped++;
+                            Log($"  {rec.RealizationNum}: ЧекНомерФП уже = {existing} — пропуск");
+                            continue;
+                        }
+                    }
+
                     obj.ЧекНомерФП     = rec.FiscalSign.Value.ToString();
                     obj.НомерЧекаККМ   = rec.FiscalDoc.Value.ToString();
 

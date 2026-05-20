@@ -681,6 +681,17 @@
                   <TextBlock Text="Применить из журнала (API)" FontSize="12" Opacity="0.85"/>
                 </StackPanel>
               </Button>
+
+              <!-- Применить старый XML + ОФД (для чеков пробитых до v1.7.4 без тега 1086) -->
+              <Button Style="{StaticResource BtnSecondary}"
+                      Command="{Binding ApplyXmlAndOfdToOneCCommand}"
+                      Margin="0,8,0,0" Padding="0,9"
+                      ToolTip="Для чеков, пробитых ДО v1.7.4 (без тега 1086): выбираете старый XML с base_number, потом сводный отчёт ОФД. Программа сопоставляет по сумме, записывает в 1С пропуская уже заполненные.">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                  <TextBlock Text="🔁" FontSize="12" Margin="0,0,8,0" Opacity="0.85"/>
+                  <TextBlock Text="Сопоставить XML+ОФД → 1С (старые чеки)" FontSize="12" Opacity="0.95"/>
+                </StackPanel>
+              </Button>
             </StackPanel>
           </Border>
 

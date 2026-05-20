@@ -322,6 +322,7 @@ public class MainViewModel : BaseViewModel
     public ICommand MatchOfdReportCommand      { get; }
     public ICommand ApplyToOneCCommand         { get; }
     public ICommand ApplyOfdReportToOneCCommand { get; }
+    public ICommand ApplyXmlAndOfdToOneCCommand { get; }
 
     // ── Skipped rows from Excel import ───────────────────────────────────────
     public ObservableCollection<SkippedRow> SkippedRows { get; } = new();
@@ -355,6 +356,7 @@ public class MainViewModel : BaseViewModel
         MatchOfdReportCommand      = new RelayCommand(_ => MatchOfdReport());
         ApplyToOneCCommand         = new AsyncRelayCommand(ApplyToOneCAsync);
         ApplyOfdReportToOneCCommand = new AsyncRelayCommand(ApplyOfdReportToOneCAsync);
+        ApplyXmlAndOfdToOneCCommand = new AsyncRelayCommand(ApplyXmlAndOfdToOneCAsync);
 
         // Загружаем сохранённые настройки АТОЛ
         var saved = AtolCredentials.Load();
@@ -741,6 +743,115 @@ public class MainViewModel : BaseViewModel
         System.Windows.MessageBox.Show(msg, "Применение отчёта ОФД завершено",
             System.Windows.MessageBoxButton.OK,
             result.Failed > 0 ? System.Windows.MessageBoxImage.Warning : System.Windows.MessageBoxImage.Information);
+    }
+
+    private async Task ApplyXmlAndOfdToOneCAsync()
+    {
+        if (string.IsNullOrWhiteSpace(OneCServer) ||
+            string.IsNullOrWhiteSpace(OneCDatabase))
+        {
+            System.Windows.MessageBox.Show(
+                "Заполните настройки подключения к 1С (Сервер + База).",
+                "Применение XML+ОФД", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        // 1. Выбираем XML
+        var xmlDlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title  = "Шаг 1/2: выберите XML-файл с пробитыми чеками коррекции",
+            Filter = "XML-файлы|*.xml",
+        };
+        if (xmlDlg.ShowDialog() != true) return;
+
+        // 2. Выбираем отчёт ОФД
+        var ofdDlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title  = "Шаг 2/2: выберите сводный отчёт ОФД (Excel)",
+            Filter = "Excel-файлы|*.xlsx;*.xls",
+        };
+        if (ofdDlg.ShowDialog() != true) return;
+
+        List<XmlOfdMatcherService.XmlCheck> xml;
+        List<XmlOfdMatcherService.OfdRow>   ofd;
+        try
+        {
+            xml = XmlOfdMatcherService.ReadXmlChecks(xmlDlg.FileName);
+            ofd = XmlOfdMatcherService.ReadOfdCorrections(ofdDlg.FileName);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Ошибка чтения: {ex.Message}",
+                "Применение XML+ОФД", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+            return;
+        }
+
+        if (xml.Count == 0)
+        {
+            System.Windows.MessageBox.Show(
+                "В XML не найдено чеков коррекции с номером реализации.",
+                "Применение XML+ОФД", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+            return;
+        }
+        if (ofd.Count == 0)
+        {
+            System.Windows.MessageBox.Show(
+                "В отчёте ОФД не найдено чеков коррекции.",
+                "Применение XML+ОФД", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        var match = XmlOfdMatcherService.Match(xml, ofd);
+        var unmatchedTxt = match.Unmatched > 0
+            ? $"\n\nНе сопоставлено: {match.Unmatched}\n  " +
+              string.Join("\n  ", match.Warnings.Take(10))
+            : string.Empty;
+
+        var confirm = System.Windows.MessageBox.Show(
+            $"XML: {xml.Count} чеков\n" +
+            $"ОФД: {ofd.Count} коррекций\n" +
+            $"Сопоставлено по сумме: {match.Matched}{unmatchedTxt}\n\n" +
+            $"Записать в 1С (уже заполненные документы будут пропущены)?",
+            "Подтверждение", System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Question);
+        if (confirm != System.Windows.MessageBoxResult.Yes) return;
+
+        AtolStatus = $"Записываем в 1С: 0/{match.Records.Count}...";
+        StatusText = AtolStatus;
+
+        var settings = new OneCConnectionSettings
+        {
+            Server   = OneCServer,
+            Database = OneCDatabase,
+            User     = OneCUser,
+            Password = OneCPassword,
+        };
+
+        var result = await Task.Run(() =>
+            OneCService.ApplyPunchedChecks(settings, match.Records, skipFilled: true));
+
+        var msg = $"Сопоставлено XML↔ОФД: {match.Matched}\n" +
+                  $"Не сопоставлено:    {match.Unmatched}\n" +
+                  $"────────────────────\n" +
+                  $"Записано в 1С:      {result.Updated}\n" +
+                  $"Пропущено (заполн.):{result.Skipped}\n" +
+                  $"Ошибок:             {result.Failed}";
+
+        if (result.Errors.Count > 0)
+            msg += "\n\nПервые ошибки:\n" + string.Join("\n", result.Errors.Take(10));
+
+        AtolStatus = $"XML+ОФД → 1С: ✓ {result.Updated}, пропущено {result.Skipped}";
+        StatusText = AtolStatus;
+
+        System.Windows.MessageBox.Show(msg, "Применение XML+ОФД завершено",
+            System.Windows.MessageBoxButton.OK,
+            (result.Failed > 0 || match.Unmatched > 0)
+                ? System.Windows.MessageBoxImage.Warning
+                : System.Windows.MessageBoxImage.Information);
     }
 
     private void SaveAtolSettings()
