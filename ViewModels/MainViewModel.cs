@@ -319,6 +319,7 @@ public class MainViewModel : BaseViewModel
     public ICommand PunchViaAtolCommand          { get; }
     public ICommand PunchOrdersViaAtolCommand  { get; }
     public ICommand GenerateCorrectiveCommand  { get; }
+    public ICommand MatchOfdReportCommand      { get; }
 
     // ── Skipped rows from Excel import ───────────────────────────────────────
     public ObservableCollection<SkippedRow> SkippedRows { get; } = new();
@@ -349,6 +350,7 @@ public class MainViewModel : BaseViewModel
         PunchViaAtolCommand        = new AsyncRelayCommand(PunchViaAtolAsync);
         PunchOrdersViaAtolCommand  = new AsyncRelayCommand(PunchOrdersViaAtolAsync);
         GenerateCorrectiveCommand  = new AsyncRelayCommand(GenerateCorrectiveAsync);
+        MatchOfdReportCommand      = new RelayCommand(_ => MatchOfdReport());
 
         // Загружаем сохранённые настройки АТОЛ
         var saved = AtolCredentials.Load();
@@ -509,6 +511,41 @@ public class MainViewModel : BaseViewModel
         catch (Exception ex)
         {
             ShowToast($"Ошибка импорта: {ex.Message}", true);
+        }
+    }
+
+    private void MatchOfdReport()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title  = "Выберите сводный отчёт ОФД (Excel)",
+            Filter = "Excel-файлы|*.xlsx;*.xls",
+        };
+        if (dlg.ShowDialog() != true) return;
+
+        try
+        {
+            var ts  = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var dir = System.IO.Path.GetDirectoryName(dlg.FileName) ?? FileHelper.OutputDir;
+            var output = System.IO.Path.Combine(dir, $"ОФД_сопоставление_{ts}.xlsx");
+
+            var result = OfdReportMatcherService.MatchAndExport(dlg.FileName, output);
+            var msg = $"Обработано чеков: {result.TotalRows}\n" +
+                      $"Сопоставлено с пробитиями: {result.MatchedRows}\n" +
+                      $"Не найдено в логе: {result.UnmatchedRows}\n\n" +
+                      $"Файл сохранён:\n{result.OutputPath}";
+
+            System.Windows.MessageBox.Show(msg, "Сопоставление ОФД",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+
+            FileHelper.OpenFolder(dir);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Ошибка сопоставления: {ex.Message}",
+                "Ошибка", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
         }
     }
 

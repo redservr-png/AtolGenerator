@@ -648,6 +648,17 @@
               <TextBlock Text="Файлы сохраняются в папку atol_output/"
                          FontSize="11" Foreground="{StaticResource BrushText3}"
                          HorizontalAlignment="Center" Margin="0,8,0,0"/>
+
+              <!-- Сопоставление отчёта ОФД -->
+              <Button Style="{StaticResource BtnSecondary}"
+                      Command="{Binding MatchOfdReportCommand}"
+                      Margin="0,12,0,0" Padding="0,9"
+                      ToolTip="Сопоставить сводный отчёт ОФД (Excel) с локальным журналом пробитых чеков. Результат — Excel с привязкой к номеру реализации 1С.">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                  <TextBlock Text="📊" FontSize="14" Margin="0,0,8,0"/>
+                  <TextBlock Text="Сопоставить отчёт ОФД с реализациями" FontSize="13"/>
+                </StackPanel>
+              </Button>
             </StackPanel>
           </Border>
 

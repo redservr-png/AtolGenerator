@@ -48,10 +48,22 @@ public class AtolTokenResponse
 
 public class AtolReceiptResponse
 {
-    [JsonPropertyName("uuid")]      public string?    Uuid      { get; set; }
-    [JsonPropertyName("error")]     public AtolError? Error     { get; set; }
-    [JsonPropertyName("status")]    public string?    Status    { get; set; }
-    [JsonPropertyName("timestamp")] public string?    Timestamp { get; set; }
+    [JsonPropertyName("uuid")]      public string?         Uuid      { get; set; }
+    [JsonPropertyName("error")]     public AtolError?      Error     { get; set; }
+    [JsonPropertyName("status")]    public string?         Status    { get; set; }
+    [JsonPropertyName("timestamp")] public string?         Timestamp { get; set; }
+    [JsonPropertyName("payload")]   public AtolPayload?    Payload   { get; set; }
+}
+
+public class AtolPayload
+{
+    [JsonPropertyName("fiscal_document_number")]     public long?   FiscalDocNumber  { get; set; }  // № ФД
+    [JsonPropertyName("fiscal_document_attribute")]  public long?   FiscalSign       { get; set; }  // ФПД
+    [JsonPropertyName("fiscal_receipt_number")]      public long?   FiscalReceiptNum { get; set; }
+    [JsonPropertyName("shift_number")]               public long?   ShiftNumber      { get; set; }
+    [JsonPropertyName("receipt_datetime")]           public string? ReceiptDateTime  { get; set; }
+    [JsonPropertyName("total")]                      public double? Total            { get; set; }
+    [JsonPropertyName("ofd_receipt_url")]            public string? OfdReceiptUrl    { get; set; }
 }
 
 public class AtolError
@@ -62,10 +74,14 @@ public class AtolError
 
 public class AtolPunchResult
 {
-    public bool   Success { get; set; }
-    public string Uuid    { get; set; } = string.Empty;
-    public string Error   { get; set; } = string.Empty;
-    public string Status  { get; set; } = string.Empty;
+    public bool   Success         { get; set; }
+    public string Uuid            { get; set; } = string.Empty;
+    public string Error           { get; set; } = string.Empty;
+    public string Status          { get; set; } = string.Empty;
+    public long?  FiscalDocNumber { get; set; }  // № ФД
+    public long?  FiscalSign      { get; set; }  // ФПД
+    public string ReceiptDateTime { get; set; } = string.Empty;
+    public string OfdReceiptUrl   { get; set; } = string.Empty;
 }
 
 // ── Сервис ────────────────────────────────────────────────────────────────────
@@ -119,10 +135,46 @@ public static class AtolApiService
     public static string LogPath { get; } = Path.Combine(
         AppDomain.CurrentDomain.BaseDirectory, "atol_log.txt");
 
+    // JSONL: каждая успешно пробитая операция — одной строкой
+    public static string PunchedJsonPath { get; } = Path.Combine(
+        AppDomain.CurrentDomain.BaseDirectory, "punched_checks.jsonl");
+
     private static void Log(string msg)
     {
         try { File.AppendAllText(LogPath, $"[{DateTime.Now:dd.MM.yyyy HH:mm:ss}] {msg}{Environment.NewLine}"); }
         catch { }
+    }
+
+    /// <summary>
+    /// Дописывает успешно пробитый чек в punched_checks.jsonl (одна строка JSON).
+    /// Поля: ts, operation, order_num, realization_num, amount, uuid, fiscal_doc, fiscal_sign, receipt_dt, ofd_url, cashier
+    /// </summary>
+    private static void LogPunch(
+        string operation, string orderNum, string realizationNum, double amount,
+        AtolPunchResult result, string cashier)
+    {
+        if (!result.Success) return;
+        try
+        {
+            var entry = new
+            {
+                ts               = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"),
+                operation        = operation,
+                order_num        = orderNum,
+                realization_num  = realizationNum,
+                amount           = amount,
+                uuid             = result.Uuid,
+                fiscal_doc       = result.FiscalDocNumber,
+                fiscal_sign      = result.FiscalSign,
+                receipt_dt       = result.ReceiptDateTime,
+                ofd_url          = result.OfdReceiptUrl,
+                cashier          = cashier,
+            };
+            var json = JsonSerializer.Serialize(entry,
+                new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+            File.AppendAllText(PunchedJsonPath, json + Environment.NewLine);
+        }
+        catch (Exception ex) { Log($"LogPunch error: {ex.Message}"); }
     }
 
     // ── Проверка group_code через фиктивный запрос статуса ──────────────────
@@ -239,8 +291,11 @@ public static class AtolApiService
             if (string.IsNullOrEmpty(result?.Uuid))
                 return new AtolPunchResult { Error = $"UUID не получен. Ответ: {body}" };
 
-            return await PollStatusAsync(creds.GroupCode, "sell_refund", result.Uuid, token,
+            var poll = await PollStatusAsync(creds.GroupCode, "sell_refund", result.Uuid, token,
                 $"sell_refund/{r.DocNumber}");
+            // r.DocNumber — это номер реализации 1С, его и пишем как realization_num
+            LogPunch("sell_refund", r.DocNumber, r.DocNumber, r.Amount, poll, cashierName);
+            return poll;
         }
         catch (Exception ex)
         {
@@ -386,8 +441,14 @@ public static class AtolApiService
             if (string.IsNullOrEmpty(result?.Uuid))
                 return new AtolPunchResult { Error = $"UUID не получен. Ответ: {body}" };
 
-            return await PollStatusAsync(creds.GroupCode, endpoint, result.Uuid, token,
+            var poll = await PollStatusAsync(creds.GroupCode, endpoint, result.Uuid, token,
                 $"{checkType}/{order.OrderNum}");
+            // Для коррекций база (base_number) — номер реализации; для обычных — order_num.
+            var realNum = checkType is "sell_correction" or "buy_correction"
+                ? (string.IsNullOrEmpty(order.CorrectionNumber) ? order.OrderNum : order.CorrectionNumber)
+                : order.OrderNum;
+            LogPunch(checkType, order.OrderNum, realNum, order.Amount, poll, AppConstants.CashierName);
+            return poll;
         }
         catch (Exception ex)
         {
@@ -421,8 +482,18 @@ public static class AtolApiService
 
                 if (result?.Status == "done")
                 {
-                    Log($"Poll [{tag}] attempt {i + 1}: done ✓");
-                    return new AtolPunchResult { Success = true, Uuid = uuid, Status = "done" };
+                    var pl = result.Payload;
+                    Log($"Poll [{tag}] attempt {i + 1}: done ✓ ФД={pl?.FiscalDocNumber} ФПД={pl?.FiscalSign}");
+                    return new AtolPunchResult
+                    {
+                        Success         = true,
+                        Uuid            = uuid,
+                        Status          = "done",
+                        FiscalDocNumber = pl?.FiscalDocNumber,
+                        FiscalSign      = pl?.FiscalSign,
+                        ReceiptDateTime = pl?.ReceiptDateTime ?? string.Empty,
+                        OfdReceiptUrl   = pl?.OfdReceiptUrl   ?? string.Empty,
+                    };
                 }
 
                 if (result?.Status == "fail")
