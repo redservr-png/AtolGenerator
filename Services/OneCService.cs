@@ -373,6 +373,112 @@ public static class OneCService
         Log($"EnrichOrdersFromOneC done");
     }
 
+    public class ApplyResult
+    {
+        public int Total       { get; set; }
+        public int Updated     { get; set; }
+        public int Skipped     { get; set; }
+        public int Failed      { get; set; }
+        public List<string> Errors { get; set; } = new();
+    }
+
+    public class PunchedRecord
+    {
+        public string RealizationNum { get; set; } = string.Empty;
+        public long?  FiscalDoc      { get; set; }
+        public long?  FiscalSign     { get; set; }
+        public string ReceiptDt      { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Применяет данные из списка пробитых чеков к документам РеализацияТоваровУслуг в 1С.
+    /// Реквизиты: ЧекНомерФП (ФПД), НомерЧекаККМ (№ ФД), ДатаПечатиЧека.
+    /// </summary>
+    public static ApplyResult ApplyPunchedChecks(
+        OneCConnectionSettings s, List<PunchedRecord> records)
+    {
+        var res = new ApplyResult { Total = records.Count };
+        if (records.Count == 0) return res;
+
+        dynamic? conn      = null;
+        dynamic? connector = null;
+
+        Log($"=== ApplyPunchedChecks: {records.Count} записей ===");
+        try
+        {
+            connector = CreateConnector();
+            conn      = connector.Connect(s.ConnectionString);
+
+            foreach (var rec in records)
+            {
+                if (string.IsNullOrEmpty(rec.RealizationNum) ||
+                    rec.FiscalDoc is null || rec.FiscalSign is null)
+                {
+                    res.Skipped++;
+                    continue;
+                }
+
+                try
+                {
+                    // 1. Находим документ по номеру
+                    var docRef = conn.Документы.РеализацияТоваровУслуг
+                        .НайтиПоНомеру(rec.RealizationNum, DateTime.Now);
+                    if (docRef is null || (bool)docRef.Пустая())
+                    {
+                        res.Failed++;
+                        var msg = $"{rec.RealizationNum}: документ не найден";
+                        res.Errors.Add(msg);
+                        Log("  " + msg);
+                        continue;
+                    }
+
+                    // 2. Получаем объект и пишем реквизиты
+                    var obj = docRef.ПолучитьОбъект();
+                    obj.ЧекНомерФП     = rec.FiscalSign.Value.ToString();
+                    obj.НомерЧекаККМ   = rec.FiscalDoc.Value.ToString();
+
+                    // Дата чека: пытаемся распарсить из ReceiptDt; если не получилось — текущая
+                    DateTime dt = DateTime.Now;
+                    if (!string.IsNullOrEmpty(rec.ReceiptDt))
+                    {
+                        if (DateTime.TryParseExact(rec.ReceiptDt, "dd.MM.yyyy HH:mm:ss",
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                System.Globalization.DateTimeStyles.None, out var parsed)
+                         || DateTime.TryParse(rec.ReceiptDt, out parsed))
+                        {
+                            dt = parsed;
+                        }
+                    }
+                    obj.ДатаПечатиЧека = dt;
+
+                    obj.Записать();
+                    res.Updated++;
+                    Log($"  {rec.RealizationNum}: ФПД={rec.FiscalSign} №ФД={rec.FiscalDoc} → записано");
+                }
+                catch (Exception ex)
+                {
+                    res.Failed++;
+                    var msg = $"{rec.RealizationNum}: {ex.Message}";
+                    res.Errors.Add(msg);
+                    Log("  ОШИБКА " + msg);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"ApplyPunchedChecks ERROR: {ex.Message}");
+            res.Errors.Add(ex.Message);
+        }
+        finally
+        {
+            if (conn      is not null) Marshal.ReleaseComObject(conn);
+            if (connector is not null) Marshal.ReleaseComObject(connector);
+        }
+
+        Log($"=== Применено: обновлено {res.Updated}, пропущено {res.Skipped}, ошибок {res.Failed} ===");
+        return res;
+    }
+
     private static dynamic CreateConnector()
     {
         var t = Type.GetTypeFromProgID("V83.COMConnector")

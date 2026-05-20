@@ -320,6 +320,7 @@ public class MainViewModel : BaseViewModel
     public ICommand PunchOrdersViaAtolCommand  { get; }
     public ICommand GenerateCorrectiveCommand  { get; }
     public ICommand MatchOfdReportCommand      { get; }
+    public ICommand ApplyToOneCCommand         { get; }
 
     // ── Skipped rows from Excel import ───────────────────────────────────────
     public ObservableCollection<SkippedRow> SkippedRows { get; } = new();
@@ -351,6 +352,7 @@ public class MainViewModel : BaseViewModel
         PunchOrdersViaAtolCommand  = new AsyncRelayCommand(PunchOrdersViaAtolAsync);
         GenerateCorrectiveCommand  = new AsyncRelayCommand(GenerateCorrectiveAsync);
         MatchOfdReportCommand      = new RelayCommand(_ => MatchOfdReport());
+        ApplyToOneCCommand         = new AsyncRelayCommand(ApplyToOneCAsync);
 
         // Загружаем сохранённые настройки АТОЛ
         var saved = AtolCredentials.Load();
@@ -547,6 +549,112 @@ public class MainViewModel : BaseViewModel
                 "Ошибка", System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Error);
         }
+    }
+
+    private async Task ApplyToOneCAsync()
+    {
+        if (string.IsNullOrWhiteSpace(OneCServer) ||
+            string.IsNullOrWhiteSpace(OneCDatabase))
+        {
+            System.Windows.MessageBox.Show(
+                "Заполните настройки подключения к 1С (Сервер + База).",
+                "Применение к 1С", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        var path = AtolApiService.PunchedJsonPath;
+        if (!System.IO.File.Exists(path))
+        {
+            System.Windows.MessageBox.Show(
+                $"Файл журнала пробитий не найден:\n{path}\n\n" +
+                "Сначала пробейте чеки через АТОЛ Online — журнал заполнится автоматически.",
+                "Применение к 1С", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        // Читаем jsonl и формируем список записей
+        var records = new List<OneCService.PunchedRecord>();
+        try
+        {
+            foreach (var line in System.IO.File.ReadLines(path))
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(line);
+                    var root = doc.RootElement;
+                    var rec = new OneCService.PunchedRecord
+                    {
+                        RealizationNum = root.TryGetProperty("realization_num", out var rn) ? rn.GetString() ?? "" : "",
+                        FiscalDoc      = root.TryGetProperty("fiscal_doc",  out var fd) && fd.ValueKind == System.Text.Json.JsonValueKind.Number ? fd.GetInt64() : null,
+                        FiscalSign     = root.TryGetProperty("fiscal_sign", out var fs) && fs.ValueKind == System.Text.Json.JsonValueKind.Number ? fs.GetInt64() : null,
+                        ReceiptDt      = root.TryGetProperty("receipt_dt",  out var dt) ? dt.GetString() ?? "" : "",
+                    };
+                    if (!string.IsNullOrEmpty(rec.RealizationNum) && rec.FiscalDoc.HasValue && rec.FiscalSign.HasValue)
+                        records.Add(rec);
+                }
+                catch { /* битая строка — пропускаем */ }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Не удалось прочитать журнал: {ex.Message}",
+                "Применение к 1С", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+            return;
+        }
+
+        if (records.Count == 0)
+        {
+            System.Windows.MessageBox.Show(
+                "В журнале нет пригодных записей (нужны № реализации, ФПД и № ФД).",
+                "Применение к 1С", System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+            return;
+        }
+
+        // Подтверждение
+        var confirm = System.Windows.MessageBox.Show(
+            $"Найдено {records.Count} пробитых чеков в журнале.\n\n" +
+            $"Программа подключится к 1С и для каждой реализации запишет:\n" +
+            $"  ЧекНомерФП    — ФПД\n" +
+            $"  НомерЧекаККМ  — № ФД\n" +
+            $"  ДатаПечатиЧека — дата чека\n\n" +
+            $"Продолжить?",
+            "Подтверждение", System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Question);
+        if (confirm != System.Windows.MessageBoxResult.Yes) return;
+
+        AtolStatus = $"Применяем к 1С: 0/{records.Count}...";
+        StatusText = AtolStatus;
+
+        var settings = new OneCConnectionSettings
+        {
+            Server   = OneCServer,
+            Database = OneCDatabase,
+            User     = OneCUser,
+            Password = OneCPassword,
+        };
+
+        var result = await Task.Run(() => OneCService.ApplyPunchedChecks(settings, records));
+
+        var msg = $"Обновлено: {result.Updated}\n" +
+                  $"Пропущено: {result.Skipped}\n" +
+                  $"Ошибок:    {result.Failed}";
+        if (result.Errors.Count > 0)
+        {
+            msg += "\n\nПервые ошибки:\n" +
+                   string.Join("\n", result.Errors.Take(10));
+        }
+
+        AtolStatus = $"Применено к 1С: ✓ {result.Updated}, ✗ {result.Failed}";
+        StatusText = AtolStatus;
+
+        System.Windows.MessageBox.Show(msg, "Применение к 1С завершено",
+            System.Windows.MessageBoxButton.OK,
+            result.Failed > 0 ? System.Windows.MessageBoxImage.Warning : System.Windows.MessageBoxImage.Information);
     }
 
     private void SaveAtolSettings()
