@@ -379,7 +379,8 @@ public static class OneCService
         public int Updated     { get; set; }
         public int Skipped     { get; set; }
         public int Failed      { get; set; }
-        public List<string> Errors { get; set; } = new();
+        public List<string> Errors         { get; set; } = new();
+        public List<string> SkippedSamples { get; set; } = new();  // первые N пропусков с подробностями
     }
 
     public class PunchedRecord
@@ -541,7 +542,9 @@ public static class OneCService
                     if (skipFilled && !string.IsNullOrEmpty(existingFp) && existingFp != "0")
                     {
                         res.Skipped++;
-                        Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ЧекНомерФП уже = {existingFp} — пропуск");
+                        var detail = $"{rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ЧекНомерФП уже = «{existingFp}»";
+                        Log($"  {detail} — пропуск");
+                        if (res.SkippedSamples.Count < 15) res.SkippedSamples.Add(detail);
                         continue;
                     }
 

@@ -619,17 +619,20 @@ public class MainViewModel : BaseViewModel
             return;
         }
 
-        // Подтверждение
+        // Подтверждение: Да = пропускать заполненные, Нет = перезаписать всё, Отмена = выход
         var confirm = System.Windows.MessageBox.Show(
             $"Найдено {records.Count} пробитых чеков в журнале.\n\n" +
             $"Программа подключится к 1С и для каждой реализации запишет:\n" +
             $"  ЧекНомерФП    — ФПД\n" +
             $"  НомерЧекаККМ  — № ФД\n" +
             $"  ДатаПечатиЧека — дата чека\n\n" +
-            $"Продолжить?",
-            "Подтверждение", System.Windows.MessageBoxButton.YesNo,
+            $"Да — записать ТОЛЬКО в пустые документы\n" +
+            $"Нет — ПЕРЕЗАПИСАТЬ ВСЕ (включая уже заполненные)\n" +
+            $"Отмена — выход",
+            "Подтверждение", System.Windows.MessageBoxButton.YesNoCancel,
             System.Windows.MessageBoxImage.Question);
-        if (confirm != System.Windows.MessageBoxResult.Yes) return;
+        if (confirm == System.Windows.MessageBoxResult.Cancel) return;
+        bool skipFilled = (confirm == System.Windows.MessageBoxResult.Yes);
 
         AtolStatus = $"Применяем к 1С: 0/{records.Count}...";
         StatusText = AtolStatus;
@@ -642,16 +645,15 @@ public class MainViewModel : BaseViewModel
             Password = OneCPassword,
         };
 
-        var result = await Task.Run(() => OneCService.ApplyPunchedChecks(settings, records));
+        var result = await Task.Run(() => OneCService.ApplyPunchedChecks(settings, records, skipFilled));
 
         var msg = $"Обновлено: {result.Updated}\n" +
                   $"Пропущено: {result.Skipped}\n" +
                   $"Ошибок:    {result.Failed}";
+        if (result.SkippedSamples.Count > 0)
+            msg += "\n\nПервые пропуски:\n  " + string.Join("\n  ", result.SkippedSamples.Take(10));
         if (result.Errors.Count > 0)
-        {
-            msg += "\n\nПервые ошибки:\n" +
-                   string.Join("\n", result.Errors.Take(10));
-        }
+            msg += "\n\nПервые ошибки:\n" + string.Join("\n", result.Errors.Take(10));
 
         AtolStatus = $"Применено к 1С: ✓ {result.Updated}, ✗ {result.Failed}";
         StatusText = AtolStatus;
@@ -710,10 +712,13 @@ public class MainViewModel : BaseViewModel
             $"  ЧекНомерФП    — ФПД\n" +
             $"  НомерЧекаККМ  — № ФД\n" +
             $"  ДатаПечатиЧека — дата чека из ОФД\n\n" +
-            $"Продолжить?",
-            "Подтверждение", System.Windows.MessageBoxButton.YesNo,
+            $"Да — записать ТОЛЬКО в пустые документы\n" +
+            $"Нет — ПЕРЕЗАПИСАТЬ ВСЕ (включая уже заполненные)\n" +
+            $"Отмена — выход",
+            "Подтверждение", System.Windows.MessageBoxButton.YesNoCancel,
             System.Windows.MessageBoxImage.Question);
-        if (confirm != System.Windows.MessageBoxResult.Yes) return;
+        if (confirm == System.Windows.MessageBoxResult.Cancel) return;
+        bool skipFilled = (confirm == System.Windows.MessageBoxResult.Yes);
 
         AtolStatus = $"Применяем отчёт к 1С: 0/{records.Count}...";
         StatusText = AtolStatus;
@@ -726,16 +731,15 @@ public class MainViewModel : BaseViewModel
             Password = OneCPassword,
         };
 
-        var result = await Task.Run(() => OneCService.ApplyPunchedChecks(settings, records));
+        var result = await Task.Run(() => OneCService.ApplyPunchedChecks(settings, records, skipFilled));
 
         var msg = $"Обновлено: {result.Updated}\n" +
                   $"Пропущено: {result.Skipped}\n" +
                   $"Ошибок:    {result.Failed}";
+        if (result.SkippedSamples.Count > 0)
+            msg += "\n\nПервые пропуски:\n  " + string.Join("\n  ", result.SkippedSamples.Take(10));
         if (result.Errors.Count > 0)
-        {
-            msg += "\n\nПервые ошибки:\n" +
-                   string.Join("\n", result.Errors.Take(10));
-        }
+            msg += "\n\nПервые ошибки:\n" + string.Join("\n", result.Errors.Take(10));
 
         AtolStatus = $"Отчёт ОФД применён: ✓ {result.Updated}, ✗ {result.Failed}";
         StatusText = AtolStatus;
@@ -811,14 +815,19 @@ public class MainViewModel : BaseViewModel
               string.Join("\n  ", match.Warnings.Take(10))
             : string.Empty;
 
+        // Первый диалог — да/нет/отмена. По умолчанию (Да) пропускаем уже заполненные,
+        // Нет → перезаписать ВСЕ (даже заполненные), Отмена → выход.
         var confirm = System.Windows.MessageBox.Show(
             $"XML: {xml.Count} чеков\n" +
             $"ОФД: {ofd.Count} коррекций\n" +
             $"Сопоставлено по сумме: {match.Matched}{unmatchedTxt}\n\n" +
-            $"Записать в 1С (уже заполненные документы будут пропущены)?",
-            "Подтверждение", System.Windows.MessageBoxButton.YesNo,
+            $"Да — записать ТОЛЬКО в пустые документы (уже заполненные пропустить)\n" +
+            $"Нет — ПЕРЕЗАПИСАТЬ ВСЕ (включая уже заполненные)\n" +
+            $"Отмена — выход",
+            "Подтверждение", System.Windows.MessageBoxButton.YesNoCancel,
             System.Windows.MessageBoxImage.Question);
-        if (confirm != System.Windows.MessageBoxResult.Yes) return;
+        if (confirm == System.Windows.MessageBoxResult.Cancel) return;
+        bool skipFilled = (confirm == System.Windows.MessageBoxResult.Yes);
 
         AtolStatus = $"Записываем в 1С: 0/{match.Records.Count}...";
         StatusText = AtolStatus;
@@ -832,14 +841,22 @@ public class MainViewModel : BaseViewModel
         };
 
         var result = await Task.Run(() =>
-            OneCService.ApplyPunchedChecks(settings, match.Records, skipFilled: true));
+            OneCService.ApplyPunchedChecks(settings, match.Records, skipFilled: skipFilled));
 
+        var modeStr = skipFilled ? "(пропуская заполненные)" : "(перезаписать всё)";
         var msg = $"Сопоставлено XML↔ОФД: {match.Matched}\n" +
                   $"Не сопоставлено:    {match.Unmatched}\n" +
                   $"────────────────────\n" +
                   $"Записано в 1С:      {result.Updated}\n" +
                   $"Пропущено (заполн.):{result.Skipped}\n" +
-                  $"Ошибок:             {result.Failed}";
+                  $"Ошибок:             {result.Failed}\n" +
+                  $"Режим:              {modeStr}";
+
+        if (result.SkippedSamples.Count > 0 && result.Skipped > 0)
+        {
+            msg += "\n\nПервые пропуски (дата+значение):\n  " +
+                   string.Join("\n  ", result.SkippedSamples.Take(10));
+        }
 
         if (result.Errors.Count > 0)
             msg += "\n\nПервые ошибки:\n" + string.Join("\n", result.Errors.Take(10));
