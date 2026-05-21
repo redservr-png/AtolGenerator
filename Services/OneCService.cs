@@ -472,10 +472,13 @@ public static class OneCService
         dynamic? connector = null;
 
         Log($"=== ApplyPunchedChecks: {records.Count} записей ===");
+        dynamic? docsManager = null;
         try
         {
             connector = CreateConnector();
             conn      = connector.Connect(s.ConnectionString);
+            // Получаем менеджер документа один раз — будем использовать его ПолучитьОбъект(Ссылка)
+            docsManager = conn.Документы.РеализацияТоваровУслуг;
 
             foreach (var rec in records)
             {
@@ -579,16 +582,52 @@ public static class OneCService
                         continue;
                     }
 
-                    lastStep = "docRef.ПолучитьОбъект()";
-                    var obj = docRef.ПолучитьОбъект();
+                    // ПолучитьОбъект — пробуем 3 способа подряд:
+                    //   1) docsManager.ПолучитьОбъект(docRef)
+                    //   2) свежая ссылка через НайтиПоНомеру → .ПолучитьОбъект()
+                    //   3) docRef.ПолучитьОбъект() напрямую
+                    // Какой-то из них должен сработать в зависимости от поведения COM/УТ.
+                    dynamic? obj = null;
+                    string failReasons = string.Empty;
+
+                    try
+                    {
+                        lastStep = "1) docsManager.ПолучитьОбъект(docRef)";
+                        obj = docsManager!.ПолучитьОбъект(docRef);
+                    }
+                    catch (Exception ex1) { failReasons += $"[1: {ex1.Message}] "; }
+
+                    if (obj is null)
+                    {
+                        try
+                        {
+                            lastStep = "2) mgr.НайтиПоНомеру → ПолучитьОбъект()";
+                            var freshRef = docsManager!.НайтиПоНомеру(rec.RealizationNum, checkDate);
+                            if (freshRef is not null && !(bool)freshRef.Пустая())
+                                obj = freshRef.ПолучитьОбъект();
+                        }
+                        catch (Exception ex2) { failReasons += $"[2: {ex2.Message}] "; }
+                    }
+
+                    if (obj is null)
+                    {
+                        try
+                        {
+                            lastStep = "3) docRef.ПолучитьОбъект()";
+                            obj = docRef.ПолучитьОбъект();
+                        }
+                        catch (Exception ex3) { failReasons += $"[3: {ex3.Message}] "; }
+                    }
+
                     if (obj is null)
                     {
                         res.Failed++;
-                        var msg = $"{rec.RealizationNum}: ПолучитьОбъект() вернул null";
+                        var msg = $"{rec.RealizationNum}: все 3 способа ПолучитьОбъект упали. {failReasons}";
                         res.Errors.Add(msg);
-                        Log("  " + msg);
+                        Log("  ОШИБКА " + msg);
                         continue;
                     }
+
 
                     // Пробуем писать ЧИСЛОВЫЕ значения (а не строки) — поле ЧекНомерФП в УТ
                     // 10.3 имеет тип Число (видно по значениям типа 3155950491 в логе)
