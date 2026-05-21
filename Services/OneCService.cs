@@ -486,6 +486,7 @@ public static class OneCService
                     continue;
                 }
 
+                string lastStep = "init";
                 try
                 {
                     // Дата чека (граница поиска документа: реализация должна быть НЕ ПОЗЖЕ даты чека)
@@ -565,7 +566,9 @@ public static class OneCService
 
                     Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} текущ.ФП[{fpTypeName}]=«{fpRaw}» → пишем ФПД={rec.FiscalSign}");
 
-                    // 3. Получаем объект через ссылку и пишем реквизиты
+                    // 3. Получаем объект через ссылку и пишем реквизиты — каждый шаг в try-catch
+                    //    для точной диагностики где падает.
+                    lastStep = "sel.ДокСсылка";
                     var docRef = sel.ДокСсылка;
                     if (docRef is null)
                     {
@@ -576,6 +579,7 @@ public static class OneCService
                         continue;
                     }
 
+                    lastStep = "docRef.ПолучитьОбъект()";
                     var obj = docRef.ПолучитьОбъект();
                     if (obj is null)
                     {
@@ -586,8 +590,15 @@ public static class OneCService
                         continue;
                     }
 
-                    obj.ЧекНомерФП     = rec.FiscalSign.Value.ToString();
-                    obj.НомерЧекаККМ   = rec.FiscalDoc.Value.ToString();
+                    // Пробуем писать ЧИСЛОВЫЕ значения (а не строки) — поле ЧекНомерФП в УТ
+                    // 10.3 имеет тип Число (видно по значениям типа 3155950491 в логе)
+                    lastStep = "set obj.ЧекНомерФП";
+                    obj.ЧекНомерФП = (double)rec.FiscalSign.Value;
+
+                    lastStep = "set obj.НомерЧекаККМ";
+                    obj.НомерЧекаККМ = (double)rec.FiscalDoc.Value;
+
+                    lastStep = "set obj.ДатаПечатиЧека";
                     obj.ДатаПечатиЧека = checkDate;
 
                     // 4. Комментарий: пустой → marker; непустой → дописываем через "   \\\   ".
@@ -595,13 +606,14 @@ public static class OneCService
                     const string marker = "Пробит чек коррекции \"Приход\"";
                     if (!existingComment.Contains("Пробит чек коррекции", StringComparison.OrdinalIgnoreCase))
                     {
+                        lastStep = "set obj.Комментарий";
                         obj.Комментарий = string.IsNullOrWhiteSpace(existingComment)
                             ? marker
                             : existingComment + "   \\\\\\   " + marker;
                     }
 
-                    // 5. Запись минуя перепроведение
-                    obj.ОбменДанными.Загрузка = true;
+                    // 5. Запись — без ОбменДанными.Загрузка (он не во всех конфигурациях работает)
+                    lastStep = "obj.Записать()";
                     obj.Записать();
                     res.Updated++;
                     Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ФПД={rec.FiscalSign} №ФД={rec.FiscalDoc} → записано");
@@ -609,7 +621,7 @@ public static class OneCService
                 catch (Exception ex)
                 {
                     res.Failed++;
-                    var msg = $"{rec.RealizationNum}: {ex.GetType().Name}: {ex.Message}";
+                    var msg = $"{rec.RealizationNum} [шаг: {lastStep}]: {ex.GetType().Name}: {ex.Message}";
                     res.Errors.Add(msg);
                     Log($"  ОШИБКА {msg}\n{ex.StackTrace}");
                 }
