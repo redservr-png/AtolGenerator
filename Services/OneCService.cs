@@ -487,49 +487,8 @@ public static class OneCService
 
                 try
                 {
-                    // 1. Находим документ запросом (надёжнее чем НайтиПоНомеру через dynamic COM)
-                    var query = conn.NewObject("Запрос");
-                    query.Текст = """
-                        ВЫБРАТЬ ПЕРВЫЕ 1
-                            Док.Ссылка       КАК ДокСсылка,
-                            Док.ЧекНомерФП   КАК ЧекНомерФП,
-                            Док.Комментарий  КАК Комментарий
-                        ИЗ
-                            Документ.РеализацияТоваровУслуг КАК Док
-                        ГДЕ
-                            Док.Номер = &НомерДок
-                            И Док.ПометкаУдаления = ЛОЖЬ
-                        """;
-                    query.УстановитьПараметр("НомерДок", rec.RealizationNum);
-                    var qResult = query.Выполнить();
-                    var sel     = qResult.Выбрать();
-                    if (!(bool)sel.Следующий())
-                    {
-                        res.Failed++;
-                        var msg = $"{rec.RealizationNum}: документ не найден";
-                        res.Errors.Add(msg);
-                        Log("  " + msg);
-                        continue;
-                    }
-
-                    // 2. Проверяем skipFilled (читаем значение из выборки, не из объекта)
-                    var existingFp = Str(sel.ЧекНомерФП).Trim();
-                    if (skipFilled && !string.IsNullOrEmpty(existingFp) && existingFp != "0")
-                    {
-                        res.Skipped++;
-                        Log($"  {rec.RealizationNum}: ЧекНомерФП уже = {existingFp} — пропуск");
-                        continue;
-                    }
-
-                    // 3. Получаем объект через ссылку и пишем реквизиты
-                    var docRef = sel.ДокСсылка;
-                    var obj    = docRef.ПолучитьОбъект();
-
-                    obj.ЧекНомерФП   = rec.FiscalSign.Value.ToString();
-                    obj.НомерЧекаККМ = rec.FiscalDoc.Value.ToString();
-
-                    // Дата чека: пытаемся распарсить из ReceiptDt; если не получилось — текущая
-                    DateTime dt = DateTime.Now;
+                    // Дата чека (граница поиска документа: реализация должна быть НЕ ПОЗЖЕ даты чека)
+                    DateTime checkDate = DateTime.Now;
                     if (!string.IsNullOrEmpty(rec.ReceiptDt))
                     {
                         if (DateTime.TryParseExact(rec.ReceiptDt, "dd.MM.yyyy HH:mm:ss",
@@ -537,15 +496,83 @@ public static class OneCService
                                 System.Globalization.DateTimeStyles.None, out var parsed)
                          || DateTime.TryParse(rec.ReceiptDt, out parsed))
                         {
-                            dt = parsed;
+                            checkDate = parsed;
                         }
                     }
-                    obj.ДатаПечатиЧека = dt;
+
+                    // 1. Находим документ запросом.
+                    //    Номера документов в УТ 10.3 — годовая нумерация: один номер может
+                    //    встречаться в разных годах. Поэтому фильтруем по дате (документ
+                    //    должен быть НЕ ПОЗЖЕ даты пробитого чека) и берём самый свежий.
+                    var query = conn.NewObject("Запрос");
+                    query.Текст = """
+                        ВЫБРАТЬ ПЕРВЫЕ 1
+                            Док.Ссылка       КАК ДокСсылка,
+                            Док.Дата         КАК ДатаДок,
+                            Док.ЧекНомерФП   КАК ЧекНомерФП,
+                            Док.Комментарий  КАК Комментарий
+                        ИЗ
+                            Документ.РеализацияТоваровУслуг КАК Док
+                        ГДЕ
+                            Док.Номер = &НомерДок
+                            И Док.ПометкаУдаления = ЛОЖЬ
+                            И Док.Дата <= &ДатаЧека
+                        УПОРЯДОЧИТЬ ПО
+                            Док.Дата УБЫВ
+                        """;
+                    query.УстановитьПараметр("НомерДок", rec.RealizationNum);
+                    query.УстановитьПараметр("ДатаЧека", checkDate);
+                    var qResult = query.Выполнить();
+                    var sel     = qResult.Выбрать();
+                    if (!(bool)sel.Следующий())
+                    {
+                        res.Failed++;
+                        var msg = $"{rec.RealizationNum}: документ не найден (до {checkDate:dd.MM.yyyy})";
+                        res.Errors.Add(msg);
+                        Log("  " + msg);
+                        continue;
+                    }
+
+                    var docDate         = ToDateTime(sel.ДатаДок);
+                    var existingFp      = Str(sel.ЧекНомерФП).Trim();
+                    var existingComment = Str(sel.Комментарий);
+
+                    // 2. Проверяем skipFilled (читаем значение из выборки, не из объекта)
+                    if (skipFilled && !string.IsNullOrEmpty(existingFp) && existingFp != "0")
+                    {
+                        res.Skipped++;
+                        Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ЧекНомерФП уже = {existingFp} — пропуск");
+                        continue;
+                    }
+
+                    // 3. Получаем объект через ссылку и пишем реквизиты
+                    var docRef = sel.ДокСсылка;
+                    if (docRef is null)
+                    {
+                        res.Failed++;
+                        var msg = $"{rec.RealizationNum}: ссылка пустая (sel.ДокСсылка == null)";
+                        res.Errors.Add(msg);
+                        Log("  " + msg);
+                        continue;
+                    }
+
+                    var obj = docRef.ПолучитьОбъект();
+                    if (obj is null)
+                    {
+                        res.Failed++;
+                        var msg = $"{rec.RealizationNum}: ПолучитьОбъект() вернул null";
+                        res.Errors.Add(msg);
+                        Log("  " + msg);
+                        continue;
+                    }
+
+                    obj.ЧекНомерФП     = rec.FiscalSign.Value.ToString();
+                    obj.НомерЧекаККМ   = rec.FiscalDoc.Value.ToString();
+                    obj.ДатаПечатиЧека = checkDate;
 
                     // 4. Комментарий: пустой → marker; непустой → дописываем через "   \\\   ".
                     //                 Если уже содержит «Пробит чек коррекции» — не дописываем.
                     const string marker = "Пробит чек коррекции \"Приход\"";
-                    var existingComment = Str(sel.Комментарий);
                     if (!existingComment.Contains("Пробит чек коррекции", StringComparison.OrdinalIgnoreCase))
                     {
                         obj.Комментарий = string.IsNullOrWhiteSpace(existingComment)
@@ -553,9 +580,11 @@ public static class OneCService
                             : existingComment + "   \\\\\\   " + marker;
                     }
 
+                    // 5. Запись минуя перепроведение
+                    obj.ОбменДанными.Загрузка = true;
                     obj.Записать();
                     res.Updated++;
-                    Log($"  {rec.RealizationNum}: ФПД={rec.FiscalSign} №ФД={rec.FiscalDoc} → записано");
+                    Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ФПД={rec.FiscalSign} №ФД={rec.FiscalDoc} → записано");
                 }
                 catch (Exception ex)
                 {
