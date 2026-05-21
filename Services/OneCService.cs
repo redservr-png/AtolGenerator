@@ -535,18 +535,35 @@ public static class OneCService
                     }
 
                     var docDate         = ToDateTime(sel.ДатаДок);
-                    var existingFp      = Str(sel.ЧекНомерФП).Trim();
                     var existingComment = Str(sel.Комментарий);
 
-                    // 2. Проверяем skipFilled (читаем значение из выборки, не из объекта)
-                    if (skipFilled && !string.IsNullOrEmpty(existingFp) && existingFp != "0")
+                    // Получаем «сырое» значение ЧекНомерФП с типом для диагностики
+                    dynamic rawFp = sel.ЧекНомерФП;
+                    string  fpTypeName = "null";
+                    string  fpRaw      = string.Empty;
+                    try
+                    {
+                        if (rawFp is not null)
+                        {
+                            fpTypeName = ((object)rawFp).GetType().FullName ?? "?";
+                            fpRaw      = (rawFp.ToString() ?? string.Empty).Trim();
+                        }
+                    }
+                    catch { /* игнорируем — оставим пустое */ }
+
+                    // 2. Проверяем skipFilled — поле считается заполненным, если значение
+                    //    не входит в список «пустых» представлений
+                    bool isFilled = !IsEmptyFp(fpRaw);
+                    if (skipFilled && isFilled)
                     {
                         res.Skipped++;
-                        var detail = $"{rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ЧекНомерФП уже = «{existingFp}»";
+                        var detail = $"{rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ЧекНомерФП[{fpTypeName}] = «{fpRaw}»";
                         Log($"  {detail} — пропуск");
                         if (res.SkippedSamples.Count < 15) res.SkippedSamples.Add(detail);
                         continue;
                     }
+
+                    Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} текущ.ФП[{fpTypeName}]=«{fpRaw}» → пишем ФПД={rec.FiscalSign}");
 
                     // 3. Получаем объект через ссылку и пишем реквизиты
                     var docRef = sel.ДокСсылка;
@@ -611,6 +628,28 @@ public static class OneCService
 
         Log($"=== Применено: обновлено {res.Updated}, пропущено {res.Skipped}, ошибок {res.Failed} ===");
         return res;
+    }
+
+    /// <summary>
+    /// Считает значение поля ЧекНомерФП «пустым» — учитывает разные представления,
+    /// которые приходят через COM-мост и через групповую обработку 1С.
+    /// </summary>
+    private static bool IsEmptyFp(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return true;
+        var v = s.Trim();
+        // Различные представления нуля
+        if (v == "0" || v == "0.0" || v == "0,0" || v == "0.00" || v == "0,00") return true;
+        // Только нули (например, "000000000")
+        if (v.All(c => c == '0')) return true;
+        // Известные платформенные плейсхолдеры
+        if (v == "999999999") return true;
+        // 1С Null-маркеры
+        if (string.Equals(v, "Неопределено", StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.Equals(v, "Null",         StringComparison.OrdinalIgnoreCase)) return true;
+        // COM-обёртки (.NET без правильной строки)
+        if (v.StartsWith("System.", StringComparison.Ordinal)) return true;
+        return false;
     }
 
     private static dynamic CreateConnector()
