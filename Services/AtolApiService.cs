@@ -386,12 +386,8 @@ public static class AtolApiService
                     payments = new[] { new { type = payType, sum = order.Amount } },
                     vats     = new[] { new { type = vatType, sum = vatSum } },
                     cashier  = AppConstants.CashierName,
-                    // Тег 1086 — доп.реквизит пользователя: номер реализации/основания
-                    additional_user_attribute = new
-                    {
-                        name  = "Номер реализации",
-                        value = baseNumber,
-                    },
+                    // Тег 1086 (additional_user_attribute) запрещён в correction по схеме АТОЛ —
+                    // номер реализации идёт только в correction_info.base_number (тег 1179).
                 }
             };
         }

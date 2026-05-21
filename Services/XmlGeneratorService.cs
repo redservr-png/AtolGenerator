@@ -143,6 +143,9 @@ public static class XmlGeneratorService
             vatSum  = Math.Round(c.Amount * 22.0 / 122.0, 2);  // 22/122 включено в цену
         }
 
+        // Внимание: XSD АТОЛ запрещает additional_user_attribute внутри <correction>.
+        // Разрешены только: device_number, internet. Поэтому тег 1086 здесь НЕ ставим —
+        // номер реализации уже передаётся в <base_number> (тег 1179) внутри correction_info.
         var correction = new XElement("correction",
             new XElement("operation", c.OperationType),
             new XElement("company",
@@ -163,14 +166,6 @@ public static class XmlGeneratorService
                     new XElement("sum",  Fmt(vatSum)))),
             new XElement("cashier", c.CashierName)
         );
-
-        // Доп. реквизит пользователя (теги 1084/1085/1086) — например, № реализации
-        if (!string.IsNullOrWhiteSpace(c.UserAttributeValue))
-        {
-            correction.Add(new XElement("additional_user_attribute",
-                new XElement("name",  string.IsNullOrWhiteSpace(c.UserAttributeName) ? "Номер реализации" : c.UserAttributeName),
-                new XElement("value", c.UserAttributeValue)));
-        }
 
         return correction;
     }
