@@ -678,12 +678,17 @@ public static class OneCService
         Log($"=== Применено: обновлено {res.Updated}, пропущено {res.Skipped}, ошибок {res.Failed} ===");
 
         // CSV-резерв для ручного импорта через внешнюю 1С-обработку (на случай COM-сбоев)
+        // Пишем в Windows-1251 — родная кодировка УТ 10.3 (платформа 8.2), без BOM.
         try
         {
+            // Регистрируем провайдер кодовых страниц (нужно в .NET Core+)
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            var enc = System.Text.Encoding.GetEncoding(1251);
+
             var csvDir  = AppDomain.CurrentDomain.BaseDirectory;
             var csvName = $"atol_to_1c_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
             var csvPath = System.IO.Path.Combine(csvDir, csvName);
-            using var sw = new System.IO.StreamWriter(csvPath, false, new System.Text.UTF8Encoding(true));
+            using var sw = new System.IO.StreamWriter(csvPath, false, enc);
             sw.WriteLine("НомерРеализации;ФПД;НомерФД;ДатаПечатиЧека");
             foreach (var rec in records)
             {
@@ -692,7 +697,7 @@ public static class OneCService
                 sw.WriteLine($"{rec.RealizationNum};{rec.FiscalSign};{rec.FiscalDoc};{rec.ReceiptDt}");
             }
             res.CsvBackupPath = csvPath;
-            Log($"CSV для ручного импорта: {csvPath}");
+            Log($"CSV для ручного импорта (Windows-1251): {csvPath}");
         }
         catch (Exception ex) { Log($"Ошибка записи CSV: {ex.Message}"); }
 
