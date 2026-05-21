@@ -654,6 +654,8 @@ public class MainViewModel : BaseViewModel
             msg += "\n\nПервые пропуски:\n  " + string.Join("\n  ", result.SkippedSamples.Take(10));
         if (result.Errors.Count > 0)
             msg += "\n\nПервые ошибки:\n" + string.Join("\n", result.Errors.Take(10));
+        if (!string.IsNullOrEmpty(result.CsvBackupPath))
+            msg += $"\n\n📄 CSV для ручного импорта:\n{result.CsvBackupPath}";
 
         AtolStatus = $"Применено к 1С: ✓ {result.Updated}, ✗ {result.Failed}";
         StatusText = AtolStatus;
@@ -740,6 +742,8 @@ public class MainViewModel : BaseViewModel
             msg += "\n\nПервые пропуски:\n  " + string.Join("\n  ", result.SkippedSamples.Take(10));
         if (result.Errors.Count > 0)
             msg += "\n\nПервые ошибки:\n" + string.Join("\n", result.Errors.Take(10));
+        if (!string.IsNullOrEmpty(result.CsvBackupPath))
+            msg += $"\n\n📄 CSV для ручного импорта:\n{result.CsvBackupPath}";
 
         AtolStatus = $"Отчёт ОФД применён: ✓ {result.Updated}, ✗ {result.Failed}";
         StatusText = AtolStatus;
@@ -860,6 +864,9 @@ public class MainViewModel : BaseViewModel
 
         if (result.Errors.Count > 0)
             msg += "\n\nПервые ошибки:\n" + string.Join("\n", result.Errors.Take(10));
+
+        if (!string.IsNullOrEmpty(result.CsvBackupPath))
+            msg += $"\n\n📄 CSV для ручного импорта в 1С (через внешнюю обработку):\n{result.CsvBackupPath}";
 
         AtolStatus = $"XML+ОФД → 1С: ✓ {result.Updated}, пропущено {result.Skipped}";
         StatusText = AtolStatus;

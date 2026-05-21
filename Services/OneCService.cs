@@ -381,6 +381,7 @@ public static class OneCService
         public int Failed      { get; set; }
         public List<string> Errors         { get; set; } = new();
         public List<string> SkippedSamples { get; set; } = new();  // первые N пропусков с подробностями
+        public string  CsvBackupPath       { get; set; } = string.Empty;   // путь к CSV для ручного импорта
     }
 
     public class PunchedRecord
@@ -582,47 +583,41 @@ public static class OneCService
                         continue;
                     }
 
-                    // ПолучитьОбъект — пробуем 3 способа подряд:
-                    //   1) docsManager.ПолучитьОбъект(docRef)
-                    //   2) свежая ссылка через НайтиПоНомеру → .ПолучитьОбъект()
-                    //   3) docRef.ПолучитьОбъект() напрямую
-                    // Какой-то из них должен сработать в зависимости от поведения COM/УТ.
+                    // Освобождаем курсор запроса ДО ПолучитьОбъект — на случай, если
+                    // удерживаемый курсор мешает платформе захватить блокировку документа.
+                    try { System.Runtime.InteropServices.Marshal.ReleaseComObject(sel); } catch { }
+                    try { System.Runtime.InteropServices.Marshal.ReleaseComObject(qResult); } catch { }
+                    try { System.Runtime.InteropServices.Marshal.ReleaseComObject(query); } catch { }
+
+                    // ПолучитьОбъект — две попытки:
+                    //   1) свежая ссылка через mgr.НайтиПоНомеру → .ПолучитьОбъект()
+                    //   2) исходная docRef.ПолучитьОбъект()
                     dynamic? obj = null;
                     string failReasons = string.Empty;
 
                     try
                     {
-                        lastStep = "1) docsManager.ПолучитьОбъект(docRef)";
-                        obj = docsManager!.ПолучитьОбъект(docRef);
+                        lastStep = "mgr.НайтиПоНомеру → ПолучитьОбъект()";
+                        var freshRef = docsManager!.НайтиПоНомеру(rec.RealizationNum, checkDate);
+                        if (freshRef is not null && !(bool)freshRef.Пустая())
+                            obj = freshRef.ПолучитьОбъект();
                     }
-                    catch (Exception ex1) { failReasons += $"[1: {ex1.Message}] "; }
+                    catch (Exception ex1) { failReasons += $"[fresh: {ex1.Message}] "; }
 
                     if (obj is null)
                     {
                         try
                         {
-                            lastStep = "2) mgr.НайтиПоНомеру → ПолучитьОбъект()";
-                            var freshRef = docsManager!.НайтиПоНомеру(rec.RealizationNum, checkDate);
-                            if (freshRef is not null && !(bool)freshRef.Пустая())
-                                obj = freshRef.ПолучитьОбъект();
-                        }
-                        catch (Exception ex2) { failReasons += $"[2: {ex2.Message}] "; }
-                    }
-
-                    if (obj is null)
-                    {
-                        try
-                        {
-                            lastStep = "3) docRef.ПолучитьОбъект()";
+                            lastStep = "docRef.ПолучитьОбъект()";
                             obj = docRef.ПолучитьОбъект();
                         }
-                        catch (Exception ex3) { failReasons += $"[3: {ex3.Message}] "; }
+                        catch (Exception ex2) { failReasons += $"[ref: {ex2.Message}] "; }
                     }
 
                     if (obj is null)
                     {
                         res.Failed++;
-                        var msg = $"{rec.RealizationNum}: все 3 способа ПолучитьОбъект упали. {failReasons}";
+                        var msg = $"{rec.RealizationNum}: оба способа ПолучитьОбъект упали. {failReasons}";
                         res.Errors.Add(msg);
                         Log("  ОШИБКА " + msg);
                         continue;
@@ -656,6 +651,9 @@ public static class OneCService
                     obj.Записать();
                     res.Updated++;
                     Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ФПД={rec.FiscalSign} №ФД={rec.FiscalDoc} → записано");
+
+                    // Освобождаем COM-объект документа
+                    try { System.Runtime.InteropServices.Marshal.ReleaseComObject(obj); } catch { }
                 }
                 catch (Exception ex)
                 {
@@ -678,6 +676,26 @@ public static class OneCService
         }
 
         Log($"=== Применено: обновлено {res.Updated}, пропущено {res.Skipped}, ошибок {res.Failed} ===");
+
+        // CSV-резерв для ручного импорта через внешнюю 1С-обработку (на случай COM-сбоев)
+        try
+        {
+            var csvDir  = AppDomain.CurrentDomain.BaseDirectory;
+            var csvName = $"atol_to_1c_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+            var csvPath = System.IO.Path.Combine(csvDir, csvName);
+            using var sw = new System.IO.StreamWriter(csvPath, false, new System.Text.UTF8Encoding(true));
+            sw.WriteLine("НомерРеализации;ФПД;НомерФД;ДатаПечатиЧека");
+            foreach (var rec in records)
+            {
+                if (string.IsNullOrEmpty(rec.RealizationNum) ||
+                    rec.FiscalDoc is null || rec.FiscalSign is null) continue;
+                sw.WriteLine($"{rec.RealizationNum};{rec.FiscalSign};{rec.FiscalDoc};{rec.ReceiptDt}");
+            }
+            res.CsvBackupPath = csvPath;
+            Log($"CSV для ручного импорта: {csvPath}");
+        }
+        catch (Exception ex) { Log($"Ошибка записи CSV: {ex.Message}"); }
+
         return res;
     }
 
