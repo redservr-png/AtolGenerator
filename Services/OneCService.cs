@@ -487,10 +487,23 @@ public static class OneCService
 
                 try
                 {
-                    // 1. Находим документ по номеру
-                    var docRef = conn.Документы.РеализацияТоваровУслуг
-                        .НайтиПоНомеру(rec.RealizationNum, DateTime.Now);
-                    if (docRef is null || (bool)docRef.Пустая())
+                    // 1. Находим документ запросом (надёжнее чем НайтиПоНомеру через dynamic COM)
+                    var query = conn.NewObject("Запрос");
+                    query.Текст = """
+                        ВЫБРАТЬ ПЕРВЫЕ 1
+                            Док.Ссылка       КАК ДокСсылка,
+                            Док.ЧекНомерФП   КАК ЧекНомерФП,
+                            Док.Комментарий  КАК Комментарий
+                        ИЗ
+                            Документ.РеализацияТоваровУслуг КАК Док
+                        ГДЕ
+                            Док.Номер = &НомерДок
+                            И Док.ПометкаУдаления = ЛОЖЬ
+                        """;
+                    query.УстановитьПараметр("НомерДок", rec.RealizationNum);
+                    var qResult = query.Выполнить();
+                    var sel     = qResult.Выбрать();
+                    if (!(bool)sel.Следующий())
                     {
                         res.Failed++;
                         var msg = $"{rec.RealizationNum}: документ не найден";
@@ -499,23 +512,21 @@ public static class OneCService
                         continue;
                     }
 
-                    // 2. Получаем объект и пишем реквизиты
-                    var obj = docRef.ПолучитьОбъект();
-
-                    // Пропускаем уже заполненные (например, заполненные вручную ранее)
-                    if (skipFilled)
+                    // 2. Проверяем skipFilled (читаем значение из выборки, не из объекта)
+                    var existingFp = Str(sel.ЧекНомерФП).Trim();
+                    if (skipFilled && !string.IsNullOrEmpty(existingFp) && existingFp != "0")
                     {
-                        var existing = Str(obj.ЧекНомерФП).Trim();
-                        if (!string.IsNullOrEmpty(existing) && existing != "0")
-                        {
-                            res.Skipped++;
-                            Log($"  {rec.RealizationNum}: ЧекНомерФП уже = {existing} — пропуск");
-                            continue;
-                        }
+                        res.Skipped++;
+                        Log($"  {rec.RealizationNum}: ЧекНомерФП уже = {existingFp} — пропуск");
+                        continue;
                     }
 
-                    obj.ЧекНомерФП     = rec.FiscalSign.Value.ToString();
-                    obj.НомерЧекаККМ   = rec.FiscalDoc.Value.ToString();
+                    // 3. Получаем объект через ссылку и пишем реквизиты
+                    var docRef = sel.ДокСсылка;
+                    var obj    = docRef.ПолучитьОбъект();
+
+                    obj.ЧекНомерФП   = rec.FiscalSign.Value.ToString();
+                    obj.НомерЧекаККМ = rec.FiscalDoc.Value.ToString();
 
                     // Дата чека: пытаемся распарсить из ReceiptDt; если не получилось — текущая
                     DateTime dt = DateTime.Now;
@@ -531,11 +542,10 @@ public static class OneCService
                     }
                     obj.ДатаПечатиЧека = dt;
 
-                    // Комментарий: пустой → "Пробит чек коррекции \"Приход\"";
-                    //              непустой → дописываем через "   \\\   ".
-                    //              Если уже содержит «Пробит чек коррекции» — не дописываем.
+                    // 4. Комментарий: пустой → marker; непустой → дописываем через "   \\\   ".
+                    //                 Если уже содержит «Пробит чек коррекции» — не дописываем.
                     const string marker = "Пробит чек коррекции \"Приход\"";
-                    var existingComment = Str(obj.Комментарий);
+                    var existingComment = Str(sel.Комментарий);
                     if (!existingComment.Contains("Пробит чек коррекции", StringComparison.OrdinalIgnoreCase))
                     {
                         obj.Комментарий = string.IsNullOrWhiteSpace(existingComment)
@@ -550,9 +560,9 @@ public static class OneCService
                 catch (Exception ex)
                 {
                     res.Failed++;
-                    var msg = $"{rec.RealizationNum}: {ex.Message}";
+                    var msg = $"{rec.RealizationNum}: {ex.GetType().Name}: {ex.Message}";
                     res.Errors.Add(msg);
-                    Log("  ОШИБКА " + msg);
+                    Log($"  ОШИБКА {msg}\n{ex.StackTrace}");
                 }
             }
         }
