@@ -46,17 +46,41 @@ public class MainViewModel : BaseViewModel
             OnPropertyChanged(nameof(ShowCorrectionBox));
             OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
             OnPropertyChanged(nameof(CorrectionPunchHint));
+            OnPropertyChanged(nameof(ShowCorrectionPunchHint));
             OnPropertyChanged(nameof(ShowPaymentType));
             OnPropertyChanged(nameof(ShowItemsSection));
         }
     }
     public bool IsCorrection         => CheckType is "sell_correction" or "buy_correction";
     public bool ShowCorrectionBox    => IsCorrection;
+
+    /// <summary>В списке есть коррекции, которые можно пробить только через XML (sell_correction).</summary>
+    public bool HasXmlOnlyCorrection =>
+        Orders.Any(o => o.CorrectionScenario.RequiresXmlOnly());
+
+    /// <summary>Количество таких «XML-только» коррекций в списке.</summary>
+    public int XmlOnlyCorrectionCount =>
+        Orders.Count(o => o.CorrectionScenario.RequiresXmlOnly());
+
     // Пробитие через API: коррекции не поддерживаются (ошибка 31)
-    public bool CanPunchOrdersViaAtol => OrderCount > 0 && !IsCorrection;
-    public string CorrectionPunchHint => IsCorrection
-        ? "Коррекция не поддерживается через АТОЛ API.\nИспользуйте сформированный XML-файл."
-        : string.Empty;
+    public bool CanPunchOrdersViaAtol =>
+        OrderCount > 0 && !IsCorrection && !HasXmlOnlyCorrection;
+
+    public string CorrectionPunchHint
+    {
+        get
+        {
+            if (IsCorrection)
+                return "Коррекция не поддерживается через АТОЛ API.\nИспользуйте сформированный XML-файл.";
+            if (HasXmlOnlyCorrection)
+                return $"В списке есть {XmlOnlyCorrectionCount} коррекций, требующих XML.\n" +
+                       "Пробитие через API недоступно — используйте «Сформировать XML».";
+            return string.Empty;
+        }
+    }
+
+    /// <summary>Показывать ли подсказку про невозможность пробития через API.</summary>
+    public bool ShowCorrectionPunchHint => IsCorrection || HasXmlOnlyCorrection;
     public bool ShowPaymentType   => IsPaymentTab;  // на вкладке реализации тип оплаты всегда 14 (аванс)
     public bool ShowBuyRefundOption => IsRealizationTab;
     public bool ShowItemsSection  => IsRealizationTab && !IsCorrection;
@@ -349,6 +373,18 @@ public class MainViewModel : BaseViewModel
 
     public MainViewModel()
     {
+        // Любое изменение списка заказов автоматически обновляет
+        // флаги доступности кнопки «Пробить в АТОЛ» и подсказку.
+        Orders.CollectionChanged += (_, __) =>
+        {
+            OnPropertyChanged(nameof(OrderCount));
+            OnPropertyChanged(nameof(HasXmlOnlyCorrection));
+            OnPropertyChanged(nameof(XmlOnlyCorrectionCount));
+            OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
+            OnPropertyChanged(nameof(CorrectionPunchHint));
+            OnPropertyChanged(nameof(ShowCorrectionPunchHint));
+        };
+
         ParseBulkCommand   = new AsyncRelayCommand(ParseBulkAsync);
         AddSingleCommand   = new RelayCommand(AddSingleOrder);
         DeleteOrderCommand = new RelayCommand(o => DeleteOrder(o as OrderEntry));
@@ -975,15 +1011,14 @@ public class MainViewModel : BaseViewModel
         if (dlg == System.Windows.MessageBoxResult.Cancel) return;
         if (dlg == System.Windows.MessageBoxResult.No) Orders.Clear();
 
-        // Кладём в основной список
+        // Кладём в основной список. CollectionChanged автоматически обновит все
+        // зависимые свойства (OrderCount, CanPunchOrdersViaAtol, CorrectionPunchHint и т.д.).
         int added = 0;
         foreach (var c in parsed)
         {
             Orders.Add(c);
             added++;
         }
-        OnPropertyChanged(nameof(OrderCount));
-        OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
 
         // Автопереключение на ту вкладку, где кейсов больше
         Tab = realizationCases.Count >= paymentCases.Count ? "realization" : "payment";

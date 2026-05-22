@@ -716,12 +716,12 @@
                   <TextBlock Text="Пробить в АТОЛ Online" FontSize="15" FontWeight="Bold" Foreground="White"/>
                 </StackPanel>
               </Button>
-              <!-- Подсказка при выборе коррекции -->
+              <!-- Подсказка при выборе коррекции или наличии XML-only коррекций в списке -->
               <TextBlock Text="{Binding CorrectionPunchHint}"
                          FontSize="11" Foreground="#FFAA44"
                          HorizontalAlignment="Center" Margin="0,4,0,0"
                          TextWrapping="Wrap" TextAlignment="Center"
-                         Visibility="{Binding IsCorrection, Converter={StaticResource BoolVis}}"/>
+                         Visibility="{Binding ShowCorrectionPunchHint, Converter={StaticResource BoolVis}}"/>
               <TextBlock Text="Файлы сохраняются в папку atol_output/"
                          FontSize="11" Foreground="{StaticResource BrushText3}"
                          HorizontalAlignment="Center" Margin="0,8,0,0"/>
