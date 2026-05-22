@@ -18,18 +18,26 @@ public enum CorrectionScenario
     FullCancel,
 
     /// <summary>
-    /// Чек большей суммой — уменьшить базу на разницу.
+    /// Чек пробит большей суммой — нужно уменьшить базу.
     /// «Чек большей суммой».
-    /// → sell_refund (отмена старого) + sell (правильная сумма).
+    /// → sell_refund(ошибочная сумма из чека) + sell_correction(правильная сумма из 1С).
     /// </summary>
-    DecreaseAmount,
+    CheckLargerAmount,
 
     /// <summary>
-    /// Чек меньшей суммой / не пробит — увеличить базу.
-    /// «Чек меньшей суммой», «не пробит», «не вышел», «не в день оплаты».
-    /// → sell_correction на разницу/полную сумму.
+    /// Чек пробит меньшей суммой — нужно увеличить базу.
+    /// «Чек меньшей суммой».
+    /// Чек был пробит, поэтому нужно сначала возврат, потом коррекция.
+    /// → sell_refund(ошибочная сумма из чека) + sell_correction(правильная сумма из 1С).
     /// </summary>
-    IncreaseAmount,
+    CheckSmallerAmount,
+
+    /// <summary>
+    /// Чек вообще не был пробит — есть документ в 1С, но фискального чека нет.
+    /// «Чек не пробит», «не вышел», «не в день оплаты», «не пробит чек в день оплаты».
+    /// → Только sell_correction на полную сумму (refund не нужен — чека и так нет).
+    /// </summary>
+    CheckNotPunched,
 
     /// <summary>
     /// Неправильный способ оплаты — отменить и пробить заново.
@@ -107,8 +115,9 @@ public static class CorrectionScenarioExtensions
     {
         CorrectionScenario.Unknown            => "— Не определён —",
         CorrectionScenario.FullCancel         => "Полная отмена (лишний чек)",
-        CorrectionScenario.DecreaseAmount     => "Чек большей суммой",
-        CorrectionScenario.IncreaseAmount     => "Чек меньшей суммой / не пробит",
+        CorrectionScenario.CheckLargerAmount  => "Чек большей суммой",
+        CorrectionScenario.CheckSmallerAmount => "Чек меньшей суммой",
+        CorrectionScenario.CheckNotPunched    => "Чек не пробит",
         CorrectionScenario.WrongPaymentType   => "Неправильный способ оплаты",
         CorrectionScenario.WrongNomenclature  => "Неправильная номенклатура",
         CorrectionScenario.RealRefund         => "Реальный возврат (по бухгалтерии)",
@@ -120,14 +129,15 @@ public static class CorrectionScenarioExtensions
     /// <summary>Определяет какой Kind заказа подходит для сценария.</summary>
     public static OrderKind ToOrderKind(this CorrectionScenario s) => s switch
     {
-        CorrectionScenario.FullCancel        => OrderKind.SingleRefund,
-        CorrectionScenario.RealRefund        => OrderKind.SingleRefund,
-        CorrectionScenario.IncreaseAmount    => OrderKind.SingleCorrection,
-        CorrectionScenario.WrongDate         => OrderKind.SingleCorrection,
-        CorrectionScenario.ExpenseCorrection => OrderKind.SingleCorrection,
-        CorrectionScenario.DecreaseAmount    => OrderKind.RefundCorrectionPair,
-        CorrectionScenario.WrongPaymentType  => OrderKind.RefundCorrectionPair,
-        CorrectionScenario.WrongNomenclature => OrderKind.RefundCorrectionPair,
+        CorrectionScenario.FullCancel         => OrderKind.SingleRefund,
+        CorrectionScenario.RealRefund         => OrderKind.SingleRefund,
+        CorrectionScenario.CheckNotPunched    => OrderKind.SingleCorrection,
+        CorrectionScenario.WrongDate          => OrderKind.SingleCorrection,
+        CorrectionScenario.ExpenseCorrection  => OrderKind.SingleCorrection,
+        CorrectionScenario.CheckLargerAmount  => OrderKind.RefundCorrectionPair,
+        CorrectionScenario.CheckSmallerAmount => OrderKind.RefundCorrectionPair,
+        CorrectionScenario.WrongPaymentType   => OrderKind.RefundCorrectionPair,
+        CorrectionScenario.WrongNomenclature  => OrderKind.RefundCorrectionPair,
         _ => OrderKind.Regular,
     };
 

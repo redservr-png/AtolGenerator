@@ -16,15 +16,17 @@ public static class CorrectionGeneratorService
     {
         return order.CorrectionScenario switch
         {
-            CorrectionScenario.FullCancel        => BuildFullCancel(order, p),
-            CorrectionScenario.DecreaseAmount    => BuildDecreaseAmount(order, p),
-            CorrectionScenario.IncreaseAmount    => BuildIncreaseAmount(order, p),
-            CorrectionScenario.WrongPaymentType  => BuildWrongPaymentType(order, p),
-            CorrectionScenario.WrongNomenclature => BuildWrongNomenclature(order, p),
-            CorrectionScenario.RealRefund        => BuildRealRefund(order, p),
-            CorrectionScenario.WrongDate         => BuildWrongDate(order, p),
-            CorrectionScenario.ExpenseCorrection => BuildExpenseCorrection(order, p),
-            _                                    => new List<CheckData>(),
+            CorrectionScenario.FullCancel         => BuildFullCancel(order, p),
+            CorrectionScenario.CheckLargerAmount  => BuildRefundPlusCorrection(order, p),
+            CorrectionScenario.CheckSmallerAmount => BuildRefundPlusCorrection(order, p),
+            CorrectionScenario.CheckNotPunched    => BuildCheckNotPunched(order, p),
+            CorrectionScenario.WrongPaymentType   => BuildWrongPaymentType(order, p),
+            CorrectionScenario.WrongNomenclature  => BuildWrongNomenclature(order, p),
+            CorrectionScenario.RealRefund         => BuildRealRefund(order, p),
+            CorrectionScenario.WrongDate          => BuildWrongDate(order, p),
+            CorrectionScenario.ExpenseCorrection  => BuildExpenseCorrection(order, p),
+            // Unknown — генерация пропускается, пользователь должен выбрать сценарий
+            _                                     => new List<CheckData>(),
         };
     }
 
@@ -39,29 +41,29 @@ public static class CorrectionGeneratorService
         return new List<CheckData> { refund };
     }
 
-    /// <summary>2) Чек большей суммой → sell_refund на ошибочную + sell на правильную меньшую.</summary>
-    private static List<CheckData> BuildDecreaseAmount(OrderEntry o, GenerationParams p)
+    /// <summary>
+    /// 2) Чек большей суммой / меньшей суммой → пара чеков.
+    /// Логика одинаковая для обоих: чек УЖЕ пробит с ошибочной суммой, поэтому:
+    ///   sell_refund(ошибочная_сумма_из_чека) + sell_correction(правильная_сумма_из_1С).
+    /// </summary>
+    private static List<CheckData> BuildRefundPlusCorrection(OrderEntry o, GenerationParams p)
     {
         var wrong   = o.OriginalCheckAmount ?? o.Amount;
         var correct = o.CorrectAmount       ?? o.Amount;
 
-        var refund = MakeRefundCheckData(o, p, amount: wrong, includeOriginalFp: true);
-        var sell   = MakeSellCheckData  (o, p, amount: correct);
-        return new List<CheckData> { refund, sell };
+        var refund = MakeRefundCheckData    (o, p, amount: wrong,   includeOriginalFp: true);
+        var corr   = MakeCorrectionCheckData(o, p, amount: correct, isExpense: false);
+        return new List<CheckData> { refund, corr };
     }
 
-    /// <summary>3) Чек меньшей суммой / не пробит → один sell_correction на разницу/полную сумму.</summary>
-    private static List<CheckData> BuildIncreaseAmount(OrderEntry o, GenerationParams p)
+    /// <summary>
+    /// 3) Чек не пробит — был расчёт, но фискального чека нет.
+    /// → Один sell_correction на полную сумму (refund не нужен — чека и так нет).
+    /// </summary>
+    private static List<CheckData> BuildCheckNotPunched(OrderEntry o, GenerationParams p)
     {
-        // Если ничего не пробивали (CheckNotPunched) — корректируем на полную сумму.
-        // Если пробили меньше — на разницу.
-        double diff;
-        if (o.OriginalCheckAmount is double pre && pre > 0 && o.CorrectAmount is double cur && cur > pre)
-            diff = cur - pre;
-        else
-            diff = o.CorrectAmount ?? o.Amount;
-
-        var corr = MakeCorrectionCheckData(o, p, amount: diff, isExpense: false);
+        var amount = o.CorrectAmount ?? o.Amount;
+        var corr   = MakeCorrectionCheckData(o, p, amount: amount, isExpense: false);
         return new List<CheckData> { corr };
     }
 

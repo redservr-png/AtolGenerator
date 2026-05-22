@@ -67,3 +67,50 @@ public class OrderKindToVisibilityConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotImplementedException();
 }
+
+/// <summary>SourceDocumentType → короткая русская подпись (для чипа в карточке).</summary>
+[ValueConversion(typeof(SourceDocumentType), typeof(string))]
+public class SourceDocumentTypeLabelConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is SourceDocumentType t ? t switch
+        {
+            SourceDocumentType.Realization => "Реализация",
+            SourceDocumentType.CardPayment => "Оплата картой",
+            SourceDocumentType.CashPayment => "ПКО (нал.)",
+            SourceDocumentType.CashExpense => "РКО (расход)",
+            SourceDocumentType.BuyerOrder  => "Заказ покупателя",
+            SourceDocumentType.KkmCheck    => "Чек ККМ",
+            SourceDocumentType.FpOnly      => "Только ФП",
+            _ => string.Empty,
+        } : string.Empty;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
+/// <summary>SourceDocumentType → Visible если ≠ Unknown (нужен чтобы не показывать пустые чипы).</summary>
+[ValueConversion(typeof(SourceDocumentType), typeof(System.Windows.Visibility))]
+public class SourceDocumentTypeVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is SourceDocumentType t && t != SourceDocumentType.Unknown
+            ? System.Windows.Visibility.Visible
+            : System.Windows.Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
+/// <summary>CorrectionScenario == Unknown → Visible (для предупреждения «выберите сценарий»).</summary>
+[ValueConversion(typeof(CorrectionScenario), typeof(System.Windows.Visibility))]
+public class UnknownScenarioVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is CorrectionScenario s && s == CorrectionScenario.Unknown
+            ? System.Windows.Visibility.Visible
+            : System.Windows.Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}

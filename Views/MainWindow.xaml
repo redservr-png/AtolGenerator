@@ -21,10 +21,13 @@
     <cv:NonZeroToBoolConverter           x:Key="NonZeroBool"/>
     <cv:StringEqualConverter             x:Key="StrEq"/>
     <cv:InverseBoolConverter             x:Key="InvBool"/>
-    <cv:OrderKindLabelConverter          x:Key="KindLabel"/>
-    <cv:CorrectionScenarioLabelConverter x:Key="ScenarioLabel"/>
-    <cv:OrderKindToBrushConverter        x:Key="KindBrush"/>
-    <cv:OrderKindToVisibilityConverter   x:Key="KindVis"/>
+    <cv:OrderKindLabelConverter             x:Key="KindLabel"/>
+    <cv:CorrectionScenarioLabelConverter    x:Key="ScenarioLabel"/>
+    <cv:OrderKindToBrushConverter           x:Key="KindBrush"/>
+    <cv:OrderKindToVisibilityConverter      x:Key="KindVis"/>
+    <cv:SourceDocumentTypeLabelConverter    x:Key="DocTypeLabel"/>
+    <cv:SourceDocumentTypeVisibilityConverter x:Key="DocTypeVis"/>
+    <cv:UnknownScenarioVisibilityConverter  x:Key="UnknownVis"/>
 
     <!-- Стиль текста в ячейках DataGrid -->
     <Style x:Key="DataGridTextStyle" TargetType="TextBlock">
@@ -579,7 +582,7 @@
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                   <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
                           CornerRadius="2" Margin="0,0,7,0"/>
-                  <TextBlock Text="ЗАКАЗЫ К ПРОБИТИЮ" Style="{StaticResource SectionTitle}" Margin="0"/>
+                  <TextBlock Text="ДОКУМЕНТЫ К ПРОБИТИЮ" Style="{StaticResource SectionTitle}" Margin="0"/>
                   <TextBlock Text="{Binding OrderCount, StringFormat=' ({0})'}"
                              FontSize="12" Foreground="{StaticResource BrushText3}"
                              VerticalAlignment="Center"/>
@@ -624,10 +627,18 @@
                             <TextBlock Text="{Binding OrderNum}"
                                        FontFamily="Courier New" FontSize="12"
                                        Foreground="{StaticResource BrushAccent2}"/>
+                            <!-- Чип с типом документа из 1С (Реализация/Опл.картой/ПКО/...) -->
+                            <Border Background="#332288CC" BorderBrush="#882288CC"
+                                    BorderThickness="1" CornerRadius="3"
+                                    Padding="5,1" Margin="8,0,0,0"
+                                    Visibility="{Binding DocumentType, Converter={StaticResource DocTypeVis}}">
+                              <TextBlock Text="{Binding DocumentType, Converter={StaticResource DocTypeLabel}}"
+                                         FontSize="10" Foreground="#88CCEE"/>
+                            </Border>
                             <!-- Чип с типом коррекции (видим только для коррекций) -->
                             <Border Background="#33FF8800" BorderBrush="#88FF8800"
                                     BorderThickness="1" CornerRadius="3"
-                                    Padding="5,1" Margin="8,0,0,0"
+                                    Padding="5,1" Margin="6,0,0,0"
                                     Visibility="{Binding Kind, Converter={StaticResource KindVis}}">
                               <TextBlock Text="{Binding Kind, Converter={StaticResource KindLabel}}"
                                          FontSize="10" Foreground="#FFCC88"/>
@@ -641,6 +652,11 @@
                                      Margin="0,2,0,0" FontStyle="Italic"
                                      Text="{Binding CorrectionScenario, Converter={StaticResource ScenarioLabel}, StringFormat='→ {0}'}"
                                      Visibility="{Binding Kind, Converter={StaticResource KindVis}}"/>
+                          <!-- Предупреждение для Unknown сценариев -->
+                          <TextBlock Text="⚠ Сценарий не определён — XML не сформируется. Выберите тип коррекции вручную."
+                                     FontSize="10" Foreground="#FF6644" FontWeight="SemiBold"
+                                     Margin="0,2,0,0" TextWrapping="Wrap"
+                                     Visibility="{Binding CorrectionScenario, Converter={StaticResource UnknownVis}}"/>
                         </StackPanel>
                         <TextBlock Grid.Column="3"
                                    FontWeight="Bold" FontSize="14"

@@ -19,19 +19,19 @@ public static class CorrectionTypeDetector
         // ── 1. Чек большей / меньшей суммой (приоритетно — может пересекаться с другими) ──
         if (Contains(n, "больш", "сумм"))
         {
-            e.CorrectionScenario = CorrectionScenario.DecreaseAmount;
+            e.CorrectionScenario = CorrectionScenario.CheckLargerAmount;
         }
         else if (Contains(n, "меньш", "сумм"))
         {
-            e.CorrectionScenario = CorrectionScenario.IncreaseAmount;
+            e.CorrectionScenario = CorrectionScenario.CheckSmallerAmount;
         }
-        // ── 2. «Не пробит» / «Не вышел» — нужно доплатить базу ────────────────────
+        // ── 2. «Не пробит» / «Не вышел» — нужно доплатить базу (без refund — чека и так нет) ──
         else if (n.Contains("не пробит") || n.Contains("не вышел")
               || n.Contains("чек не пробит") || n.Contains("чека не было")
               || n.Contains("не день в день") || n.Contains("следующий день")
               || n.Contains("на следующий"))
         {
-            e.CorrectionScenario = CorrectionScenario.IncreaseAmount;
+            e.CorrectionScenario = CorrectionScenario.CheckNotPunched;
         }
         // ── 3. Способ оплаты перепутали ───────────────────────────────────────────
         else if (n.Contains("пробит наличными") || n.Contains("пробит нал")
@@ -94,11 +94,13 @@ public static class CorrectionTypeDetector
             e.CorrectionScenario = CorrectionScenario.Unknown;
         }
 
-        // Выставляем Kind по выбранному сценарию (для Unknown остаётся Regular,
-        // что в UI визуально подскажет — нужно править вручную)
+        // Выставляем Kind по выбранному сценарию.
+        // Для Unknown — НЕ ставим дефолт; помечаем как SingleRefund чтобы строка
+        // выделилась цветной полосой, но в UI рядом будет предупреждение
+        // «выберите сценарий», и при генерации XML такие строки пропускаются.
         e.Kind = e.CorrectionScenario.ToOrderKind();
         if (e.CorrectionScenario == CorrectionScenario.Unknown)
-            e.Kind = OrderKind.SingleRefund;   // безопасный дефолт для Unknown
+            e.Kind = OrderKind.SingleRefund;
     }
 
     /// <summary>Применяет автодетект ко всем записям списка.</summary>
