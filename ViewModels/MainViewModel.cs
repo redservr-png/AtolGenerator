@@ -1075,8 +1075,8 @@ public class MainViewModel : BaseViewModel
         Orders.Clear();
         foreach (var e in snapshot) Orders.Add(e);
 
-        ObsidianStatus = $"✓ Заполнено сумм: {result.Filled} / {result.Total} " +
-                         $"(не найдено: {result.NotFound}, пропущено: {result.Skipped})" +
+        ObsidianStatus = $"✓ Сумм: {result.Filled} / {result.Total} • ФП: {result.FilledFp}" +
+                         $"  (не найдено: {result.NotFound}, пропущено: {result.Skipped})" +
                          (result.Errors.Count > 0 ? $", ошибок: {result.Errors.Count}" : string.Empty);
     }
 

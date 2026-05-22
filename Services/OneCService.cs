@@ -706,10 +706,11 @@ public static class OneCService
 
     public class FetchAmountResult
     {
-        public int Total      { get; set; }
-        public int Filled     { get; set; }
-        public int NotFound   { get; set; }
-        public int Skipped    { get; set; }
+        public int Total       { get; set; }
+        public int Filled      { get; set; }
+        public int FilledFp    { get; set; }   // сколько строк получило непустой ЧекНомерФП
+        public int NotFound    { get; set; }
+        public int Skipped     { get; set; }
         public List<string> Errors { get; set; } = new();
     }
 
@@ -764,11 +765,17 @@ public static class OneCService
                         }
                     }
 
+                    // У большинства документов с фискалкой есть поле ЧекНомерФП.
+                    // У Заказа покупателя его нет — для него выбираем только сумму.
+                    bool hasFpField = HasFiscalNumberField(o.DocumentType);
+                    var fpSelectPart = hasFpField ? ", Док.ЧекНомерФП КАК ЧекНомерФП" : "";
+
                     var query = conn.NewObject("Запрос");
                     query.Текст = $"""
                         ВЫБРАТЬ ПЕРВЫЕ 1
                             Док.СуммаДокумента  КАК Сумма,
                             Док.Дата             КАК ДатаДок
+                            {fpSelectPart}
                         ИЗ
                             Документ.{metaName} КАК Док
                         ГДЕ
@@ -795,8 +802,25 @@ public static class OneCService
                     // подставляем правильную сумму как основную.
                     if (o.Amount <= 0) o.Amount = sum;
 
+                    // ФП исходного чека (тег 1192) — если у документа есть поле и оно не пустое.
+                    // Не перезаписываем уже заполненный OriginalFiscalNumber (пользователь
+                    // мог ввести его вручную для FP-only кейсов из Obsidian).
+                    if (hasFpField && string.IsNullOrEmpty(o.OriginalFiscalNumber))
+                    {
+                        try
+                        {
+                            var fp = Str(sel.ЧекНомерФП).Trim();
+                            if (!IsEmptyFp(fp))
+                            {
+                                o.OriginalFiscalNumber = fp;
+                                res.FilledFp++;
+                            }
+                        }
+                        catch { /* нет поля — пропускаем */ }
+                    }
+
                     res.Filled++;
-                    Log($"  {o.OrderNum} ({metaName}): сумма = {sum}");
+                    Log($"  {o.OrderNum} ({metaName}): сумма={sum}, ФП={o.OriginalFiscalNumber}");
                 }
                 catch (Exception ex)
                 {
@@ -830,6 +854,18 @@ public static class OneCService
         Models.SourceDocumentType.BuyerOrder  => "ЗаказПокупателя",
         // KkmCheck и FpOnly: либо нет документа в 1С с таким номером, либо неоднозначно — пропускаем
         _ => null,
+    };
+
+    /// <summary>Есть ли у документа реквизит ЧекНомерФП в УТ 10.3.</summary>
+    private static bool HasFiscalNumberField(Models.SourceDocumentType t) => t switch
+    {
+        Models.SourceDocumentType.Realization => true,
+        Models.SourceDocumentType.CardPayment => true,
+        Models.SourceDocumentType.CashPayment => true,
+        Models.SourceDocumentType.CashExpense => true,
+        // Заказ покупателя — это не фискальный документ, ЧекНомерФП не имеет
+        Models.SourceDocumentType.BuyerOrder  => false,
+        _ => false,
     };
 
     /// <summary>

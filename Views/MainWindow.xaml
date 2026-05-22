@@ -94,7 +94,7 @@
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
           <ColumnDefinition Width="18"/>
-          <ColumnDefinition Width="330"/>
+          <ColumnDefinition Width="480"/>
         </Grid.ColumnDefinitions>
 
         <!-- ════ LEFT COLUMN ════ -->
@@ -495,11 +495,11 @@
                       Style="{StaticResource BtnPrimary}"
                       Padding="11,8" FontSize="13" Margin="0,10,0,0"
                       Command="{Binding LoadObsidianCasesCommand}"/>
-              <Button Content="🔄  Догрузить суммы из 1С"
+              <Button Content="🔄  Догрузить из 1С (суммы + ФП)"
                       Style="{StaticResource BtnSecondary}"
                       Padding="11,7" FontSize="12" Margin="0,6,0,0"
                       Command="{Binding FetchAmountsFromOneCCommand}"
-                      ToolTip="Для каждого кейса по типу+номеру документа находит правильную сумму в 1С и записывает её. Для сценариев «чек большей/меньшей суммой» ошибочную сумму нужно вводить вручную в карточке."/>
+                      ToolTip="Для каждого кейса по типу+номеру документа берёт из 1С: сумму (записывается в CorrectAmount) и фискальный признак исходного чека ЧекНомерФП (записывается в OriginalFiscalNumber для тега 1192). Для «Чек большей/меньшей суммой» ОШИБОЧНУЮ сумму нужно вводить вручную в карточке (✏)."/>
               <TextBlock Text="{Binding ObsidianStatus}"
                          FontSize="12" Foreground="{StaticResource BrushText2}"
                          Margin="0,8,0,0" TextWrapping="Wrap"/>
