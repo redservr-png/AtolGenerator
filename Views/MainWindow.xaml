@@ -21,6 +21,10 @@
     <cv:NonZeroToBoolConverter           x:Key="NonZeroBool"/>
     <cv:StringEqualConverter             x:Key="StrEq"/>
     <cv:InverseBoolConverter             x:Key="InvBool"/>
+    <cv:OrderKindLabelConverter          x:Key="KindLabel"/>
+    <cv:CorrectionScenarioLabelConverter x:Key="ScenarioLabel"/>
+    <cv:OrderKindToBrushConverter        x:Key="KindBrush"/>
+    <cv:OrderKindToVisibilityConverter   x:Key="KindVis"/>
 
     <!-- Стиль текста в ячейках DataGrid -->
     <Style x:Key="DataGridTextStyle" TargetType="TextBlock">
@@ -596,22 +600,44 @@
                     <Border Background="{StaticResource BrushSurface2}"
                             BorderBrush="{StaticResource BrushBorder}"
                             BorderThickness="1" CornerRadius="8"
-                            Padding="10,8" Margin="0,0,0,6">
+                            Padding="0,8,10,8" Margin="0,0,0,6"
+                            ToolTip="{Binding Notes}">
                       <Grid>
                         <Grid.ColumnDefinitions>
+                          <ColumnDefinition Width="Auto"/>
+                          <ColumnDefinition Width="10"/>
                           <ColumnDefinition/>
                           <ColumnDefinition Width="Auto"/>
                           <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
-                          <TextBlock Text="{Binding OrderNum}"
-                                     FontFamily="Courier New" FontSize="12"
-                                     Foreground="{StaticResource BrushAccent2}"/>
+                        <!-- Цветная полоса слева (только для коррекций) -->
+                        <Border Grid.Column="0" Width="4"
+                                Background="{Binding Kind, Converter={StaticResource KindBrush}}"
+                                CornerRadius="2,0,0,2"/>
+                        <StackPanel Grid.Column="2">
+                          <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding OrderNum}"
+                                       FontFamily="Courier New" FontSize="12"
+                                       Foreground="{StaticResource BrushAccent2}"/>
+                            <!-- Чип с типом коррекции (видим только для коррекций) -->
+                            <Border Background="#33FF8800" BorderBrush="#88FF8800"
+                                    BorderThickness="1" CornerRadius="3"
+                                    Padding="5,1" Margin="8,0,0,0"
+                                    Visibility="{Binding Kind, Converter={StaticResource KindVis}}">
+                              <TextBlock Text="{Binding Kind, Converter={StaticResource KindLabel}}"
+                                         FontSize="10" Foreground="#FFCC88"/>
+                            </Border>
+                          </StackPanel>
                           <TextBlock Text="{Binding OrderDate}"
                                      FontSize="11" Foreground="{StaticResource BrushText3}"
                                      Margin="0,1,0,0"/>
+                          <!-- Сценарий коррекции (видим только для коррекций) -->
+                          <TextBlock FontSize="10" Foreground="#FFAA66"
+                                     Margin="0,2,0,0" FontStyle="Italic"
+                                     Text="{Binding CorrectionScenario, Converter={StaticResource ScenarioLabel}, StringFormat='→ {0}'}"
+                                     Visibility="{Binding Kind, Converter={StaticResource KindVis}}"/>
                         </StackPanel>
-                        <TextBlock Grid.Column="1"
+                        <TextBlock Grid.Column="3"
                                    FontWeight="Bold" FontSize="14"
                                    Foreground="{StaticResource BrushGreen}"
                                    VerticalAlignment="Center" Margin="8,0">
@@ -621,7 +647,7 @@
                             </MultiBinding>
                           </TextBlock.Text>
                         </TextBlock>
-                        <Button Grid.Column="2" Content="✕"
+                        <Button Grid.Column="4" Content="✕"
                                 Style="{StaticResource BtnDelete}"
                                 VerticalAlignment="Center"
                                 Command="{Binding DataContext.DeleteOrderCommand,
