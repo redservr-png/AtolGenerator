@@ -368,6 +368,7 @@ public class MainViewModel : BaseViewModel
     public ICommand ToggleObsidianPanelCommand  { get; }
     public ICommand BrowseMdFileCommand         { get; }
     public ICommand LoadObsidianCasesCommand    { get; }
+    public ICommand FetchAmountsFromOneCCommand { get; }
 
     // ── Skipped rows from Excel import ───────────────────────────────────────
     public ObservableCollection<SkippedRow> SkippedRows { get; } = new();
@@ -416,6 +417,7 @@ public class MainViewModel : BaseViewModel
         ToggleObsidianPanelCommand  = new RelayCommand(_ => ShowObsidianPanel = !ShowObsidianPanel);
         BrowseMdFileCommand         = new RelayCommand(_ => BrowseMdFile());
         LoadObsidianCasesCommand    = new RelayCommand(_ => LoadObsidianCases());
+        FetchAmountsFromOneCCommand = new AsyncRelayCommand(FetchAmountsFromOneCAsync);
 
         // Загружаем сохранённые настройки АТОЛ
         var saved = AtolCredentials.Load();
@@ -1028,6 +1030,52 @@ public class MainViewModel : BaseViewModel
         ObsidianStatus = $"✓ Загружено {added} кейсов " +
                          $"(Реализаций: {realizationCases.Count}, Прочих: {paymentCases.Count}). " +
                          $"Активная вкладка: {(Tab == "realization" ? "Реализация" : "Оплата")}";
+    }
+
+    /// <summary>
+    /// Догружает суммы документов из 1С для всех заказов в списке Orders, у которых
+    /// есть номер документа и тип ≠ FpOnly/Unknown. Заполняет CorrectAmount; если
+    /// Amount был 0 — подставляет правильную сумму. OriginalCheckAmount не трогает —
+    /// он заполняется вручную для сценариев «чек большей/меньшей суммой».
+    /// </summary>
+    private async Task FetchAmountsFromOneCAsync()
+    {
+        if (Orders.Count == 0)
+        {
+            ObsidianStatus = "⚠ Список пуст — сначала загрузите кейсы";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(OneCServer) || string.IsNullOrWhiteSpace(OneCDatabase))
+        {
+            ObsidianStatus = "⚠ Заполните настройки 1С в правой панели";
+            return;
+        }
+
+        ObsidianStatus = $"Догружаем суммы из 1С для {Orders.Count} записей…";
+        var settings = BuildOneCSettings();
+
+        // Берём только записи, для которых вообще возможен запрос в 1С
+        var targets = Orders
+            .Where(o => !string.IsNullOrEmpty(o.OrderNum)
+                     && o.DocumentType is not (SourceDocumentType.Unknown or SourceDocumentType.FpOnly or SourceDocumentType.KkmCheck))
+            .ToList();
+        if (targets.Count == 0)
+        {
+            ObsidianStatus = "Нет записей пригодных для добора (нужен № документа и тип ≠ ФП/ЧекККМ)";
+            return;
+        }
+
+        var result = await Task.Run(() => OneCService.FetchAmountsFromOneC(settings, targets));
+
+        // CollectionChanged не вызывается при изменении свойств элементов, поэтому
+        // принудительно перерисуем карточки — заменим коллекцию на тот же набор
+        var snapshot = Orders.ToList();
+        Orders.Clear();
+        foreach (var e in snapshot) Orders.Add(e);
+
+        ObsidianStatus = $"✓ Заполнено сумм: {result.Filled} / {result.Total} " +
+                         $"(не найдено: {result.NotFound}, пропущено: {result.Skipped})" +
+                         (result.Errors.Count > 0 ? $", ошибок: {result.Errors.Count}" : string.Empty);
     }
 
     private void SaveAtolSettings()

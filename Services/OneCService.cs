@@ -704,6 +704,134 @@ public static class OneCService
         return res;
     }
 
+    public class FetchAmountResult
+    {
+        public int Total      { get; set; }
+        public int Filled     { get; set; }
+        public int NotFound   { get; set; }
+        public int Skipped    { get; set; }
+        public List<string> Errors { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Универсальный добор суммы документа из 1С по списку записей.
+    /// Для каждой записи находит документ по типу+номеру (с учётом годовой нумерации),
+    /// записывает результат в OrderEntry.CorrectAmount и Amount (если Amount=0).
+    ///
+    /// OriginalCheckAmount НЕ перезаписываем — там может уже стоять ошибочная сумма
+    /// введённая пользователем для сценариев DecreaseAmount/IncreaseAmount.
+    /// </summary>
+    public static FetchAmountResult FetchAmountsFromOneC(
+        OneCConnectionSettings s, IEnumerable<Models.OrderEntry> orders)
+    {
+        var res = new FetchAmountResult();
+        var list = orders.ToList();
+        res.Total = list.Count;
+        if (list.Count == 0) return res;
+
+        dynamic? conn      = null;
+        dynamic? connector = null;
+
+        Log($"=== FetchAmountsFromOneC: {list.Count} записей ===");
+        try
+        {
+            connector = CreateConnector();
+            conn      = connector.Connect(s.ConnectionString);
+
+            foreach (var o in list)
+            {
+                var metaName = DocumentMetaName(o.DocumentType);
+                if (metaName is null || string.IsNullOrEmpty(o.OrderNum))
+                {
+                    res.Skipped++;
+                    continue;
+                }
+
+                try
+                {
+                    // Граница даты — из строки в OrderDate (формат «dd.MM.yyyy HH:mm:ss»),
+                    // либо сегодня
+                    DateTime dateHint = DateTime.Now;
+                    if (!string.IsNullOrEmpty(o.OrderDate))
+                    {
+                        var datePart = o.OrderDate.Split(' ').FirstOrDefault() ?? string.Empty;
+                        if (DateTime.TryParseExact(datePart, "dd.MM.yyyy",
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                System.Globalization.DateTimeStyles.None, out var d))
+                        {
+                            // Берём конец того дня — чтобы документ этого дня попал в выборку
+                            dateHint = d.Date.AddDays(1).AddSeconds(-1);
+                        }
+                    }
+
+                    var query = conn.NewObject("Запрос");
+                    query.Текст = $"""
+                        ВЫБРАТЬ ПЕРВЫЕ 1
+                            Док.СуммаДокумента  КАК Сумма,
+                            Док.Дата             КАК ДатаДок
+                        ИЗ
+                            Документ.{metaName} КАК Док
+                        ГДЕ
+                            Док.Номер = &Номер
+                            И Док.ПометкаУдаления = ЛОЖЬ
+                            И Док.Дата <= &ДатаЧека
+                        УПОРЯДОЧИТЬ ПО
+                            Док.Дата УБЫВ
+                        """;
+                    query.УстановитьПараметр("Номер",    o.OrderNum);
+                    query.УстановитьПараметр("ДатаЧека", dateHint);
+                    var sel = query.Выполнить().Выбрать();
+
+                    if (!(bool)sel.Следующий())
+                    {
+                        res.NotFound++;
+                        Log($"  {o.OrderNum} ({metaName}): не найден до {dateHint:dd.MM.yyyy}");
+                        continue;
+                    }
+
+                    var sum = ToDouble(sel.Сумма);
+                    o.CorrectAmount = sum;
+                    // Если Amount был 0 (типично для строк из Obsidian без «суммы» в тексте) —
+                    // подставляем правильную сумму как основную.
+                    if (o.Amount <= 0) o.Amount = sum;
+
+                    res.Filled++;
+                    Log($"  {o.OrderNum} ({metaName}): сумма = {sum}");
+                }
+                catch (Exception ex)
+                {
+                    res.Errors.Add($"{o.OrderNum}: {ex.Message}");
+                    Log($"  ОШИБКА {o.OrderNum}: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"FetchAmountsFromOneC ERROR: {ex.Message}");
+            res.Errors.Add(ex.Message);
+        }
+        finally
+        {
+            if (conn      is not null) Marshal.ReleaseComObject(conn);
+            if (connector is not null) Marshal.ReleaseComObject(connector);
+        }
+
+        Log($"=== FetchAmounts: заполнено {res.Filled}, не найдено {res.NotFound}, пропущено {res.Skipped} ===");
+        return res;
+    }
+
+    /// <summary>Маппинг SourceDocumentType → имя документа в метаданных 1С УТ 10.3.</summary>
+    private static string? DocumentMetaName(Models.SourceDocumentType t) => t switch
+    {
+        Models.SourceDocumentType.Realization => "РеализацияТоваровУслуг",
+        Models.SourceDocumentType.CardPayment => "ОплатаОтПокупателяПлатежнойКартой",
+        Models.SourceDocumentType.CashPayment => "ПриходныйКассовыйОрдер",
+        Models.SourceDocumentType.CashExpense => "РасходныйКассовыйОрдер",
+        Models.SourceDocumentType.BuyerOrder  => "ЗаказПокупателя",
+        // KkmCheck и FpOnly: либо нет документа в 1С с таким номером, либо неоднозначно — пропускаем
+        _ => null,
+    };
+
     /// <summary>
     /// Считает значение поля ЧекНомерФП «пустым» — учитывает разные представления,
     /// которые приходят через COM-мост и через групповую обработку 1С.
