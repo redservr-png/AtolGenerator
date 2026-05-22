@@ -23,10 +23,16 @@ public static class ObsidianParserService
         @"^\s*-\s*\[(?<done>[ xX])\]\s*(?<body>.+)$",
         RegexOptions.Compiled);
 
-    // Номер документа: т0000123456 (т или Т, потом 7 цифр)
+    // Номер документа: т0000123456 (т или Т, потом 10 цифр — стандарт УТ 10.3)
+    // Делаем диапазон 7-11 чтобы поддержать редкие усечённые форматы, но в большинстве случаев — 10.
     private static readonly Regex RxDocNumber = new(
-        @"[тТ]\d{7,8}",
+        @"[тТ]\d{7,11}",
         RegexOptions.Compiled);
+
+    // Сумма в строке: «сумма 35242,00», «сумма 1 500,00», «11030 руб»
+    private static readonly Regex RxAmountInline = new(
+        @"сумма\s+(?<a>\d[\d\s]*[,.]\d{2})|(?<r>\d[\d\s]*)\s*руб",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // Дата+время: 10.09.2025 16:11:59 или 10.09.2025 9:36:01 (часы могут быть без ведущего нуля)
     private static readonly Regex RxDateTime = new(
@@ -100,8 +106,10 @@ public static class ObsidianParserService
         var fpOnly = RxFpOnly.Match(body);
         if (fpOnly.Success)
         {
-            var city = ExtractCity(body);
-            var notes = ExtractNotes(body, "", "", city);
+            var city   = ExtractCity(body);
+            var notes  = ExtractNotes(body, "", "", city);
+            var fpAmt  = ExtractAmount(body);
+
             return new OrderEntry
             {
                 Kind                 = OrderKind.SingleRefund,
@@ -110,6 +118,8 @@ public static class ObsidianParserService
                 OriginalFiscalNumber = fpOnly.Groups["fp"].Value,
                 Notes                = notes,
                 City                 = city,
+                Amount               = fpAmt,
+                OriginalCheckAmount  = fpAmt > 0 ? fpAmt : null,
             };
         }
 
@@ -146,19 +156,35 @@ public static class ObsidianParserService
         // 5. Город
         var cityName = ExtractCity(body);
 
-        // 6. Описание (что после города/даты)
+        // 6. Сумма (если указана в тексте: «сумма 35242,00» или «11030 руб»)
+        var amt = ExtractAmount(body);
+
+        // 7. Описание (что после города/даты/суммы)
         var notesText = ExtractNotes(body, docNumber, date.Split(' ').FirstOrDefault() ?? "", cityName);
 
-        // 7. Заполняем entry — Kind/Scenario определит детектор позже
+        // 8. Заполняем entry — Kind/Scenario определит детектор позже
         return new OrderEntry
         {
-            DocumentType = docType,
-            OrderNum     = docNumber,
-            OrderDate    = date,
-            City         = cityName,
-            Notes        = notesText,
-            Kind         = OrderKind.Regular,  // временно, заполнит детектор
+            DocumentType        = docType,
+            OrderNum            = docNumber,
+            OrderDate           = date,
+            City                = cityName,
+            Notes               = notesText,
+            Amount              = amt,
+            OriginalCheckAmount = amt > 0 ? amt : null,
+            Kind                = OrderKind.Regular,  // временно, заполнит детектор
         };
+    }
+
+    /// <summary>Пытается извлечь сумму из текста: «сумма 35 242,00», «11030 руб», «сумма 1500,00».</summary>
+    private static double ExtractAmount(string body)
+    {
+        var m = RxAmountInline.Match(body);
+        if (!m.Success) return 0;
+        var raw = (m.Groups["a"].Success ? m.Groups["a"].Value : m.Groups["r"].Value)
+            .Replace(" ", "").Replace("\xa0", "").Replace(",", ".");
+        return double.TryParse(raw, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0;
     }
 
     private static string ExtractCity(string body)
