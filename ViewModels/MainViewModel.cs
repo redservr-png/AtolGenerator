@@ -296,6 +296,21 @@ public class MainViewModel : BaseViewModel
         set => Set(ref _showAtolPanel, value);
     }
 
+    // ── Obsidian (кейсы коррекций) ───────────────────────────────────────────
+    private bool   _showObsidianPanel;
+    private string _obsidianMdPath    = string.Empty;
+    private string _obsidianPasteText = string.Empty;
+    private string _obsidianStatus    = string.Empty;
+
+    public bool   ShowObsidianPanel
+    {
+        get => _showObsidianPanel;
+        set => Set(ref _showObsidianPanel, value);
+    }
+    public string ObsidianMdPath    { get => _obsidianMdPath;    set => Set(ref _obsidianMdPath,    value); }
+    public string ObsidianPasteText { get => _obsidianPasteText; set => Set(ref _obsidianPasteText, value); }
+    public string ObsidianStatus    { get => _obsidianStatus;    set => Set(ref _obsidianStatus,    value); }
+
     // ── Commands ─────────────────────────────────────────────────────────────
     public ICommand ParseBulkCommand       { get; }
     public ICommand AddSingleCommand       { get; }
@@ -323,6 +338,9 @@ public class MainViewModel : BaseViewModel
     public ICommand ApplyToOneCCommand         { get; }
     public ICommand ApplyOfdReportToOneCCommand { get; }
     public ICommand ApplyXmlAndOfdToOneCCommand { get; }
+    public ICommand ToggleObsidianPanelCommand  { get; }
+    public ICommand BrowseMdFileCommand         { get; }
+    public ICommand LoadObsidianCasesCommand    { get; }
 
     // ── Skipped rows from Excel import ───────────────────────────────────────
     public ObservableCollection<SkippedRow> SkippedRows { get; } = new();
@@ -357,6 +375,9 @@ public class MainViewModel : BaseViewModel
         ApplyToOneCCommand         = new AsyncRelayCommand(ApplyToOneCAsync);
         ApplyOfdReportToOneCCommand = new AsyncRelayCommand(ApplyOfdReportToOneCAsync);
         ApplyXmlAndOfdToOneCCommand = new AsyncRelayCommand(ApplyXmlAndOfdToOneCAsync);
+        ToggleObsidianPanelCommand  = new RelayCommand(_ => ShowObsidianPanel = !ShowObsidianPanel);
+        BrowseMdFileCommand         = new RelayCommand(_ => BrowseMdFile());
+        LoadObsidianCasesCommand    = new RelayCommand(_ => LoadObsidianCases());
 
         // Загружаем сохранённые настройки АТОЛ
         var saved = AtolCredentials.Load();
@@ -373,6 +394,10 @@ public class MainViewModel : BaseViewModel
             OneCUser     = savedOneC.User;
             OneCPassword = savedOneC.Password;
         }
+
+        // Загружаем сохранённый путь к Obsidian-файлу
+        var savedObs = ObsidianSettings.Load();
+        ObsidianMdPath = savedObs.MdFilePath;
     }
 
     // ── Logic ─────────────────────────────────────────────────────────────────
@@ -876,6 +901,96 @@ public class MainViewModel : BaseViewModel
             (result.Failed > 0 || match.Unmatched > 0)
                 ? System.Windows.MessageBoxImage.Warning
                 : System.Windows.MessageBoxImage.Information);
+    }
+
+    // ── Obsidian: загрузка кейсов коррекций ───────────────────────────────────
+    private void BrowseMdFile()
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title  = "Выберите файл «Исправить чеки.md»",
+            Filter = "Markdown (*.md)|*.md|Все файлы (*.*)|*.*",
+        };
+        if (!string.IsNullOrEmpty(ObsidianMdPath) && System.IO.File.Exists(ObsidianMdPath))
+            dlg.InitialDirectory = System.IO.Path.GetDirectoryName(ObsidianMdPath);
+
+        if (dlg.ShowDialog() != true) return;
+        ObsidianMdPath = dlg.FileName;
+        // Сохраняем путь, чтобы при следующем запуске уже был выбран
+        new ObsidianSettings { MdFilePath = ObsidianMdPath }.Save();
+    }
+
+    private void LoadObsidianCases()
+    {
+        // Источник: текст из textbox имеет приоритет над файлом — пользователь
+        // мог вставить нужные строки точечно
+        List<OrderEntry> parsed;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(ObsidianPasteText))
+                parsed = ObsidianParserService.ParseText(ObsidianPasteText);
+            else if (!string.IsNullOrWhiteSpace(ObsidianMdPath) && System.IO.File.Exists(ObsidianMdPath))
+                parsed = ObsidianParserService.ParseFile(ObsidianMdPath);
+            else
+            {
+                ObsidianStatus = "⚠ Выберите файл или вставьте строки";
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            ObsidianStatus = $"⚠ Ошибка чтения: {ex.Message}";
+            return;
+        }
+
+        if (parsed.Count == 0)
+        {
+            ObsidianStatus = "Не найдено ни одной активной строки (- [ ] ...). Возможно все уже отмечены [x].";
+            return;
+        }
+
+        // Автоопределение типа коррекции по описанию
+        CorrectionTypeDetector.DetectAll(parsed);
+
+        // Распределяем по вкладкам по типу документа
+        var realizationCases = parsed
+            .Where(o => o.DocumentType == SourceDocumentType.Realization)
+            .ToList();
+        var paymentCases = parsed
+            .Where(o => o.DocumentType != SourceDocumentType.Realization)
+            .ToList();
+
+        // Подтверждение перед загрузкой
+        var dlg = System.Windows.MessageBox.Show(
+            $"Найдено кейсов:\n" +
+            $"  • Реализации: {realizationCases.Count}\n" +
+            $"  • Оплаты/ПКО/РКО/Прочее: {paymentCases.Count}\n\n" +
+            $"Добавить их в основной список заказов?\n\n" +
+            $"Да — добавятся к существующим заказам\n" +
+            $"Нет — основной список будет очищен перед загрузкой\n" +
+            $"Отмена — выйти",
+            "Загрузка кейсов коррекций",
+            System.Windows.MessageBoxButton.YesNoCancel,
+            System.Windows.MessageBoxImage.Question);
+        if (dlg == System.Windows.MessageBoxResult.Cancel) return;
+        if (dlg == System.Windows.MessageBoxResult.No) Orders.Clear();
+
+        // Кладём в основной список
+        int added = 0;
+        foreach (var c in parsed)
+        {
+            Orders.Add(c);
+            added++;
+        }
+        OnPropertyChanged(nameof(OrderCount));
+        OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
+
+        // Автопереключение на ту вкладку, где кейсов больше
+        Tab = realizationCases.Count >= paymentCases.Count ? "realization" : "payment";
+
+        ObsidianStatus = $"✓ Загружено {added} кейсов " +
+                         $"(Реализаций: {realizationCases.Count}, Прочих: {paymentCases.Count}). " +
+                         $"Активная вкладка: {(Tab == "realization" ? "Реализация" : "Оплата")}";
     }
 
     private void SaveAtolSettings()

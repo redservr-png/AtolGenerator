@@ -60,6 +60,11 @@
                      VerticalAlignment="Center"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+          <Button Content="📋  Кейсы коррекций"
+                  Style="{StaticResource BtnGhost}"
+                  Padding="10,5" FontSize="12" Margin="0,0,8,0"
+                  ToolTip="Загрузка списка чеков для исправления из Obsidian-файла"
+                  Command="{Binding ToggleObsidianPanelCommand}"/>
           <Button Content="🔑  АТОЛ Online"
                   Style="{StaticResource BtnGhost}"
                   Padding="10,5" FontSize="12" Margin="0,0,16,0"
@@ -442,6 +447,52 @@
 
         <!-- ════ RIGHT COLUMN ════ -->
         <StackPanel Grid.Row="0" Grid.Column="2">
+
+          <!-- Кейсы коррекций из Obsidian -->
+          <Border Background="{StaticResource BrushSurface1}"
+                  BorderBrush="{StaticResource BrushBorder}"
+                  BorderThickness="1" CornerRadius="10" Padding="16"
+                  Margin="0,0,0,14"
+                  Visibility="{Binding ShowObsidianPanel, Converter={StaticResource BoolVis}}">
+            <StackPanel>
+              <TextBlock Text="📋  КЕЙСЫ КОРРЕКЦИЙ ИЗ OBSIDIAN"
+                         FontSize="11" FontWeight="Bold"
+                         Foreground="{StaticResource BrushAccent2}" Margin="0,0,0,10"/>
+              <TextBlock Text="Источник 1 — путь к файлу «Исправить чеки.md»"
+                         FontSize="10" Foreground="{StaticResource BrushText3}"
+                         Margin="0,0,0,4"/>
+              <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         Text="{Binding ObsidianMdPath, UpdateSourceTrigger=PropertyChanged}"
+                         Tag="C:\Obsidian\...\Исправить чеки.md"
+                         IsReadOnly="True"/>
+                <Button Grid.Column="1"
+                        Content="..." MinWidth="32" Margin="6,0,0,0"
+                        Style="{StaticResource BtnSecondary}"
+                        Command="{Binding BrowseMdFileCommand}"
+                        ToolTip="Выбрать файл"/>
+              </Grid>
+              <TextBlock Text="Источник 2 — или вставьте строки сюда (приоритет над файлом, если не пусто)"
+                         FontSize="10" Foreground="{StaticResource BrushText3}"
+                         Margin="0,4,0,4"/>
+              <TextBox Text="{Binding ObsidianPasteText, UpdateSourceTrigger=PropertyChanged}"
+                       AcceptsReturn="True" TextWrapping="Wrap"
+                       VerticalScrollBarVisibility="Auto"
+                       MinHeight="80" MaxHeight="180"
+                       Tag="- [ ] Реализация товаров и услуг т0000XXXXX от dd.mm.yyyy ..."/>
+              <Button Content="📥  Загрузить кейсы"
+                      Style="{StaticResource BtnPrimary}"
+                      Padding="11,8" FontSize="13" Margin="0,10,0,0"
+                      Command="{Binding LoadObsidianCasesCommand}"/>
+              <TextBlock Text="{Binding ObsidianStatus}"
+                         FontSize="12" Foreground="{StaticResource BrushText2}"
+                         Margin="0,8,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+          </Border>
 
           <!-- АТОЛ Online panel -->
           <Border Background="{StaticResource BrushSurface1}"
