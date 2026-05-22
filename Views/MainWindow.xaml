@@ -1143,25 +1143,6 @@
                   </StackPanel>
                 </Button>
 
-                <!-- Исправительные чеки — только для строк с пробитым чеком -->
-                <Button Padding="12,5" FontSize="12" Margin="6,0,0,0"
-                        Command="{Binding GenerateCorrectiveCommand}">
-                  <Button.Style>
-                    <Style TargetType="Button" BasedOn="{StaticResource BtnPrimary}">
-                      <Setter Property="Background" Value="#CC227744"/>
-                      <Style.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                          <Setter Property="Background" Value="#CC338855"/>
-                        </Trigger>
-                      </Style.Triggers>
-                    </Style>
-                  </Button.Style>
-                  <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="📋  Исправительный чек (" Margin="0"/>
-                    <TextBlock Text="{Binding SelectedHasCheckCount, Mode=OneWay}" FontWeight="Bold"/>
-                    <TextBlock Text=")" Margin="0"/>
-                  </StackPanel>
-                </Button>
               </WrapPanel>
             </Grid>
 

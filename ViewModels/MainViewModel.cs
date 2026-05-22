@@ -357,7 +357,6 @@ public class MainViewModel : BaseViewModel
     public ICommand TestAtolConnectionCommand  { get; }
     public ICommand PunchViaAtolCommand          { get; }
     public ICommand PunchOrdersViaAtolCommand  { get; }
-    public ICommand GenerateCorrectiveCommand  { get; }
     public ICommand MatchOfdReportCommand      { get; }
     public ICommand ApplyToOneCCommand         { get; }
     public ICommand ApplyOfdReportToOneCCommand { get; }
@@ -406,7 +405,6 @@ public class MainViewModel : BaseViewModel
         TestAtolConnectionCommand  = new AsyncRelayCommand(TestAtolConnectionAsync);
         PunchViaAtolCommand        = new AsyncRelayCommand(PunchViaAtolAsync);
         PunchOrdersViaAtolCommand  = new AsyncRelayCommand(PunchOrdersViaAtolAsync);
-        GenerateCorrectiveCommand  = new AsyncRelayCommand(GenerateCorrectiveAsync);
         MatchOfdReportCommand      = new RelayCommand(_ => MatchOfdReport());
         ApplyToOneCCommand         = new AsyncRelayCommand(ApplyToOneCAsync);
         ApplyOfdReportToOneCCommand = new AsyncRelayCommand(ApplyOfdReportToOneCAsync);
@@ -1305,78 +1303,6 @@ public class MainViewModel : BaseViewModel
             ShowToast($"Добавлено {added} реализаций в очередь", false);
         else
             ShowToast("Нет новых реализаций для добавления", true);
-    }
-
-    // ── Исправительные чеки ───────────────────────────────────────────────────
-    private async Task GenerateCorrectiveAsync()
-    {
-        var selected = LoadedRealizations.Where(r => r.IsSelected && r.HasCheck).ToList();
-        if (selected.Count == 0)
-        { ShowToast("Выберите реализации с пробитым чеком (отметьте галочкой)", true); return; }
-
-        if (!OneCService.IsAvailable())
-        { ShowToast("Для исправительных чеков требуется подключение к 1С (V83.COMConnector)", true); return; }
-
-        if (string.IsNullOrWhiteSpace(OneCServer) || string.IsNullOrWhiteSpace(OneCDatabase))
-        { ShowToast("Заполните настройки 1С для загрузки позиций документов", true); return; }
-
-        StatusText = $"Формирование исправительных чеков для {selected.Count} реализаций...";
-
-        var settings   = BuildOneCSettings();
-        var allResults = new List<GenerationResult>();
-        var failCount  = 0;
-
-        foreach (var row in selected)
-        {
-            try
-            {
-                StatusText = $"Загрузка позиций: {row.DocNumber}...";
-                var items = await Task.Run(() =>
-                    OneCService.LoadRealizationItems(settings, row.DocNumber, row.IsService));
-
-                if (items.Count == 0)
-                {
-                    ShowToast($"Нет позиций в документе {row.DocNumber} — пропущено", true);
-                    failCount++;
-                    continue;
-                }
-
-                var results = await Task.Run(() =>
-                    CorrectiveCheckService.Generate(row.Source, items, FileHelper.OutputDir, SelectedCashier));
-
-                allResults.AddRange(results);
-
-                // Добавляем пару в единый список результатов
-                var entry = new ResultDisplayEntry
-                {
-                    Refund     = results.Count > 0 ? results[0] : null,
-                    Correction = results.Count > 1 ? results[1] : null,
-                    PairLabel  = $"{row.DocNumber}  {row.CustomerName}",
-                };
-                AllResultEntries.Add(entry);
-            }
-            catch (Exception ex)
-            {
-                failCount++;
-                ShowToast($"Ошибка {row.DocNumber}: {ex.Message}", true);
-            }
-        }
-
-        ShowResults = AllResultEntries.Count > 0;
-
-        // Выделяем первую новую пару в предпросмотре (не сбрасываем уже выбранное)
-        if (allResults.Count > 0)
-        {
-            var lastAdded = AllResultEntries.LastOrDefault(e => e.IsPair);
-            if (lastAdded is not null) SelectedEntry = lastAdded;
-        }
-
-        var pairCount = allResults.Count / 2;
-        StatusText = $"Сформировано {pairCount} пар исправительных чеков" +
-                     (failCount > 0 ? $"  |  ошибок: {failCount}" : string.Empty);
-        ShowToast(
-            $"Исправительные чеки: {pairCount} пар" + (failCount > 0 ? $", ошибок {failCount}" : string.Empty),
-            failCount > 0 && pairCount == 0);
     }
 
     private async Task GenerateChecksAsync()
