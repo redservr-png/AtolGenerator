@@ -18,6 +18,26 @@ public static class CheckGeneratorService
 
         foreach (var order in p.Orders)
         {
+            // ── Исправительные кейсы из Obsidian: делегируем спецсервису ──
+            if (order.IsCorrection)
+            {
+                var checks = CorrectionGeneratorService.BuildCheckDataList(order, p);
+                foreach (var cd in checks)
+                {
+                    var tsC      = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")[..17];
+                    var safeNumC = FileHelper.SafeFilename(order.OrderNum ?? string.Empty);
+                    var baseNmC  = $"{tsC}_{safeNumC}_{cd.OperationType}";
+                    results.Add(new GenerationResult
+                    {
+                        OrderNum  = order.OrderNum,
+                        Amount    = cd.Amount,
+                        CheckData = cd,
+                        BaseName  = baseNmC,
+                    });
+                }
+                continue;   // обычная логика ниже этому заказу не нужна
+            }
+
             var amount      = order.Amount;
             var agentInfo   = order.AgentInfo;
             var corrDateRaw = order.CorrectionDate;
