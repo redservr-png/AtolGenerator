@@ -1,0 +1,173 @@
+<Window x:Class="AtolGenerator.Views.CorrectionEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
+        Title="Редактирование коррекции"
+        Width="560" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        Background="#1E1F26"
+        Foreground="#E0E2E8"
+        FontFamily="Segoe UI" FontSize="13">
+
+    <Window.Resources>
+        <cv:OrderKindLabelConverter             x:Key="KindLabel"/>
+        <cv:CorrectionScenarioLabelConverter    x:Key="ScenarioLabel"/>
+        <cv:SourceDocumentTypeLabelConverter    x:Key="DocTypeLabel"/>
+
+        <!-- Стиль ярлыка над полем -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontSize"   Value="11"/>
+            <Setter Property="Foreground" Value="#888A95"/>
+            <Setter Property="Margin"     Value="0,8,0,3"/>
+        </Style>
+        <!-- Стиль текстового поля -->
+        <Style TargetType="TextBox">
+            <Setter Property="Background"   Value="#252731"/>
+            <Setter Property="Foreground"   Value="#E0E2E8"/>
+            <Setter Property="BorderBrush"  Value="#3A3D49"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"      Value="8,5"/>
+            <Setter Property="FontSize"     Value="13"/>
+            <Setter Property="CaretBrush"   Value="#88BBFF"/>
+        </Style>
+        <!-- Стиль комбобокса -->
+        <Style TargetType="ComboBox">
+            <Setter Property="Background"      Value="#252731"/>
+            <Setter Property="Foreground"      Value="#E0E2E8"/>
+            <Setter Property="BorderBrush"     Value="#3A3D49"/>
+            <Setter Property="Padding"         Value="8,5"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        </Style>
+        <!-- Кнопки -->
+        <Style x:Key="BtnPrimary" TargetType="Button">
+            <Setter Property="Background"  Value="#1E6BD4"/>
+            <Setter Property="Foreground"  Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding"     Value="20,8"/>
+            <Setter Property="FontSize"    Value="13"/>
+            <Setter Property="FontWeight"  Value="Bold"/>
+            <Setter Property="Cursor"      Value="Hand"/>
+        </Style>
+        <Style x:Key="BtnGhost" TargetType="Button">
+            <Setter Property="Background"  Value="Transparent"/>
+            <Setter Property="Foreground"  Value="#B8BAC4"/>
+            <Setter Property="BorderBrush" Value="#3A3D49"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"     Value="20,8"/>
+            <Setter Property="FontSize"    Value="13"/>
+            <Setter Property="Cursor"      Value="Hand"/>
+        </Style>
+    </Window.Resources>
+
+    <Border Padding="22">
+        <StackPanel>
+            <!-- Заголовок -->
+            <TextBlock Text="✏  Редактирование коррекции"
+                       FontSize="16" FontWeight="Bold"
+                       Foreground="#88BBFF"
+                       Margin="0,0,0,4"/>
+            <TextBlock Text="Изменения применятся к карточке в основном списке после нажатия «Сохранить»"
+                       FontSize="11" Foreground="#888A95"
+                       Margin="0,0,0,14" TextWrapping="Wrap"/>
+
+            <!-- Тип документа + Тип коррекции -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Тип документа (из 1С)" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                    <ComboBox ItemsSource="{Binding AllDocumentTypes, RelativeSource={RelativeSource AncestorType=Window}}"
+                              SelectedItem="{Binding DocumentType, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={StaticResource DocTypeLabel}}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Сценарий коррекции" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
+                    <ComboBox ItemsSource="{Binding AllScenarios, RelativeSource={RelativeSource AncestorType=Window}}"
+                              SelectedItem="{Binding CorrectionScenario, Mode=TwoWay}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Converter={StaticResource ScenarioLabel}}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+            </Grid>
+
+            <!-- № документа + Дата -->
+            <Grid Margin="0,2,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="№ документа" Style="{StaticResource FieldLabel}"/>
+                    <TextBox Text="{Binding OrderNum, UpdateSourceTrigger=PropertyChanged}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Дата документа" Style="{StaticResource FieldLabel}"/>
+                    <TextBox Text="{Binding OrderDate, UpdateSourceTrigger=PropertyChanged}"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- Город -->
+            <TextBlock Text="Город / Подразделение" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding City, UpdateSourceTrigger=PropertyChanged}"/>
+
+            <!-- Суммы -->
+            <Grid Margin="0,2,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource FieldLabel}">
+                        <Run Text="Сумма правильная (из 1С), ₽"/>
+                    </TextBlock>
+                    <TextBox Text="{Binding CorrectAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
+                             ToolTip="Сумма документа из 1С — используется в чеке коррекции"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Style="{StaticResource FieldLabel}">
+                        <Run Text="Сумма в чеке (ошибочная), ₽"
+                             Foreground="#FFAA66"/>
+                    </TextBlock>
+                    <TextBox Text="{Binding OriginalCheckAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
+                             ToolTip="Сумма, которая была в ошибочно пробитом чеке (из ОФД/Такском или вручную). Нужно для «Чек большей/меньшей суммой»"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- ФП исходного чека -->
+            <TextBlock Text="ФП исходного чека (тег 1192)" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding OriginalFiscalNumber, UpdateSourceTrigger=PropertyChanged}"
+                     ToolTip="Фискальный признак (ФПД) ошибочного чека. Прописывается в тег 1192 для привязки исправительного чека к оригиналу"/>
+
+            <!-- Описание -->
+            <TextBlock Text="Описание / Комментарий" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}"
+                     AcceptsReturn="True" TextWrapping="Wrap"
+                     MinHeight="50" MaxHeight="100"
+                     VerticalScrollBarVisibility="Auto"/>
+
+            <!-- Кнопки -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+                <Button Content="Отмена" Style="{StaticResource BtnGhost}"
+                        Margin="0,0,8,0"
+                        Click="Cancel_Click"/>
+                <Button Content="Сохранить" Style="{StaticResource BtnPrimary}"
+                        Click="Save_Click" IsDefault="True"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

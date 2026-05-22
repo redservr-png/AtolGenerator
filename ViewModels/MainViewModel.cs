@@ -369,6 +369,7 @@ public class MainViewModel : BaseViewModel
     public ICommand BrowseMdFileCommand         { get; }
     public ICommand LoadObsidianCasesCommand    { get; }
     public ICommand FetchAmountsFromOneCCommand { get; }
+    public ICommand EditOrderCommand            { get; }
 
     // ── Skipped rows from Excel import ───────────────────────────────────────
     public ObservableCollection<SkippedRow> SkippedRows { get; } = new();
@@ -418,6 +419,7 @@ public class MainViewModel : BaseViewModel
         BrowseMdFileCommand         = new RelayCommand(_ => BrowseMdFile());
         LoadObsidianCasesCommand    = new RelayCommand(_ => LoadObsidianCases());
         FetchAmountsFromOneCCommand = new AsyncRelayCommand(FetchAmountsFromOneCAsync);
+        EditOrderCommand            = new RelayCommand(o => EditOrder(o as OrderEntry));
 
         // Загружаем сохранённые настройки АТОЛ
         var saved = AtolCredentials.Load();
@@ -1076,6 +1078,80 @@ public class MainViewModel : BaseViewModel
         ObsidianStatus = $"✓ Заполнено сумм: {result.Filled} / {result.Total} " +
                          $"(не найдено: {result.NotFound}, пропущено: {result.Skipped})" +
                          (result.Errors.Count > 0 ? $", ошибок: {result.Errors.Count}" : string.Empty);
+    }
+
+    /// <summary>Открывает модальное окно редактирования записи.</summary>
+    private void EditOrder(OrderEntry? order)
+    {
+        if (order is null) return;
+
+        // Работаем с копией — если пользователь отменит, оригинал не пострадает
+        var copy = CloneOrderEntry(order);
+        var dlg  = new Views.CorrectionEditorWindow(copy)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow,
+        };
+
+        if (dlg.ShowDialog() != true) return;
+
+        // Применяем правки обратно к оригиналу
+        ApplyOrderEntry(copy, order);
+
+        // Перерисовываем карточку: убрать + вставить на то же место → CollectionChanged
+        var idx = Orders.IndexOf(order);
+        if (idx >= 0)
+        {
+            Orders.RemoveAt(idx);
+            Orders.Insert(idx, order);
+        }
+    }
+
+    /// <summary>Создаёт независимую копию OrderEntry (мелкое клонирование).</summary>
+    private static OrderEntry CloneOrderEntry(OrderEntry s) => new()
+    {
+        OrderNum             = s.OrderNum,
+        OrderDate            = s.OrderDate,
+        Amount               = s.Amount,
+        CustomerName         = s.CustomerName,
+        Items                = s.Items.ToList(),
+        AgentInfo            = s.AgentInfo,
+        CorrectionDate       = s.CorrectionDate,
+        CorrectionNumber     = s.CorrectionNumber,
+        IsService            = s.IsService,
+        City                 = s.City,
+        Kind                 = s.Kind,
+        DocumentType         = s.DocumentType,
+        CorrectionScenario   = s.CorrectionScenario,
+        OriginalFiscalNumber = s.OriginalFiscalNumber,
+        OriginalCheckAmount  = s.OriginalCheckAmount,
+        CorrectAmount        = s.CorrectAmount,
+        Notes                = s.Notes,
+        OriginalPaymentWasCash = s.OriginalPaymentWasCash,
+        CorrectPaymentIsCash   = s.CorrectPaymentIsCash,
+    };
+
+    /// <summary>Копирует поля из источника в цель (используется после редактирования).</summary>
+    private static void ApplyOrderEntry(OrderEntry from, OrderEntry to)
+    {
+        to.OrderNum             = from.OrderNum;
+        to.OrderDate            = from.OrderDate;
+        to.Amount               = from.Amount;
+        to.CustomerName         = from.CustomerName;
+        to.Items                = from.Items;
+        to.AgentInfo            = from.AgentInfo;
+        to.CorrectionDate       = from.CorrectionDate;
+        to.CorrectionNumber     = from.CorrectionNumber;
+        to.IsService            = from.IsService;
+        to.City                 = from.City;
+        to.Kind                 = from.Kind;
+        to.DocumentType         = from.DocumentType;
+        to.CorrectionScenario   = from.CorrectionScenario;
+        to.OriginalFiscalNumber = from.OriginalFiscalNumber;
+        to.OriginalCheckAmount  = from.OriginalCheckAmount;
+        to.CorrectAmount        = from.CorrectAmount;
+        to.Notes                = from.Notes;
+        to.OriginalPaymentWasCash = from.OriginalPaymentWasCash;
+        to.CorrectPaymentIsCash   = from.CorrectPaymentIsCash;
     }
 
     private void SaveAtolSettings()
