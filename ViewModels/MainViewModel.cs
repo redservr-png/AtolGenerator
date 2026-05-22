@@ -209,8 +209,12 @@ public class MainViewModel : BaseViewModel
         get => _showLoadedRealizations;
         set => Set(ref _showLoadedRealizations, value);
     }
-    public int SelectedOneCCount     => LoadedRealizations.Count(r => r.IsSelected && !r.HasCheck);
-    public int SelectedHasCheckCount => LoadedRealizations.Count(r => r.IsSelected && r.HasCheck);
+    // Все выбранные строки (для кнопки «Добавить выбранные» — добавляются как Regular для без-чека и как коррекция для с-чеком)
+    public int SelectedOneCCount        => LoadedRealizations.Count(r => r.IsSelected);
+    // Только без чека — пригодны для пробития через АТОЛ Online API
+    public int SelectedNoCheckCount     => LoadedRealizations.Count(r => r.IsSelected && !r.HasCheck);
+    // С пробитым чеком — будут добавлены как коррекции (XML-only)
+    public int SelectedHasCheckCount    => LoadedRealizations.Count(r => r.IsSelected && r.HasCheck);
     public int TotalOneCLoaded       => LoadedRealizations.Count;
 
     // ── Results ──────────────────────────────────────────────────────────────
@@ -1244,11 +1248,13 @@ public class MainViewModel : BaseViewModel
         foreach (var r in realizations)
         {
             var vm = new OneCRealizationViewModel(r);
-            // Already-checked rows — pre-deselect so user can see them but won't add them
-            if (r.HasCheck) vm.IsSelected = false;
+            // Все строки выбираются по умолчанию.
+            // Строки без чека добавятся как Regular (для пробития sell),
+            // строки с пробитым чеком — как коррекции (для пары refund+correction).
             vm.PropertyChanged += (_, _) =>
             {
                 OnPropertyChanged(nameof(SelectedOneCCount));
+                OnPropertyChanged(nameof(SelectedNoCheckCount));
                 OnPropertyChanged(nameof(SelectedHasCheckCount));
             };
             LoadedRealizations.Add(vm);
@@ -1268,21 +1274,24 @@ public class MainViewModel : BaseViewModel
     private void SetAllOneCSelected(bool value)
     {
         foreach (var r in LoadedRealizations)
-            if (!r.HasCheck) r.IsSelected = value;
+            r.IsSelected = value;
         OnPropertyChanged(nameof(SelectedOneCCount));
+        OnPropertyChanged(nameof(SelectedNoCheckCount));
+        OnPropertyChanged(nameof(SelectedHasCheckCount));
     }
 
     private void AddSelectedToOrders()
     {
-        var existing = new HashSet<string>(Orders.Select(o => o.OrderNum));
-        var added = 0;
+        var existing      = new HashSet<string>(Orders.Select(o => o.OrderNum));
+        int addedRegular  = 0;
+        int addedCorrect  = 0;
 
-        foreach (var r in LoadedRealizations.Where(r => r.IsSelected && !r.HasCheck))
+        foreach (var r in LoadedRealizations.Where(r => r.IsSelected))
         {
             var key = string.IsNullOrEmpty(r.OrderNumber) ? r.DocNumber : r.OrderNumber;
             if (existing.Contains(key)) continue;
 
-            Orders.Add(new OrderEntry
+            var entry = new OrderEntry
             {
                 OrderNum         = r.OrderNumber,
                 OrderDate        = r.OrderDate,
@@ -1292,15 +1301,35 @@ public class MainViewModel : BaseViewModel
                 CorrectionNumber = r.DocNumber,
                 IsService        = r.IsService,
                 City             = r.City,
-            });
+            };
+
+            // Если у реализации уже пробит чек — добавляем как исправительный кейс.
+            // Сценарий не определяем автоматически (нет описания, как в Obsidian) —
+            // пользователь выберет вручную через combobox в карточке.
+            if (r.HasCheck)
+            {
+                entry.DocumentType         = SourceDocumentType.Realization;
+                entry.OriginalFiscalNumber = r.FiscalNumber ?? string.Empty;
+                entry.OriginalCheckAmount  = r.Amount;
+                entry.CorrectAmount        = r.Amount;
+                entry.CorrectionScenario   = CorrectionScenario.Unknown;
+                entry.Kind                 = OrderKind.RefundCorrectionPair;
+                entry.Notes                = "Реализация с пробитым чеком из 1С — выберите сценарий коррекции";
+                addedCorrect++;
+            }
+            else
+            {
+                addedRegular++;
+            }
+
+            Orders.Add(entry);
             existing.Add(key);
-            added++;
         }
 
-        OnPropertyChanged(nameof(OrderCount));
-        OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
-        if (added > 0)
-            ShowToast($"Добавлено {added} реализаций в очередь", false);
+        // OrderCount / CanPunchOrdersViaAtol обновятся через Orders.CollectionChanged
+        var total = addedRegular + addedCorrect;
+        if (total > 0)
+            ShowToast($"Добавлено: {addedRegular} обычных + {addedCorrect} коррекций", false);
         else
             ShowToast("Нет новых реализаций для добавления", true);
     }

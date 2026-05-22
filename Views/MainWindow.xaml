@@ -1117,7 +1117,9 @@
                         Command="{Binding DeselectAllOneCCommand}"/>
                 <Button Style="{StaticResource BtnPrimary}"
                         Padding="12,5" FontSize="12" Margin="0,0,6,0"
-                        Command="{Binding AddSelectedToOrdersCommand}">
+                        Command="{Binding AddSelectedToOrdersCommand}"
+                        IsEnabled="{Binding SelectedOneCCount, Converter={StaticResource NonZeroBool}}"
+                        ToolTip="Добавляет выбранные реализации в основной список. Без чека → обычная реализация. С пробитым чеком → коррекция (вы выберете сценарий)">
                   <StackPanel Orientation="Horizontal">
                     <TextBlock Text="➕  Добавить выбранные (" Margin="0"/>
                     <TextBlock Text="{Binding SelectedOneCCount, Mode=OneWay}" FontWeight="Bold"/>
@@ -1125,7 +1127,9 @@
                   </StackPanel>
                 </Button>
                 <Button Padding="12,5" FontSize="12"
-                        Command="{Binding PunchViaAtolCommand}">
+                        Command="{Binding PunchViaAtolCommand}"
+                        IsEnabled="{Binding SelectedNoCheckCount, Converter={StaticResource NonZeroBool}}"
+                        ToolTip="Пробивает реализации без чека напрямую через АТОЛ Online API. Реализации с уже пробитым чеком нужно добавить кнопкой «Добавить выбранные» и пробить как коррекцию через XML.">
                   <Button.Style>
                     <Style TargetType="Button" BasedOn="{StaticResource BtnPrimary}">
                       <Setter Property="Background" Value="#CC2244AA"/>
@@ -1138,7 +1142,7 @@
                   </Button.Style>
                   <StackPanel Orientation="Horizontal">
                     <TextBlock Text="🔥  Пробить через АТОЛ (" Margin="0"/>
-                    <TextBlock Text="{Binding SelectedOneCCount, Mode=OneWay}" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding SelectedNoCheckCount, Mode=OneWay}" FontWeight="Bold"/>
                     <TextBlock Text=")" Margin="0"/>
                   </StackPanel>
                 </Button>
