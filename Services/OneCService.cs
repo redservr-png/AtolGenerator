@@ -1,6 +1,8 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using AtolGenerator.Constants;
+using AtolGenerator.Models;
 
 namespace AtolGenerator.Services;
 
@@ -56,6 +58,9 @@ public class OneCRealization
     public string CheckNumber    { get; set; } = string.Empty;
     public string CheckDate      { get; set; } = string.Empty;
     public string FiscalNumber   { get; set; } = string.Empty;  // ЧекНомерФП
+    public List<OneCRealizationItem> Items { get; set; } = new();
+    public string ServiceType { get; set; } = string.Empty;
+    public ServiceProvider? AgentInfo { get; set; }
 }
 
 public static class OneCService
@@ -277,6 +282,55 @@ public static class OneCService
         return result;
     }
 
+    public static void EnrichRealizationForReceipt(
+        OneCConnectionSettings s, OneCRealization realization)
+    {
+        if (realization.Items.Count == 0 && !string.IsNullOrWhiteSpace(realization.DocNumber))
+            realization.Items = LoadRealizationItems(s, realization.DocNumber, realization.IsService);
+
+        if (string.IsNullOrWhiteSpace(realization.ServiceType))
+            realization.ServiceType = DetectServiceType(realization.Items.Select(i => i.Name));
+
+        if (realization.IsService && realization.AgentInfo is null)
+            realization.AgentInfo = ResolveServiceProvider(realization.City, realization.ServiceType);
+    }
+
+    public static ServiceProvider? ResolveServiceProvider(string city, string serviceType)
+    {
+        if (string.IsNullOrWhiteSpace(city)) return null;
+
+        var cityMatches = AppConstants.ServiceProviders
+            .Where(p => city.Contains(p.City, StringComparison.OrdinalIgnoreCase)
+                     || p.City.Contains(city, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (cityMatches.Count == 0) return null;
+
+        if (!string.IsNullOrWhiteSpace(serviceType))
+        {
+            var byType = cityMatches.FirstOrDefault(p =>
+                string.Equals(p.Service, serviceType, StringComparison.OrdinalIgnoreCase));
+            if (byType is not null) return byType;
+        }
+
+        return cityMatches.Count == 1 ? cityMatches[0] : null;
+    }
+
+    public static string DetectServiceType(IEnumerable<string> itemNames)
+    {
+        foreach (var rawName in itemNames)
+        {
+            var name = rawName ?? string.Empty;
+            if (name.Contains("достав", StringComparison.OrdinalIgnoreCase)
+             || name.Contains("перевоз", StringComparison.OrdinalIgnoreCase))
+                return "Доставка";
+            if (name.Contains("сбор", StringComparison.OrdinalIgnoreCase)
+             || name.Contains("монтаж", StringComparison.OrdinalIgnoreCase))
+                return "Сборка";
+        }
+
+        return string.Empty;
+    }
+
     /// <summary>
     /// Обогащает список заказов из текста данными из 1С:
     /// Подразделение (город) → IsService (из договора) → AgentInfo (из AppConstants).
@@ -334,22 +388,9 @@ public static class OneCService
                     // Ищем поставщика по городу + типу услуги
                     if (order.IsService && !string.IsNullOrEmpty(order.City))
                     {
-                        // Определяем тип: (сборка) / (доставка) — берём из уже распознанных данных
-                        // или пробуем оба варианта по очерёдности
-                        var svcTypes = new[] { "Сборка", "Доставка" };
-                        foreach (var svcType in svcTypes)
-                        {
-                            var agent = AtolGenerator.Constants.AppConstants.ServiceProviders
-                                .FirstOrDefault(p =>
-                                    string.Equals(p.Service, svcType, StringComparison.OrdinalIgnoreCase) &&
-                                    order.City.Contains(p.City, StringComparison.OrdinalIgnoreCase));
-                            if (agent is not null)
-                            {
-                                order.AgentInfo = agent;
-                                Log($"  {order.OrderNum}: город={order.City}, агент={agent.Name}");
-                                break;
-                            }
-                        }
+                        order.AgentInfo = ResolveServiceProvider(order.City, order.ServiceType);
+                        if (order.AgentInfo is not null)
+                            Log($"  {order.OrderNum}: город={order.City}, агент={order.AgentInfo.Name}");
                         if (order.AgentInfo is null)
                             Log($"  {order.OrderNum}: город={order.City} — агент не найден в списке");
                     }

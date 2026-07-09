@@ -37,4 +37,17 @@ public class OneCRealizationViewModel : BaseViewModel
     public bool   PunchFail   { get => _punchFail;   set => Set(ref _punchFail,   value); }
 
     public OneCRealizationViewModel(OneCRealization r) => Source = r;
+
+    public void MarkAsPunched(AtolPunchResult result)
+    {
+        Source.HasCheck = true;
+        Source.CheckDate = result.ReceiptDateTime;
+        Source.CheckNumber = result.FiscalDocNumber?.ToString() ?? string.Empty;
+        Source.FiscalNumber = result.FiscalSign?.ToString() ?? string.Empty;
+
+        OnPropertyChanged(nameof(HasCheck));
+        OnPropertyChanged(nameof(CheckDate));
+        OnPropertyChanged(nameof(CheckNumber));
+        OnPropertyChanged(nameof(FiscalNumber));
+    }
 }

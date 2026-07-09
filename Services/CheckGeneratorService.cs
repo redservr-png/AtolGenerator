@@ -18,23 +18,39 @@ public static class CheckGeneratorService
 
         foreach (var order in p.Orders)
         {
+            ValidateCorrectionVat(order);
+
             // ── Исправительные кейсы из Obsidian: делегируем спецсервису ──
             if (order.IsCorrection)
             {
                 var checks = CorrectionGeneratorService.BuildCheckDataList(order, p);
+                var orderResults = new List<GenerationResult>();
                 foreach (var cd in checks)
                 {
                     var tsC      = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")[..17];
-                    var safeNumC = FileHelper.SafeFilename(order.OrderNum ?? string.Empty);
+                    var orderNumC = order.OrderNum ?? string.Empty;
+                    var safeNumC = FileHelper.SafeFilename(orderNumC);
                     var baseNmC  = $"{tsC}_{safeNumC}_{cd.OperationType}";
-                    results.Add(new GenerationResult
+                    orderResults.Add(new GenerationResult
                     {
-                        OrderNum  = order.OrderNum,
+                        OrderNum  = orderNumC,
                         Amount    = cd.Amount,
                         CheckData = cd,
                         BaseName  = baseNmC,
                     });
                 }
+
+                if (orderResults.Count > 0)
+                {
+                    var memoTs = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")[..17];
+                    var memoSafeNum = FileHelper.SafeFilename(order.OrderNum ?? string.Empty);
+                    var docxPath = Path.Combine(p.OutputDir, $"{memoTs}_{memoSafeNum}_служебка.docx");
+                    GenerateCorrectionMemo(order, p, order.Amount, checks.Last().OperationType, docxPath);
+                    foreach (var r in orderResults)
+                        r.DocxPath = docxPath;
+                    results.AddRange(orderResults);
+                }
+
                 continue;   // обычная логика ниже этому заказу не нужна
             }
 
@@ -69,12 +85,25 @@ public static class CheckGeneratorService
                 }
                 else
                 {
-                    foreach (var raw in order.Items)
+                    var sourceItems = order.Items.Count > 0
+                        ? order.Items
+                        : new List<OrderItem>
+                        {
+                            new()
+                            {
+                                Name = $"{(orderIsService ? "Услуга" : "Товар")} по реализации {(string.IsNullOrWhiteSpace(order.CorrectionNumber) ? order.OrderNum : order.CorrectionNumber)}",
+                                Quantity = 1,
+                                Sum = amount,
+                            }
+                        };
+
+                    foreach (var raw in sourceItems)
                     {
                         var qty   = raw.Quantity > 0 ? raw.Quantity : 1;
                         var s     = raw.Sum;
                         var price = Math.Round(s / qty, 2);
                         bool isService = orderIsService;
+                        var serviceVatType = agentInfo?.VatType ?? "none";
                         items.Add(new CheckItem
                         {
                             Name          = raw.Name,
@@ -83,8 +112,8 @@ public static class CheckGeneratorService
                             Sum           = s,
                             PaymentMethod = "full_payment",
                             PaymentObject = isService ? "service" : "commodity",
-                            VatType       = isService ? "none" : "vat22",
-                            VatSum        = isService ? s : CalcVat22(s),
+                            VatType       = isService ? serviceVatType : "vat22",
+                            VatSum        = isService ? CalcServiceVat(s, serviceVatType) : CalcVat22(s),
                             IsService     = isService,
                         });
                     }
@@ -92,9 +121,9 @@ public static class CheckGeneratorService
             }
 
             // CheckVatType для итога чека: услуга/агент → none; оплата → vat122; реализация → vat22
-            var checkVatType = orderIsService        ? "none"
-                             : p.Tab == "payment"   ? "vat122"
-                             :                        "vat22";
+            var checkVatType = orderIsService
+                             ? (p.Tab == "realization" ? agentInfo?.VatType ?? "none" : "none")
+                             : p.Tab == "payment" ? "vat122" : "vat22";
 
             // ── Build CheckData for XML ──
             var checkData = new CheckData
@@ -138,12 +167,13 @@ public static class CheckGeneratorService
 
             // ── Имена файлов (используются для DOCX и при раздельном XML) ──
             var ts       = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")[..17];
-            var safeNum  = FileHelper.SafeFilename(order.OrderNum);
+            var orderNum = order.OrderNum ?? string.Empty;
+            var safeNum  = FileHelper.SafeFilename(orderNum);
             var baseName = $"{ts}_{safeNum}_{p.CheckType}";
 
             var result = new GenerationResult
             {
-                OrderNum  = order.OrderNum,
+                OrderNum  = orderNum,
                 Amount    = amount,
                 CheckData = checkData,
                 BaseName  = baseName,
@@ -154,7 +184,7 @@ public static class CheckGeneratorService
             {
                 var docxPath = Path.Combine(p.OutputDir, $"{baseName}_служебка.docx");
 
-                var orderInfoStr = order.OrderNum;
+                var orderInfoStr = orderNum;
                 if (!string.IsNullOrEmpty(order.OrderDate))
                     orderInfoStr += $" от {order.OrderDate} (Заказ покупателя)";
 
@@ -235,9 +265,93 @@ public static class CheckGeneratorService
         return results;
     }
 
+    private static void GenerateCorrectionMemo(
+        OrderEntry order, GenerationParams p, double amount, string operationType, string docxPath)
+    {
+        var tab = order.DocumentType == SourceDocumentType.Realization ? "realization" : p.Tab;
+        var orderIsService = order.IsService || order.AgentInfo is not null || p.IsService;
+        var corrDateRaw = order.CorrectionDate;
+
+        var orderInfoStr = !string.IsNullOrWhiteSpace(order.CorrectionNumber)
+            ? order.CorrectionNumber
+            : order.OrderNum;
+        if (!string.IsNullOrEmpty(order.OrderDate))
+        {
+            var docLabel = order.DocumentType == SourceDocumentType.Realization
+                ? "Реализация товаров и услуг"
+                : "Заказ покупателя";
+            orderInfoStr += $" от {order.OrderDate} ({docLabel})";
+        }
+
+        var eventDate = !string.IsNullOrEmpty(corrDateRaw)
+            ? corrDateRaw
+            : !string.IsNullOrEmpty(order.OrderDate)
+                ? order.OrderDate.Split(' ')[0]
+                : DateTime.Today.ToString("dd.MM.yyyy");
+
+        var operationDesc = tab == "realization"
+            ? (orderIsService
+                ? "реализации услуги по перевозке/сборки товара покупателю"
+                : "реализации товара покупателю")
+            : operationType == "buy_correction"
+                ? "возврате безналичных денежных средств покупателю"
+                : AppConstants.OperationDescriptions.GetValueOrDefault(operationType, "расчёте");
+
+        var storeKkt = tab == "realization"
+            ? AppConstants.GetKktByCity(order.City)
+            : AppConstants.DefaultKkt;
+        var onlineKkt = AppConstants.DefaultKkt;
+
+        var memo = new MemoData
+        {
+            EventDate        = eventDate,
+            TodayDate        = DateTime.Today.ToString("dd.MM.yyyy"),
+            OperationDesc    = operationDesc,
+            CustomerName     = order.CustomerName,
+            Amount           = amount,
+            OrderInfo        = orderInfoStr,
+            CorrectionDesc   = AppConstants.CorrectionDescriptions.GetValueOrDefault(operationType, string.Empty),
+            FromPosition     = p.Cashier.Position,
+            FromNameGenitive = p.Cashier.NameGenitive,
+            CashierShort     = p.Cashier.ShortName,
+            KktModel         = storeKkt.Model,
+            KktSerial        = storeKkt.Serial,
+            KktReg           = storeKkt.RegNum,
+            KktFfd           = storeKkt.Ffd,
+            KktModelOnline   = onlineKkt.Model,
+            KktSerialOnline  = onlineKkt.Serial,
+            KktRegOnline     = onlineKkt.RegNum,
+            KktFfdOnline     = onlineKkt.Ffd,
+        };
+
+        DocxGeneratorService.Generate(memo, docxPath);
+    }
+
     private static double CalcVat122(double amount) => Math.Round(amount * 22.0 / 122.0, 2);
     // НДС 22% — сумма уже включает налог в цену (22/122)
     private static double CalcVat22(double amount)  => Math.Round(amount * 22.0 / 122.0, 2);
+    private static double CalcServiceVat(double amount, string vatType) =>
+        vatType == "vat5" ? Math.Round(amount * 5.0 / 100.0, 2) : amount;
+
+    private static void ValidateCorrectionVat(OrderEntry order)
+    {
+        if (!order.IsCorrection ||
+            order.DocumentType != SourceDocumentType.Realization ||
+            !order.IsService)
+            return;
+
+        var docNum = !string.IsNullOrWhiteSpace(order.CorrectionNumber)
+            ? order.CorrectionNumber
+            : order.OrderNum;
+
+        if (string.IsNullOrWhiteSpace(order.ServiceType))
+            throw new InvalidOperationException(
+                $"{docNum}: не определена услуга по номенклатуре (доставка/сборка), XML коррекции не сформирован.");
+
+        if (order.AgentInfo is null)
+            throw new InvalidOperationException(
+                $"{docNum}: не найдена ставка НДС для услуги «{order.ServiceType}» и подразделения «{order.City}», XML коррекции не сформирован.");
+    }
 
     private static string ToIsoDate(string ddMmYyyy)
     {

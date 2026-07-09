@@ -5,8 +5,8 @@
         xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
         Title="АТОЛ Чек-генератор"
         Icon="/Resources/app.ico"
-        Height="820" Width="1160"
-        MinHeight="600" MinWidth="800"
+        Height="900" Width="1440"
+        MinHeight="720" MinWidth="1180"
         Background="{StaticResource BrushBg}"
         WindowStartupLocation="CenterScreen">
 
@@ -40,52 +40,138 @@
 
   <Grid>
     <Grid.RowDefinitions>
-      <RowDefinition Height="58"/>   <!-- header -->
+      <RowDefinition Height="66"/>   <!-- header -->
       <RowDefinition Height="*"/>    <!-- content -->
       <RowDefinition Height="34"/>   <!-- status bar -->
     </Grid.RowDefinitions>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="220"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
+
+    <!-- ══════════ SIDEBAR ══════════ -->
+    <Border Grid.Row="0" Grid.RowSpan="3" Grid.Column="0"
+            Background="#14202B"
+            BorderBrush="#243244"
+            BorderThickness="0,0,1,0">
+      <Grid Margin="16,18">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/>
+          <RowDefinition Height="*"/>
+          <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,34">
+          <Border Width="38" Height="38" CornerRadius="8" Margin="0,0,10,0">
+            <Border.Background>
+              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#2563EB" Offset="0"/>
+                <GradientStop Color="#0F766E" Offset="1"/>
+              </LinearGradientBrush>
+            </Border.Background>
+            <TextBlock Text="▣" FontSize="18" Foreground="White"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <TextBlock Text="АТОЛ&#x0a;Чек-генератор"
+                     FontSize="14" FontWeight="Bold"
+                     Foreground="#F8FAFC"
+                     LineHeight="18" VerticalAlignment="Center"/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1">
+          <TextBlock Text="РАБОЧИЕ СЦЕНАРИИ" FontSize="11"
+                     Foreground="#8DA0B8" Margin="0,0,0,10"/>
+          <Button Style="{StaticResource BtnGhost}"
+                  HorizontalContentAlignment="Left"
+                  Margin="0,0,0,8"
+                  Command="{Binding OpenWorkspaceCommand}"
+                  CommandParameter="refunds">
+            <TextBlock Text="↩  Возвраты по заказам" Foreground="#F8FAFC"/>
+          </Button>
+          <Button Style="{StaticResource BtnGhost}"
+                  HorizontalContentAlignment="Left"
+                  Margin="0,0,0,8"
+                  Command="{Binding OpenWorkspaceCommand}"
+                  CommandParameter="realizationCorrections">
+            <TextBlock Text="⚡  Коррекции реализаций 1С" Foreground="#F8FAFC"/>
+          </Button>
+          <Button Style="{StaticResource BtnGhost}"
+                  HorizontalContentAlignment="Left"
+                  Margin="0,0,0,8"
+                  Command="{Binding OpenWorkspaceCommand}"
+                  CommandParameter="obsidian">
+            <TextBlock Text="▧  Кейсы Obsidian" Foreground="#D9E2EC"/>
+          </Button>
+          <Button Style="{StaticResource BtnGhost}"
+                  HorizontalContentAlignment="Left"
+                  Margin="0,0,0,22"
+                  Command="{Binding OpenWorkspaceCommand}"
+                  CommandParameter="ofd">
+            <TextBlock Text="⇄  XML + ОФД → 1С" Foreground="#D9E2EC"/>
+          </Button>
+
+          <TextBlock Text="ДОПОЛНИТЕЛЬНО" FontSize="11"
+                     Foreground="#8DA0B8" Margin="0,0,0,10"/>
+          <Button Style="{StaticResource BtnGhost}"
+                  HorizontalContentAlignment="Left"
+                  Margin="0,0,0,8"
+                  Command="{Binding OpenWorkspaceCommand}"
+                  CommandParameter="payment">
+            <TextBlock Text="▣  Оплаты / приход" Foreground="#D9E2EC"/>
+          </Button>
+          <Button Style="{StaticResource BtnGhost}"
+                  HorizontalContentAlignment="Left"
+                  Margin="0,0,0,22"
+                  Command="{Binding OpenWorkspaceCommand}"
+                  CommandParameter="atol">
+            <TextBlock Text="🔑  Настройки АТОЛ Online" Foreground="#D9E2EC"/>
+          </Button>
+        </StackPanel>
+
+        <StackPanel Grid.Row="3">
+          <Separator Background="#314154" Margin="0,0,0,14"/>
+          <TextBlock Text="Кассир" FontSize="11" Foreground="#8DA0B8"/>
+          <TextBlock FontSize="13" FontWeight="SemiBold"
+                     Foreground="#F8FAFC" Margin="0,3,0,14">
+            <Run Text="Кассир: "/>
+            <Run Text="{Binding SelectedCashierShort}"/>
+          </TextBlock>
+          <TextBlock Text="Готово к работе" FontSize="12"
+                     Foreground="#7DD3C7"/>
+        </StackPanel>
+      </Grid>
+    </Border>
 
     <!-- ══════════ HEADER ══════════ -->
-    <Border Grid.Row="0"
+    <Border Grid.Row="0" Grid.Column="1"
             Background="{StaticResource BrushSurface1}"
             BorderBrush="{StaticResource BrushBorder}"
             BorderThickness="0,0,0,1">
-      <Grid Margin="24,0">
+      <Grid Margin="18,0">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <Border Width="32" Height="32" CornerRadius="8" Margin="0,0,10,0">
-            <Border.Background>
-              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                <GradientStop Color="#4C8AF5" Offset="0"/>
-                <GradientStop Color="#8155FF" Offset="1"/>
-              </LinearGradientBrush>
-            </Border.Background>
-            <TextBlock Text="🧾" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          </Border>
-          <TextBlock Text="АТОЛ Чек-генератор"
-                     FontSize="17" FontWeight="Bold"
-                     Foreground="{StaticResource BrushAccent2}"
-                     VerticalAlignment="Center"/>
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
           <Button Content="📋  Кейсы коррекций"
-                  Style="{StaticResource BtnGhost}"
-                  Padding="10,5" FontSize="12" Margin="0,0,8,0"
+                  Style="{StaticResource BtnSecondary}"
+                  Padding="12,7" FontSize="12" Margin="0,0,8,0"
                   ToolTip="Загрузка списка чеков для исправления из Obsidian-файла"
                   Command="{Binding ToggleObsidianPanelCommand}"/>
           <Button Content="🔑  АТОЛ Online"
-                  Style="{StaticResource BtnGhost}"
-                  Padding="10,5" FontSize="12" Margin="0,0,16,0"
+                  Style="{StaticResource BtnSecondary}"
+                  Padding="12,7" FontSize="12" Margin="0,0,12,0"
                   Command="{Binding ToggleAtolPanelCommand}"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
           <TextBlock Text="ИП Шевелев Е.Н. · ИНН 352526561274 · ФФД 1.05"
-                     FontSize="12" Foreground="{StaticResource BrushText3}"
+                     FontSize="12" Foreground="{StaticResource BrushText2}"
                      VerticalAlignment="Center"/>
+          <Ellipse Width="8" Height="8" Fill="{StaticResource BrushGreen}" Margin="14,0,0,0"/>
         </StackPanel>
       </Grid>
     </Border>
 
     <!-- ══════════ CONTENT ══════════ -->
-    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-      <Grid Margin="18,16,18,16">
+    <ScrollViewer Grid.Row="1" Grid.Column="1" VerticalScrollBarVisibility="Auto">
+      <Grid Margin="24,20,24,20">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto"/>  <!-- Row 0: основной контент -->
           <RowDefinition Height="Auto"/>  <!-- Row 1: результаты + предпросмотр -->
@@ -93,8 +179,8 @@
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="18"/>
-          <ColumnDefinition Width="480"/>
+          <ColumnDefinition Width="22"/>
+          <ColumnDefinition Width="460"/>
         </Grid.ColumnDefinitions>
 
         <!-- ════ LEFT COLUMN ════ -->
@@ -102,7 +188,8 @@
 
           <!-- Tabs -->
           <Border Background="{StaticResource BrushSurface2}"
-                  CornerRadius="10" Padding="4">
+                  CornerRadius="10" Padding="4"
+                  Visibility="Collapsed">
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition/>
@@ -757,49 +844,62 @@
                          FontSize="11" Foreground="{StaticResource BrushText3}"
                          HorizontalAlignment="Center" Margin="0,8,0,0"/>
 
-              <!-- Сопоставление отчёта ОФД -->
-              <Button Style="{StaticResource BtnSecondary}"
-                      Command="{Binding MatchOfdReportCommand}"
-                      Margin="0,12,0,0" Padding="0,9"
-                      ToolTip="Сопоставить сводный отчёт ОФД (Excel) с локальным журналом пробитых чеков. Результат — Excel с привязкой к номеру реализации 1С.">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                  <TextBlock Text="📊" FontSize="14" Margin="0,0,8,0"/>
-                  <TextBlock Text="Сопоставить отчёт ОФД с реализациями" FontSize="13"/>
-                </StackPanel>
-              </Button>
+              <Border Background="{StaticResource BrushSurface2}"
+                      BorderBrush="{StaticResource BrushBorder}"
+                      BorderThickness="1" CornerRadius="8"
+                      Padding="12" Margin="0,12,0,0"
+                      Visibility="{Binding ShowOfdToolsPanel, Converter={StaticResource BoolVis}}">
+                <StackPanel>
+                  <TextBlock Text="XML + ОФД → 1С"
+                             FontSize="11" FontWeight="Bold"
+                             Foreground="{StaticResource BrushAccent2}"
+                             Margin="0,0,0,8"/>
 
-              <!-- Применить отчёт ОФД к 1С — основной workflow для коррекций через XML -->
-              <Button Style="{StaticResource BtnSecondary}"
-                      Command="{Binding ApplyOfdReportToOneCCommand}"
-                      Margin="0,8,0,0" Padding="0,9"
-                      ToolTip="Загрузить сводный отчёт ОФД и записать ФПД/№ ФД/ДатаПечатиЧека в документы РеализацияТоваровУслуг 1С. Привязка идёт по тегу 1086 (номер реализации, который вшит в XML с v1.7.4).">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                  <TextBlock Text="🚀" FontSize="14" Margin="0,0,8,0"/>
-                  <TextBlock Text="Применить отчёт ОФД к 1С" FontSize="13" FontWeight="SemiBold"/>
-                </StackPanel>
-              </Button>
+                  <!-- Сопоставление отчёта ОФД -->
+                  <Button Style="{StaticResource BtnSecondary}"
+                          Command="{Binding MatchOfdReportCommand}"
+                          Padding="0,9"
+                          ToolTip="Сопоставить сводный отчёт ОФД (Excel) с локальным журналом пробитых чеков. Результат — Excel с привязкой к номеру реализации 1С.">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                      <TextBlock Text="📊" FontSize="14" Margin="0,0,8,0"/>
+                      <TextBlock Text="Сопоставить отчёт ОФД с реализациями" FontSize="13"/>
+                    </StackPanel>
+                  </Button>
 
-              <!-- Применить из локального журнала пробитий (только для чеков пробитых через API) -->
-              <Button Style="{StaticResource BtnSecondary}"
-                      Command="{Binding ApplyToOneCCommand}"
-                      Margin="0,8,0,0" Padding="0,9"
-                      ToolTip="Применить к 1С из локального журнала punched_checks.jsonl (заполняется только при пробитии через АТОЛ Online API, т.е. для sell/sell_refund — не для коррекций).">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                  <TextBlock Text="⤓" FontSize="12" Margin="0,0,8,0" Opacity="0.7"/>
-                  <TextBlock Text="Применить из журнала (API)" FontSize="12" Opacity="0.85"/>
-                </StackPanel>
-              </Button>
+                  <!-- Применить отчёт ОФД к 1С — основной workflow для коррекций через XML -->
+                  <Button Style="{StaticResource BtnSecondary}"
+                          Command="{Binding ApplyOfdReportToOneCCommand}"
+                          Margin="0,8,0,0" Padding="0,9"
+                          ToolTip="Загрузить сводный отчёт ОФД и записать ФПД/№ ФД/ДатаПечатиЧека в документы РеализацияТоваровУслуг 1С. Привязка идёт по тегу 1086 (номер реализации, который вшит в XML с v1.7.4).">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                      <TextBlock Text="🚀" FontSize="14" Margin="0,0,8,0"/>
+                      <TextBlock Text="Применить отчёт ОФД к 1С" FontSize="13" FontWeight="SemiBold"/>
+                    </StackPanel>
+                  </Button>
 
-              <!-- Применить старый XML + ОФД (для чеков пробитых до v1.7.4 без тега 1086) -->
-              <Button Style="{StaticResource BtnSecondary}"
-                      Command="{Binding ApplyXmlAndOfdToOneCCommand}"
-                      Margin="0,8,0,0" Padding="0,9"
-                      ToolTip="Для чеков, пробитых ДО v1.7.4 (без тега 1086): выбираете старый XML с base_number, потом сводный отчёт ОФД. Программа сопоставляет по сумме, записывает в 1С пропуская уже заполненные.">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                  <TextBlock Text="🔁" FontSize="12" Margin="0,0,8,0" Opacity="0.85"/>
-                  <TextBlock Text="Сопоставить XML+ОФД → 1С (старые чеки)" FontSize="12" Opacity="0.95"/>
+                  <!-- Применить из локального журнала пробитий (только для чеков пробитых через API) -->
+                  <Button Style="{StaticResource BtnSecondary}"
+                          Command="{Binding ApplyToOneCCommand}"
+                          Margin="0,8,0,0" Padding="0,9"
+                          ToolTip="Применить к 1С из локального журнала punched_checks.jsonl (заполняется только при пробитии через АТОЛ Online API, т.е. для sell/sell_refund — не для коррекций).">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                      <TextBlock Text="⤓" FontSize="12" Margin="0,0,8,0" Opacity="0.7"/>
+                      <TextBlock Text="Применить из журнала (API)" FontSize="12" Opacity="0.85"/>
+                    </StackPanel>
+                  </Button>
+
+                  <!-- Применить старый XML + ОФД (для чеков пробитых до v1.7.4 без тега 1086) -->
+                  <Button Style="{StaticResource BtnSecondary}"
+                          Command="{Binding ApplyXmlAndOfdToOneCCommand}"
+                          Margin="0,8,0,0" Padding="0,9"
+                          ToolTip="Для чеков, пробитых ДО v1.7.4 (без тега 1086): выбираете старый XML с base_number, потом сводный отчёт ОФД. Программа сопоставляет по сумме, записывает в 1С пропуская уже заполненные.">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                      <TextBlock Text="🔁" FontSize="12" Margin="0,0,8,0" Opacity="0.85"/>
+                      <TextBlock Text="Сопоставить XML+ОФД → 1С (старые чеки)" FontSize="12" Opacity="0.95"/>
+                    </StackPanel>
+                  </Button>
                 </StackPanel>
-              </Button>
+              </Border>
             </StackPanel>
           </Border>
 
@@ -1150,7 +1250,7 @@
                         Padding="12,5" FontSize="12" Margin="0,0,6,0"
                         Command="{Binding AddSelectedToOrdersCommand}"
                         IsEnabled="{Binding SelectedOneCCount, Converter={StaticResource NonZeroBool}}"
-                        ToolTip="Добавляет выбранные реализации в основной список. Без чека → обычная реализация. С пробитым чеком → коррекция (вы выберете сценарий)">
+                        ToolTip="Добавляет выбранные реализации в основной список как чеки коррекции «Чек не пробит».">
                   <StackPanel Orientation="Horizontal">
                     <TextBlock Text="➕  Добавить выбранные (" Margin="0"/>
                     <TextBlock Text="{Binding SelectedOneCCount, Mode=OneWay}" FontWeight="Bold"/>
@@ -1159,8 +1259,8 @@
                 </Button>
                 <Button Padding="12,5" FontSize="12"
                         Command="{Binding PunchViaAtolCommand}"
-                        IsEnabled="{Binding SelectedNoCheckCount, Converter={StaticResource NonZeroBool}}"
-                        ToolTip="Пробивает реализации без чека напрямую через АТОЛ Online API. Реализации с уже пробитым чеком нужно добавить кнопкой «Добавить выбранные» и пробить как коррекцию через XML.">
+                        IsEnabled="{Binding CanPunchSelectedRealizationsViaAtol}"
+                        ToolTip="Редкий режим: пробивает выбранные реализации без чека как обычный «Приход» через АТОЛ Online. Доступно только когда выбран тип чека «Приход». Для коррекций используйте XML.">
                   <Button.Style>
                     <Style TargetType="Button" BasedOn="{StaticResource BtnPrimary}">
                       <Setter Property="Background" Value="#CC2244AA"/>
@@ -1405,7 +1505,7 @@
     </ScrollViewer>
 
     <!-- ══════════ STATUS BAR ══════════ -->
-    <Border Grid.Row="2"
+    <Border Grid.Row="2" Grid.Column="1"
             Background="{StaticResource BrushSurface1}"
             BorderBrush="{StaticResource BrushBorder}"
             BorderThickness="0,1,0,0">
@@ -1427,7 +1527,7 @@
     </Border>
 
     <!-- ══════════ TOAST ══════════ -->
-    <Border Grid.Row="1"
+    <Border Grid.Row="1" Grid.Column="1"
             HorizontalAlignment="Right" VerticalAlignment="Top"
             Margin="0,14,18,0" MaxWidth="320"
             Visibility="{Binding ToastVisible, Converter={StaticResource BoolVis}}"

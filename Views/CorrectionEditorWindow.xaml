@@ -3,171 +3,411 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
         Title="Редактирование коррекции"
-        Width="560" SizeToContent="Height"
+        Width="1020" Height="760" MinWidth="860" MinHeight="620"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize" ShowInTaskbar="False"
-        Background="#1E1F26"
-        Foreground="#E0E2E8"
+        ResizeMode="CanResize" ShowInTaskbar="False"
+        Background="{StaticResource BrushBg}"
+        Foreground="{StaticResource BrushText}"
         FontFamily="Segoe UI" FontSize="13">
 
     <Window.Resources>
         <cv:OrderKindLabelConverter             x:Key="KindLabel"/>
         <cv:CorrectionScenarioLabelConverter    x:Key="ScenarioLabel"/>
         <cv:SourceDocumentTypeLabelConverter    x:Key="DocTypeLabel"/>
+        <cv:BoolToVisibilityConverter           x:Key="BoolVis"/>
 
-        <!-- Стиль ярлыка над полем -->
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="FontSize"   Value="11"/>
-            <Setter Property="Foreground" Value="#888A95"/>
-            <Setter Property="Margin"     Value="0,8,0,3"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushText2}"/>
+            <Setter Property="Margin"     Value="0,0,0,4"/>
         </Style>
-        <!-- Стиль текстового поля -->
-        <Style TargetType="TextBox">
-            <Setter Property="Background"   Value="#252731"/>
-            <Setter Property="Foreground"   Value="#E0E2E8"/>
-            <Setter Property="BorderBrush"  Value="#3A3D49"/>
+
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushText}"/>
+        </Style>
+
+        <Style x:Key="MutedText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushText3}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+
+        <Style x:Key="PanelBorder" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource BrushSurface1}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding"      Value="8,5"/>
-            <Setter Property="FontSize"     Value="13"/>
-            <Setter Property="CaretBrush"   Value="#88BBFF"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16"/>
         </Style>
-        <!-- Стиль комбобокса -->
+
+        <Style x:Key="SoftPanelBorder" TargetType="Border" BasedOn="{StaticResource PanelBorder}">
+            <Setter Property="Background" Value="{StaticResource BrushSurface2}"/>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Background"   Value="{StaticResource BrushSurface2}"/>
+            <Setter Property="Foreground"   Value="{StaticResource BrushText}"/>
+            <Setter Property="BorderBrush"  Value="{StaticResource BrushBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"      Value="10,7"/>
+            <Setter Property="FontSize"     Value="13"/>
+            <Setter Property="CaretBrush"   Value="{StaticResource BrushAccent}"/>
+        </Style>
+
         <Style TargetType="ComboBox">
-            <Setter Property="Background"      Value="#252731"/>
-            <Setter Property="Foreground"      Value="#E0E2E8"/>
-            <Setter Property="BorderBrush"     Value="#3A3D49"/>
-            <Setter Property="Padding"         Value="8,5"/>
+            <Setter Property="Background"      Value="{StaticResource BrushSurface2}"/>
+            <Setter Property="Foreground"      Value="{StaticResource BrushText}"/>
+            <Setter Property="BorderBrush"     Value="{StaticResource BrushBorder}"/>
+            <Setter Property="Padding"         Value="10,7"/>
             <Setter Property="FontSize"        Value="13"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
-        <!-- Кнопки -->
+
         <Style x:Key="BtnPrimary" TargetType="Button">
-            <Setter Property="Background"  Value="#1E6BD4"/>
+            <Setter Property="Background"  Value="{StaticResource BrushAccent}"/>
             <Setter Property="Foreground"  Value="White"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding"     Value="20,8"/>
+            <Setter Property="Padding"     Value="20,9"/>
             <Setter Property="FontSize"    Value="13"/>
             <Setter Property="FontWeight"  Value="Bold"/>
             <Setter Property="Cursor"      Value="Hand"/>
         </Style>
+
         <Style x:Key="BtnGhost" TargetType="Button">
-            <Setter Property="Background"  Value="Transparent"/>
-            <Setter Property="Foreground"  Value="#B8BAC4"/>
-            <Setter Property="BorderBrush" Value="#3A3D49"/>
+            <Setter Property="Background"  Value="{StaticResource BrushSurface2}"/>
+            <Setter Property="Foreground"  Value="{StaticResource BrushText}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding"     Value="20,8"/>
+            <Setter Property="Padding"     Value="14,8"/>
             <Setter Property="FontSize"    Value="13"/>
             <Setter Property="Cursor"      Value="Hand"/>
         </Style>
+
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="{StaticResource BrushSurface1}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource BrushBorder}"/>
+            <Setter Property="RowBackground" Value="{StaticResource BrushSurface1}"/>
+            <Setter Property="AlternatingRowBackground" Value="{StaticResource BrushSurface2}"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
+            <Setter Property="CanUserResizeRows" Value="False"/>
+            <Setter Property="AutoGenerateColumns" Value="False"/>
+        </Style>
+
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{StaticResource BrushSurface2}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushText2}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+        </Style>
+
+        <Style TargetType="DataGridCell">
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
     </Window.Resources>
 
-    <Border Padding="22">
-        <StackPanel>
-            <!-- Заголовок -->
-            <TextBlock Text="✏  Редактирование коррекции"
-                       FontSize="16" FontWeight="Bold"
-                       Foreground="#88BBFF"
-                       Margin="0,0,0,4"/>
-            <TextBlock Text="Изменения применятся к карточке в основном списке после нажатия «Сохранить»"
-                       FontSize="11" Foreground="#888A95"
-                       Margin="0,0,0,14" TextWrapping="Wrap"/>
+    <Border Margin="16" Style="{StaticResource PanelBorder}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-            <!-- Тип документа + Тип коррекции -->
-            <Grid>
+            <Grid Grid.Row="0" Margin="0,0,0,14">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="Тип документа (из 1С)" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                    <ComboBox ItemsSource="{Binding AllDocumentTypes, RelativeSource={RelativeSource AncestorType=Window}}"
-                              SelectedItem="{Binding DocumentType, Mode=TwoWay}">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Converter={StaticResource DocTypeLabel}}"/>
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
+
+                <StackPanel>
+                    <TextBlock Text="Редактирование коррекции"
+                               FontSize="20" FontWeight="Bold"
+                               Foreground="{StaticResource BrushText}"/>
+                    <TextBlock Text="Проверьте основание, суммы, ФП для тега 1192 и табличную часть возврата."
+                               Style="{StaticResource MutedText}" Margin="0,3,0,0"/>
                 </StackPanel>
-                <StackPanel Grid.Column="2">
-                    <TextBlock Text="Сценарий коррекции" Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                    <ComboBox ItemsSource="{Binding AllScenarios, RelativeSource={RelativeSource AncestorType=Window}}"
-                              SelectedItem="{Binding CorrectionScenario, Mode=TwoWay}">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Converter={StaticResource ScenarioLabel}}"/>
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                </StackPanel>
+
+                <Border Grid.Column="1" Background="#102563EB" CornerRadius="6"
+                        BorderBrush="#332563EB" BorderThickness="1"
+                        Padding="10,5" VerticalAlignment="Top">
+                    <TextBlock Text="{Binding Kind, Converter={StaticResource KindLabel}}"
+                               Foreground="{StaticResource BrushAccent}"
+                               FontSize="12" FontWeight="Bold"/>
+                </Border>
             </Grid>
 
-            <!-- № документа + Дата -->
-            <Grid Margin="0,2,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="№ документа" Style="{StaticResource FieldLabel}"/>
-                    <TextBox Text="{Binding OrderNum, UpdateSourceTrigger=PropertyChanged}"/>
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="0,0,8,0">
+                    <Border Style="{StaticResource SoftPanelBorder}" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Grid.Column="0">
+                                <TextBlock Text="Тип документа" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox x:Name="DocTypeCombo"
+                                          ItemsSource="{Binding AllDocumentTypes, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          SelectedItem="{Binding DocumentType, Mode=TwoWay}"
+                                          SelectionChanged="LayoutMode_SelectionChanged">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Converter={StaticResource DocTypeLabel}}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="0" Grid.Column="2">
+                                <TextBlock Text="Сценарий" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox x:Name="ScenarioCombo"
+                                          ItemsSource="{Binding AllScenarios, RelativeSource={RelativeSource AncestorType=Window}}"
+                                          SelectedItem="{Binding CorrectionScenario, Mode=TwoWay}"
+                                          SelectionChanged="LayoutMode_SelectionChanged">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Converter={StaticResource ScenarioLabel}}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.Column="0">
+                                <TextBlock Text="Номер документа" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding OrderNum, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.Column="2">
+                                <TextBlock Text="Дата документа" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding OrderDate, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="4" Grid.Column="0">
+                                <TextBlock Text="Город / подразделение" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding City, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="4" Grid.Column="2">
+                                <TextBlock Text="Покупатель" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding CustomerName, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="RepairPairPanel" Style="{StaticResource PanelBorder}"
+                            BorderBrush="#66D97706" Margin="0,0,0,12"
+                            Visibility="Collapsed">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,12">
+                                <Border DockPanel.Dock="Left" Width="4" Height="32"
+                                        Background="{StaticResource BrushOrange}" CornerRadius="2"
+                                        Margin="0,0,10,0"/>
+                                <StackPanel>
+                                    <TextBlock Text="Исправительный комплект по реализации"
+                                               FontSize="16" FontWeight="Bold"
+                                               Foreground="{StaticResource BrushOrange}"/>
+                                    <TextBlock Text="XML будет состоять из двух чеков: возврат ошибочного чека с табличной частью и правильная коррекция без табличной части."
+                                               Style="{StaticResource MutedText}"/>
+                                </StackPanel>
+                            </DockPanel>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.18*"/>
+                                    <ColumnDefinition Width="14"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" Style="{StaticResource SoftPanelBorder}">
+                                    <StackPanel>
+                                        <TextBlock Text="1. Возврат старого чека" Style="{StaticResource SectionTitle}"/>
+                                        <TextBlock Text="Операция: sell_refund. Тег 1192 берётся из ФП исходного чека."
+                                                   Style="{StaticResource MutedText}" Margin="0,3,0,12"/>
+
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="12"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Сумма старого чека, ₽" Style="{StaticResource FieldLabel}"/>
+                                                <TextBox Text="{Binding OriginalCheckAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
+                                                         ToolTip="Итоговая сумма возвратного чека"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="ФП старого чека (1192)" Style="{StaticResource FieldLabel}"/>
+                                                <TextBox Text="{Binding OriginalFiscalNumber, UpdateSourceTrigger=PropertyChanged}"
+                                                         ToolTip="Фискальный признак ошибочного чека"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <DockPanel Margin="0,2,0,6">
+                                            <TextBlock Text="Табличная часть возврата"
+                                                       Style="{StaticResource FieldLabel}"
+                                                       DockPanel.Dock="Left"/>
+                                            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                                <Button Content="+ Позиция" Style="{StaticResource BtnGhost}"
+                                                        Padding="10,5" Margin="0,0,6,0"
+                                                        Click="AddRepairItem_Click"/>
+                                                <Button Content="Удалить" Style="{StaticResource BtnGhost}"
+                                                        Padding="10,5"
+                                                        Click="DeleteRepairItem_Click"/>
+                                            </StackPanel>
+                                        </DockPanel>
+
+                                        <DataGrid x:Name="RepairItemsGrid"
+                                                  ItemsSource="{Binding Items}"
+                                                  Height="190"
+                                                  CanUserAddRows="False"
+                                                  CanUserDeleteRows="False"
+                                                  CurrentCellChanged="RepairItemsGrid_CurrentCellChanged">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="Номенклатура"
+                                                                    Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                                                                    Width="*"/>
+                                                <DataGridTextColumn Header="Кол-во"
+                                                                    Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}"
+                                                                    Width="90"/>
+                                                <DataGridTextColumn Header="Сумма, ₽"
+                                                                    Binding="{Binding Sum, UpdateSourceTrigger=PropertyChanged}"
+                                                                    Width="110"/>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+
+                                        <TextBlock x:Name="RefundItemsTotalText"
+                                                   Style="{StaticResource MutedText}"
+                                                   Margin="0,8,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Column="2" Style="{StaticResource SoftPanelBorder}">
+                                    <StackPanel>
+                                        <TextBlock Text="2. Правильная коррекция" Style="{StaticResource SectionTitle}"/>
+                                        <TextBlock Text="Операция: sell_correction. Для ФФД 1.05 табличная часть здесь не формируется."
+                                                   Style="{StaticResource MutedText}" Margin="0,3,0,12"/>
+
+                                        <TextBlock Text="Исправленная сумма, ₽" Style="{StaticResource FieldLabel}"/>
+                                        <TextBox Text="{Binding CorrectAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
+                                                 ToolTip="Сумма реализации после исправления, используется в чеке коррекции"/>
+
+                                        <Grid Margin="0,10,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="12"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Основание: дата" Style="{StaticResource FieldLabel}"/>
+                                                <TextBox Text="{Binding CorrectionDate, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock Text="Основание: номер" Style="{StaticResource FieldLabel}"/>
+                                                <TextBox Text="{Binding CorrectionNumber, UpdateSourceTrigger=PropertyChanged}"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Border Background="{StaticResource BrushSurface1}"
+                                                BorderBrush="{StaticResource BrushBorder}"
+                                                BorderThickness="1" CornerRadius="6"
+                                                Padding="10" Margin="0,12,0,0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="НДС" FontWeight="Bold"
+                                                           Foreground="{StaticResource BrushAccent2}"
+                                                           Margin="0,0,12,0"/>
+                                                <StackPanel Grid.Column="1">
+                                                    <TextBlock>
+                                                        <Run Text="Услуга: "/>
+                                                        <Run Text="{Binding ServiceType, TargetNullValue=''}"/>
+                                                    </TextBlock>
+                                                    <TextBlock>
+                                                        <Run Text="Агент / ставка: "/>
+                                                        <Run Text="{Binding AgentInfo.Name, TargetNullValue='товарная реализация'}"/>
+                                                        <Run Text=" "/>
+                                                        <Run Text="{Binding AgentInfo.VatType, TargetNullValue='vat22'}"/>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource SoftPanelBorder}" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Grid.Column="0">
+                                <TextBlock Text="Сумма правильная (из 1С), ₽" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding CorrectAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
+                                         ToolTip="Сумма документа из 1С — используется в чеке коррекции"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="0" Grid.Column="2">
+                                <TextBlock Text="Сумма в чеке (ошибочная), ₽" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding OriginalCheckAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
+                                         ToolTip="Сумма, которая была в ошибочно пробитом чеке"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.ColumnSpan="3">
+                                <TextBlock Text="ФП исходного чека (тег 1192)" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding OriginalFiscalNumber, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="Фискальный признак ошибочного чека. Для исправительных чеков записывается в тег 1192"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Style="{StaticResource SoftPanelBorder}">
+                        <StackPanel>
+                            <TextBlock Text="Описание / комментарий" Style="{StaticResource FieldLabel}"/>
+                            <TextBox Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}"
+                                     AcceptsReturn="True" TextWrapping="Wrap"
+                                     MinHeight="72"
+                                     VerticalScrollBarVisibility="Auto"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
-                <StackPanel Grid.Column="2">
-                    <TextBlock Text="Дата документа" Style="{StaticResource FieldLabel}"/>
-                    <TextBox Text="{Binding OrderDate, UpdateSourceTrigger=PropertyChanged}"/>
-                </StackPanel>
-            </Grid>
+            </ScrollViewer>
 
-            <!-- Город -->
-            <TextBlock Text="Город / Подразделение" Style="{StaticResource FieldLabel}"/>
-            <TextBox Text="{Binding City, UpdateSourceTrigger=PropertyChanged}"/>
-
-            <!-- Суммы -->
-            <Grid Margin="0,2,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                    <TextBlock Style="{StaticResource FieldLabel}">
-                        <Run Text="Сумма правильная (из 1С), ₽"/>
-                    </TextBlock>
-                    <TextBox Text="{Binding CorrectAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
-                             ToolTip="Сумма документа из 1С — используется в чеке коррекции"/>
-                </StackPanel>
-                <StackPanel Grid.Column="2">
-                    <TextBlock Style="{StaticResource FieldLabel}">
-                        <Run Text="Сумма в чеке (ошибочная), ₽"
-                             Foreground="#FFAA66"/>
-                    </TextBlock>
-                    <TextBox Text="{Binding OriginalCheckAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
-                             ToolTip="Сумма, которая была в ошибочно пробитом чеке (из ОФД/Такском или вручную). Нужно для «Чек большей/меньшей суммой»"/>
-                </StackPanel>
-            </Grid>
-
-            <!-- ФП исходного чека -->
-            <TextBlock Text="ФП исходного чека (тег 1192)" Style="{StaticResource FieldLabel}"/>
-            <TextBox Text="{Binding OriginalFiscalNumber, UpdateSourceTrigger=PropertyChanged}"
-                     ToolTip="Фискальный признак (ФПД) ошибочного чека. Прописывается в тег 1192 для привязки исправительного чека к оригиналу"/>
-
-            <!-- Описание -->
-            <TextBlock Text="Описание / Комментарий" Style="{StaticResource FieldLabel}"/>
-            <TextBox Text="{Binding Notes, UpdateSourceTrigger=PropertyChanged}"
-                     AcceptsReturn="True" TextWrapping="Wrap"
-                     MinHeight="50" MaxHeight="100"
-                     VerticalScrollBarVisibility="Auto"/>
-
-            <!-- Кнопки -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
                 <Button Content="Отмена" Style="{StaticResource BtnGhost}"
                         Margin="0,0,8,0"
                         Click="Cancel_Click"/>
                 <Button Content="Сохранить" Style="{StaticResource BtnPrimary}"
                         Click="Save_Click" IsDefault="True"/>
             </StackPanel>
-        </StackPanel>
+        </Grid>
     </Border>
 </Window>

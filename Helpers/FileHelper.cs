@@ -8,7 +8,7 @@ public static class FileHelper
 {
     private static readonly Regex SafePattern = new(@"[^\w\-]", RegexOptions.Compiled);
 
-    public static string SafeFilename(string s) => SafePattern.Replace(s, "_");
+    public static string SafeFilename(string? s) => SafePattern.Replace(s ?? string.Empty, "_");
 
     public static void OpenFolder(string path)
     {

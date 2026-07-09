@@ -99,6 +99,12 @@ public static class AtolApiService
         PropertyNameCaseInsensitive = true,
     };
 
+    private static readonly JsonSerializerOptions JsonOmitNullOpts = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
     // ── Токен (кэшируем до истечения ~24ч) ───────────────────────────────────
     private static string? _cachedToken;
     private static DateTime _tokenExpiry = DateTime.MinValue;
@@ -175,6 +181,101 @@ public static class AtolApiService
             File.AppendAllText(PunchedJsonPath, json + Environment.NewLine);
         }
         catch (Exception ex) { Log($"LogPunch error: {ex.Message}"); }
+    }
+
+    private static object BuildAgentInfo() => new { type = "commission_agent" };
+
+    private static object? BuildSupplierInfo(ServiceProvider? agent) =>
+        agent is null
+            ? null
+            : new
+            {
+                phones = new[] { agent.Phone },
+                name   = agent.Name,
+                inn    = agent.Inn,
+            };
+
+    private static string GetRealizationNumber(OrderEntry order, string tab, string checkType)
+    {
+        if ((tab == "realization" || checkType is "sell_refund" or "sell_correction" or "buy_correction")
+            && !string.IsNullOrWhiteSpace(order.CorrectionNumber))
+            return order.CorrectionNumber;
+
+        return order.OrderNum;
+    }
+
+    private static (string Type, double Sum) CalcVat(OrderEntry order, string checkType, string tab, double amount)
+    {
+        if (order.IsService)
+        {
+            var serviceVat = order.AgentInfo?.VatType ?? "none";
+            var serviceVatSum = serviceVat == "vat5"
+                ? Math.Round(amount * 5.0 / 100.0, 2)
+                : amount;
+            return (serviceVat, serviceVatSum);
+        }
+
+        if (checkType is "buy_correction" or "buy_refund")
+            return ("none", amount);
+
+        var vatType = tab == "realization" ? "vat22" : "vat122";
+        return (vatType, Math.Round(amount * 22.0 / 122.0, 2));
+    }
+
+    private static object BuildReceiptItem(
+        string name, double quantity, double sum, string paymentMethod,
+        string paymentObject, string vatType, double vatSum, ServiceProvider? agent)
+    {
+        var qty = quantity > 0 ? quantity : 1.0;
+        var price = Math.Round(sum / qty, 2);
+
+        return new
+        {
+            name,
+            price,
+            quantity = qty,
+            sum,
+            payment_method = paymentMethod,
+            payment_object = paymentObject,
+            agent_info = agent is not null ? BuildAgentInfo() : null,
+            supplier_info = BuildSupplierInfo(agent),
+            vat = new { type = vatType, sum = vatSum },
+        };
+    }
+
+    private static List<object> BuildReceiptItems(OrderEntry order, string checkType, string tab)
+    {
+        var items = new List<object>();
+        var paymentMethod = tab == "payment"
+            ? (order.IsService ? "full_prepayment" : "advance")
+            : "full_payment";
+        var paymentObject = tab == "payment"
+            ? "payment"
+            : (order.IsService ? "service" : "commodity");
+        var itemAgent = order.IsService ? order.AgentInfo : null;
+
+        if (tab == "realization" && order.Items.Count > 0)
+        {
+            foreach (var raw in order.Items)
+            {
+                var sum = raw.Sum > 0 ? raw.Sum : order.Amount;
+                var itemName = string.IsNullOrWhiteSpace(raw.Name)
+                    ? $"{(order.IsService ? "Услуга" : "Товар")} по реализации {GetRealizationNumber(order, tab, checkType)}"
+                    : raw.Name;
+                var vat = CalcVat(order, checkType, tab, sum);
+                items.Add(BuildReceiptItem(itemName, raw.Quantity, sum, paymentMethod, paymentObject,
+                    vat.Type, vat.Sum, itemAgent));
+            }
+            return items;
+        }
+
+        var name = tab == "payment"
+            ? $"Аванс от покупателя по заказу № {order.OrderNum}"
+            : $"{(order.IsService ? "Услуга" : "Товар")} по реализации {GetRealizationNumber(order, tab, checkType)}";
+        var totalVat = CalcVat(order, checkType, tab, order.Amount);
+        items.Add(BuildReceiptItem(name, 1.0, order.Amount, paymentMethod, paymentObject,
+            totalVat.Type, totalVat.Sum, itemAgent));
+        return items;
     }
 
     // ── Проверка group_code через фиктивный запрос статуса ──────────────────
@@ -315,40 +416,36 @@ public static class AtolApiService
     // paymentType: cash | card | advance
     public static async Task<AtolPunchResult> PunchOrderAsync(
         AtolCredentials creds, OrderEntry order, string checkType, string paymentType,
-        string tab = "payment")
+        string tab = "payment", string cashierName = "")
     {
         var (token, tokenErr) = await GetTokenAsync(creds);
         if (token is null)
             return new AtolPunchResult { Error = $"Нет токена: {tokenErr}" };
 
-        // НДС
-        string vatType;
-        double vatSum;
-        if (order.IsService)
-        {
-            vatType = order.AgentInfo?.VatType ?? "none";
-            vatSum  = vatType == "vat5"
-                ? Math.Round(order.Amount * 5.0 / 100.0, 2)
-                : order.Amount;
-        }
-        else if (checkType is "buy_correction" or "buy_refund")
-        {
-            vatType = "none";
-            vatSum  = order.Amount;
-        }
-        else
-        {
-            vatType = "vat122";
-            vatSum  = Math.Round(order.Amount * 22.0 / 122.0, 2);
-        }
+        if (string.IsNullOrWhiteSpace(cashierName))
+            cashierName = AppConstants.CashierName;
+
+        if (order.IsService && order.AgentInfo is null)
+            return new AtolPunchResult
+            {
+                Error = $"Для услуги {order.OrderNum} не найден агент/поставщик. Проверьте подразделение и номенклатуру в 1С."
+            };
+
+        var realizationNum = GetRealizationNumber(order, tab, checkType);
+        var receiptItems = BuildReceiptItems(order, checkType, tab);
+        var totalVat = CalcVat(order, checkType, tab, order.Amount);
+        var vatType = totalVat.Type;
+        var vatSum  = totalVat.Sum;
 
         // Тип оплаты: 0=наличные, 1=безналичные, 2=аванс
-        int payType = paymentType switch
-        {
-            "cash"    => 0,
-            "advance" => 2,
-            _         => 1,   // card по умолчанию
-        };
+        int payType = tab == "realization"
+            ? 2
+            : paymentType switch
+            {
+                "cash"    => 0,
+                "advance" => 2,
+                _         => 1,   // card по умолчанию
+            };
 
         string   endpoint;
         object   requestBody;
@@ -385,7 +482,7 @@ public static class AtolApiService
                     },
                     payments = new[] { new { type = payType, sum = order.Amount } },
                     vats     = new[] { new { type = vatType, sum = vatSum } },
-                    cashier  = AppConstants.CashierName,
+                    cashier  = cashierName,
                     // Тег 1086 (additional_user_attribute) запрещён в correction по схеме АТОЛ —
                     // номер реализации идёт только в correction_info.base_number (тег 1179).
                 }
@@ -410,36 +507,17 @@ public static class AtolApiService
                         inn             = AppConstants.InnOrg,
                         payment_address = AppConstants.PaymentAddress,
                     },
-                    items = new[]
-                    {
-                        new
-                        {
-                            // Оплата (аванс от покупателя) → «Платёж»; Реализация → товар/услуга
-                            name           = tab == "payment"
-                                ? $"Аванс от покупателя по заказу № {order.OrderNum}"
-                                : $"{(order.IsService ? "Услуга" : "Товар")} по заказу {order.OrderNum}",
-                            price          = order.Amount,
-                            quantity       = 1.0,
-                            sum            = order.Amount,
-                            // payment_method: оплата → advance/full_prepayment; реализация → full_payment
-                            payment_method = tab == "payment"
-                                ? (order.IsService ? "full_prepayment" : "advance")
-                                : "full_payment",
-                            // payment_object: оплата → payment; реализация → service/commodity
-                            payment_object = tab == "payment"
-                                ? "payment"
-                                : (order.IsService ? "service" : "commodity"),
-                            vat            = new { type = vatType, sum = vatSum },
-                        }
-                    },
+                    items = receiptItems,
                     payments = new[] { new { type = payType, sum = order.Amount } },
                     vats     = new[] { new { type = vatType, sum = vatSum } },
                     total    = order.Amount,
-                    cashier  = AppConstants.CashierName,
-                    // Тег 1086 — доп.реквизит пользователя: номер реализации (для sell_refund).
-                    // Для обычного sell — не добавляем (номер уже в названии позиции).
-                    additional_user_attribute = checkType == "sell_refund" && !string.IsNullOrEmpty(order.OrderNum)
-                        ? new { name = "Номер реализации", value = order.OrderNum }
+                    cashier  = cashierName,
+                    additional_check_props = checkType == "sell_refund" && !string.IsNullOrWhiteSpace(order.OriginalFiscalNumber)
+                        ? order.OriginalFiscalNumber
+                        : null,
+                    additional_user_attribute = (tab == "realization" || checkType == "sell_refund")
+                                                && !string.IsNullOrWhiteSpace(realizationNum)
+                        ? new { name = "Номер реализации", value = realizationNum }
                         : null,
                 }
             };
@@ -447,7 +525,7 @@ public static class AtolApiService
 
         try
         {
-            var json    = JsonSerializer.Serialize(requestBody);
+            var json    = JsonSerializer.Serialize(requestBody, JsonOmitNullOpts);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             var resp    = await Http.PostAsync($"{creds.GroupCode}/{endpoint}?token={token}", content);
             var body    = await resp.Content.ReadAsStringAsync();
@@ -466,11 +544,7 @@ public static class AtolApiService
 
             var poll = await PollStatusAsync(creds.GroupCode, endpoint, result.Uuid, token,
                 $"{checkType}/{order.OrderNum}");
-            // Для коррекций база (base_number) — номер реализации; для обычных — order_num.
-            var realNum = checkType is "sell_correction" or "buy_correction"
-                ? (string.IsNullOrEmpty(order.CorrectionNumber) ? order.OrderNum : order.CorrectionNumber)
-                : order.OrderNum;
-            LogPunch(checkType, order.OrderNum, realNum, order.Amount, poll, AppConstants.CashierName);
+            LogPunch(checkType, order.OrderNum, realizationNum, order.Amount, poll, cashierName);
             return poll;
         }
         catch (Exception ex)

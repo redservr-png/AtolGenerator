@@ -11,6 +11,7 @@ public class OrderEntry
     public string          CorrectionDate   { get; set; } = string.Empty;  // DD.MM.YYYY
     public string          CorrectionNumber { get; set; } = string.Empty;
     public bool            IsService        { get; set; }  // true = Агентский договор → без НДС
+    public string          ServiceType      { get; set; } = string.Empty;  // "доставка" / "сборка" из текста заказа
     public string          City             { get; set; } = string.Empty;  // подразделение из 1С
 
     // ── Поля для исправительных чеков (загружаются из Obsidian-кейсов) ──────────

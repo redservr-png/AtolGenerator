@@ -49,6 +49,7 @@ public class MainViewModel : BaseViewModel
             OnPropertyChanged(nameof(ShowCorrectionPunchHint));
             OnPropertyChanged(nameof(ShowPaymentType));
             OnPropertyChanged(nameof(ShowItemsSection));
+            OnPropertyChanged(nameof(CanPunchSelectedRealizationsViaAtol));
         }
     }
     public bool IsCorrection         => CheckType is "sell_correction" or "buy_correction";
@@ -92,8 +93,13 @@ public class MainViewModel : BaseViewModel
     public CashierInfo SelectedCashier
     {
         get => _selectedCashier;
-        set => Set(ref _selectedCashier, value);
+        set
+        {
+            Set(ref _selectedCashier, value);
+            OnPropertyChanged(nameof(SelectedCashierShort));
+        }
     }
+    public string SelectedCashierShort => SelectedCashier?.ShortName ?? AppConstants.CashierShort;
 
     // ── Merge XML ────────────────────────────────────────────────────────────
     private bool _mergeXml = true;
@@ -209,13 +215,15 @@ public class MainViewModel : BaseViewModel
         get => _showLoadedRealizations;
         set => Set(ref _showLoadedRealizations, value);
     }
-    // Все выбранные строки (для кнопки «Добавить выбранные» — добавляются как Regular для без-чека и как коррекция для с-чеком)
+    // Все выбранные строки из запроса 1С.
     public int SelectedOneCCount        => LoadedRealizations.Count(r => r.IsSelected);
-    // Только без чека — пригодны для пробития через АТОЛ Online API
+    // Только без чека — иногда вручную пробиваются как обычный "Приход" через API.
     public int SelectedNoCheckCount     => LoadedRealizations.Count(r => r.IsSelected && !r.HasCheck);
-    // С пробитым чеком — будут добавлены как коррекции (XML-only)
+    // С пробитым не в день реализации чеком — исправительный комплект XML.
     public int SelectedHasCheckCount    => LoadedRealizations.Count(r => r.IsSelected && r.HasCheck);
     public int TotalOneCLoaded       => LoadedRealizations.Count;
+    public bool CanPunchSelectedRealizationsViaAtol =>
+        SelectedNoCheckCount > 0 && CheckType == "sell";
 
     // ── Results ──────────────────────────────────────────────────────────────
     public ObservableCollection<GenerationResult>    Results         { get; } = new();
@@ -339,6 +347,13 @@ public class MainViewModel : BaseViewModel
     public string ObsidianPasteText { get => _obsidianPasteText; set => Set(ref _obsidianPasteText, value); }
     public string ObsidianStatus    { get => _obsidianStatus;    set => Set(ref _obsidianStatus,    value); }
 
+    private bool _showOfdToolsPanel;
+    public bool ShowOfdToolsPanel
+    {
+        get => _showOfdToolsPanel;
+        set => Set(ref _showOfdToolsPanel, value);
+    }
+
     // ── Commands ─────────────────────────────────────────────────────────────
     public ICommand ParseBulkCommand       { get; }
     public ICommand AddSingleCommand       { get; }
@@ -349,6 +364,7 @@ public class MainViewModel : BaseViewModel
     public ICommand AddItemCommand         { get; }
     public ICommand DeleteItemCommand      { get; }
     public ICommand SwitchTabCommand       { get; }
+    public ICommand OpenWorkspaceCommand   { get; }
     public ICommand ImportExcelCommand     { get; }
     public ICommand ToggleOneCPanelCommand     { get; }
     public ICommand TestOneCCommand            { get; }
@@ -399,13 +415,14 @@ public class MainViewModel : BaseViewModel
         AddItemCommand     = new RelayCommand(_ => CurrentItems.Add(new OrderItemViewModel()));
         DeleteItemCommand  = new RelayCommand(o => { if (o is OrderItemViewModel vm) CurrentItems.Remove(vm); });
         SwitchTabCommand       = new RelayCommand(t => { if (t is string s) Tab = s; });
+        OpenWorkspaceCommand   = new RelayCommand(t => OpenWorkspace(t?.ToString()));
         ImportExcelCommand     = new RelayCommand(_ => ImportExcel());
         ToggleOneCPanelCommand     = new RelayCommand(_ => ShowOneCPanel = !ShowOneCPanel);
         TestOneCCommand            = new AsyncRelayCommand(TestOneCAsync);
         LoadFromOneCCommand        = new AsyncRelayCommand(LoadFromOneCAsync);
         SelectAllOneCCommand       = new RelayCommand(_ => SetAllOneCSelected(true));
         DeselectAllOneCCommand     = new RelayCommand(_ => SetAllOneCSelected(false));
-        AddSelectedToOrdersCommand = new RelayCommand(_ => AddSelectedToOrders());
+        AddSelectedToOrdersCommand = new AsyncRelayCommand(AddSelectedToOrdersAsync);
         ToggleAtolPanelCommand     = new RelayCommand(_ => ShowAtolPanel = !ShowAtolPanel);
         SaveAtolSettingsCommand    = new RelayCommand(_ => SaveAtolSettings());
         TestAtolConnectionCommand  = new AsyncRelayCommand(TestAtolConnectionAsync);
@@ -443,6 +460,66 @@ public class MainViewModel : BaseViewModel
     }
 
     // ── Logic ─────────────────────────────────────────────────────────────────
+
+    private void OpenWorkspace(string? target)
+    {
+        switch (target)
+        {
+            case "refunds":
+                Tab = "payment";
+                CheckType = "sell_refund";
+                ShowOneCPanel = false;
+                ShowObsidianPanel = false;
+                ShowOfdToolsPanel = false;
+                StatusText = "Возвраты по заказам";
+                break;
+
+            case "realizationCorrections":
+                Tab = "realization";
+                CheckType = "sell_correction";
+                ShowOneCPanel = true;
+                ShowObsidianPanel = false;
+                ShowOfdToolsPanel = false;
+                StatusText = "Коррекции реализаций 1С";
+                break;
+
+            case "obsidian":
+                ShowObsidianPanel = true;
+                ShowOfdToolsPanel = false;
+                StatusText = "Кейсы коррекций Obsidian";
+                break;
+
+            case "ofd":
+                Tab = "realization";
+                ShowOneCPanel = true;
+                ShowObsidianPanel = false;
+                ShowOfdToolsPanel = true;
+                StatusText = "XML + ОФД → 1С";
+                break;
+
+            case "atol":
+                ShowAtolPanel = true;
+                ShowOfdToolsPanel = false;
+                StatusText = "Настройки АТОЛ Online";
+                break;
+
+            case "payment":
+                Tab = "payment";
+                CheckType = "sell";
+                ShowOneCPanel = false;
+                ShowOfdToolsPanel = false;
+                StatusText = "Оплаты";
+                break;
+
+            case "realization":
+                Tab = "realization";
+                CheckType = "sell";
+                ShowOneCPanel = false;
+                ShowOfdToolsPanel = false;
+                StatusText = "Реализации";
+                break;
+        }
+    }
 
     private void RefreshCities()
     {
@@ -514,6 +591,7 @@ public class MainViewModel : BaseViewModel
             Amount       = amt,
             CustomerName = SingleCustomer.Trim(),
             AgentInfo    = IsServiceProvider ? SelectedAgent : null,
+            ServiceType  = IsServiceProvider ? SelectedServiceType : string.Empty,
             Items        = CurrentItems.Select(i => i.ToModel()).ToList(),
         };
         ApplyCorrectionFields(order);
@@ -1113,11 +1191,17 @@ public class MainViewModel : BaseViewModel
         OrderDate            = s.OrderDate,
         Amount               = s.Amount,
         CustomerName         = s.CustomerName,
-        Items                = s.Items.ToList(),
+        Items                = s.Items.Select(i => new OrderItem
+        {
+            Name     = i.Name,
+            Quantity = i.Quantity,
+            Sum      = i.Sum,
+        }).ToList(),
         AgentInfo            = s.AgentInfo,
         CorrectionDate       = s.CorrectionDate,
         CorrectionNumber     = s.CorrectionNumber,
         IsService            = s.IsService,
+        ServiceType          = s.ServiceType,
         City                 = s.City,
         Kind                 = s.Kind,
         DocumentType         = s.DocumentType,
@@ -1137,11 +1221,17 @@ public class MainViewModel : BaseViewModel
         to.OrderDate            = from.OrderDate;
         to.Amount               = from.Amount;
         to.CustomerName         = from.CustomerName;
-        to.Items                = from.Items;
+        to.Items                = from.Items.Select(i => new OrderItem
+        {
+            Name     = i.Name,
+            Quantity = i.Quantity,
+            Sum      = i.Sum,
+        }).ToList();
         to.AgentInfo            = from.AgentInfo;
         to.CorrectionDate       = from.CorrectionDate;
         to.CorrectionNumber     = from.CorrectionNumber;
         to.IsService            = from.IsService;
+        to.ServiceType          = from.ServiceType;
         to.City                 = from.City;
         to.Kind                 = from.Kind;
         to.DocumentType         = from.DocumentType;
@@ -1210,17 +1300,168 @@ public class MainViewModel : BaseViewModel
         }
     }
 
+    private async Task<List<string>> PrepareOneCRealizationsAsync(List<OneCRealizationViewModel> rows)
+    {
+        if (rows.Count == 0) return new List<string>();
+
+        var settings = BuildOneCSettings();
+        return await Task.Run(() =>
+        {
+            var errors = new List<string>();
+            foreach (var row in rows)
+            {
+                try
+                {
+                    OneCService.EnrichRealizationForReceipt(settings, row.Source);
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{row.DocNumber}: не удалось загрузить номенклатуру из 1С ({ex.Message})");
+                    continue;
+                }
+
+                if (!row.Source.IsService) continue;
+
+                if (string.IsNullOrWhiteSpace(row.Source.ServiceType))
+                {
+                    errors.Add($"{row.DocNumber}: не определена услуга по номенклатуре (доставка/сборка)");
+                    continue;
+                }
+
+                if (row.Source.AgentInfo is null)
+                {
+                    var city = string.IsNullOrWhiteSpace(row.City) ? "подразделение не заполнено" : row.City;
+                    errors.Add($"{row.DocNumber}: для услуги «{row.Source.ServiceType}» и подразделения «{city}» не найдена ставка НДС");
+                }
+            }
+
+            return errors;
+        });
+    }
+
+    private static bool IsRealizationVatReady(OneCRealizationViewModel row) =>
+        !row.Source.IsService ||
+        (!string.IsNullOrWhiteSpace(row.Source.ServiceType) && row.Source.AgentInfo is not null);
+
+    private void ShowRealizationVatErrors(List<string> errors, bool stopped)
+    {
+        var title = stopped
+            ? "Не удалось определить ставку НДС для выбранных агентских реализаций.\n\n"
+            : "Часть агентских реализаций пропущена: не удалось определить ставку НДС.\n\n";
+        var text = title +
+                   string.Join("\n", errors.Take(15));
+        if (errors.Count > 15)
+            text += $"\n...и еще {errors.Count - 15}";
+
+        AtolStatus = stopped
+            ? "Операция остановлена: не определена услуга/ставка НДС"
+            : "Часть реализаций пропущена: не определена услуга/ставка НДС";
+        StatusText = AtolStatus;
+        ShowToast(stopped ? "Не определена услуга/ставка НДС" : "Часть строк пропущена", true);
+        MessageBox.Show(text, "Проверка реализаций из 1С",
+            MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    private static OrderEntry BuildCorrectionOrderFromRealization(OneCRealizationViewModel r)
+    {
+        var entry = new OrderEntry
+        {
+            OrderNum         = r.DocNumber,
+            OrderDate        = r.DocDate,
+            Amount           = r.Amount,
+            CustomerName     = r.CustomerName,
+            AgentInfo        = r.Source.AgentInfo,
+            CorrectionDate   = r.DocDate,
+            CorrectionNumber = r.DocNumber,
+            IsService        = r.IsService,
+            ServiceType      = r.Source.ServiceType,
+            City             = r.City,
+            DocumentType     = SourceDocumentType.Realization,
+            CorrectAmount    = r.Amount,
+            Items            = r.Source.Items.Select(i => new OrderItem
+            {
+                Name     = i.Name,
+                Quantity = i.Quantity,
+                Sum      = i.Sum,
+            }).ToList(),
+            Notes            = string.IsNullOrWhiteSpace(r.OrderNumber)
+            ? "Реализация из 1С без фискального чека — формируется чек коррекции"
+            : $"Реализация из 1С без фискального чека — заказ покупателя {r.OrderNumber}",
+        };
+
+        if (r.HasCheck)
+        {
+            entry.OriginalFiscalNumber = r.FiscalNumber;
+            entry.OriginalCheckAmount  = r.Amount;
+            entry.CorrectionScenario   = CorrectionScenario.WrongDate;
+            entry.Kind                 = OrderKind.RefundCorrectionPair;
+            entry.Notes                = string.IsNullOrWhiteSpace(r.OrderNumber)
+                ? "Реализация из 1С пробита не в день реализации — исправительный комплект"
+                : $"Реализация из 1С пробита не в день реализации — заказ покупателя {r.OrderNumber}";
+        }
+        else
+        {
+            entry.CorrectionScenario = CorrectionScenario.CheckNotPunched;
+            entry.Kind               = OrderKind.SingleCorrection;
+        }
+
+        return entry;
+    }
+
+    private static OrderEntry BuildApiSellOrderFromRealization(OneCRealizationViewModel r) => new()
+    {
+        OrderNum         = string.IsNullOrWhiteSpace(r.OrderNumber) ? r.DocNumber : r.OrderNumber,
+        OrderDate        = string.IsNullOrWhiteSpace(r.OrderDate) ? r.DocDate : r.OrderDate,
+        Amount           = r.Amount,
+        CustomerName     = r.CustomerName,
+        Items            = r.Source.Items.Select(i => new OrderItem
+        {
+            Name     = i.Name,
+            Quantity = i.Quantity,
+            Sum      = i.Sum,
+        }).ToList(),
+        AgentInfo        = r.Source.AgentInfo,
+        CorrectionDate   = r.DocDate,
+        CorrectionNumber = r.DocNumber,
+        IsService        = r.IsService,
+        ServiceType      = r.Source.ServiceType,
+        City             = r.City,
+        DocumentType     = SourceDocumentType.Realization,
+    };
+
     private async Task PunchViaAtolAsync()
     {
+        if (CheckType != "sell")
+        {
+            ShowToast("Через API по реализациям доступен только тип «Приход»", true);
+            return;
+        }
+
         var rows = LoadedRealizations
             .Where(r => r.IsSelected && !r.HasCheck)
             .ToList();
 
         if (rows.Count == 0)
-        { ShowToast("Нет выбранных реализаций для пробития", true); return; }
+        { ShowToast("Нет выбранных реализаций без чека для пробития прихода", true); return; }
 
         if (string.IsNullOrWhiteSpace(AtolGroupCode) || string.IsNullOrWhiteSpace(AtolLogin))
         { ShowToast("Заполните настройки АТОЛ (кнопка 🔑 в шапке)", true); return; }
+
+        AtolStatus = $"Догружаем ставки НДС из 1С для {rows.Count} реализаций…";
+        StatusText = AtolStatus;
+        var errors = await PrepareOneCRealizationsAsync(rows);
+        if (errors.Count > 0)
+        {
+            ShowRealizationVatErrors(errors, stopped: false);
+        }
+
+        rows = rows.Where(IsRealizationVatReady).ToList();
+        if (rows.Count == 0)
+        {
+            AtolStatus = "Пробитие остановлено: нет реализаций с определенной ставкой НДС";
+            StatusText = AtolStatus;
+            return;
+        }
 
         var creds = new AtolCredentials
         {
@@ -1229,37 +1470,46 @@ public class MainViewModel : BaseViewModel
             GroupCode = AtolGroupCode.Trim(),
         };
 
-        AtolStatus = $"Пробиваем возвраты 0 из {rows.Count}… (коррекция — через XML)";
+        AtolStatus = $"Пробиваем приходы по реализациям 0 из {rows.Count}...";
+        var errorsText = new System.Text.StringBuilder();
         int ok = 0, fail = 0;
 
         for (int i = 0; i < rows.Count; i++)
         {
             var row = rows[i];
-            AtolStatus = $"Возврат {i + 1}/{rows.Count}: {row.DocNumber}…";
+            AtolStatus = $"Пробиваем приход {i + 1}/{rows.Count}: {row.DocNumber}...";
             row.PunchStatus = "⏳";
 
-            var result = await AtolApiService.PunchCorrectionAsync(creds, row.Source,
+            var order = BuildApiSellOrderFromRealization(row);
+            var result = await AtolApiService.PunchOrderAsync(creds, order, "sell", "advance", "realization",
                 SelectedCashier?.FullName ?? AppConstants.CashierName);
 
             if (result.Success)
             {
-                row.PunchOk     = true;
-                row.PunchFail   = false;
-                row.PunchStatus = $"✅ возврат {result.Uuid?[..8]}…";
                 ok++;
+                row.PunchOk = true;
+                row.PunchFail = false;
+                row.PunchStatus = $"✅ {result.Uuid?[..8]}...";
+                row.MarkAsPunched(result);
+                OnPropertyChanged(nameof(SelectedNoCheckCount));
+                OnPropertyChanged(nameof(SelectedHasCheckCount));
+                OnPropertyChanged(nameof(CanPunchSelectedRealizationsViaAtol));
             }
             else
             {
-                row.PunchOk     = false;
-                row.PunchFail   = true;
-                row.PunchStatus = $"❌ {result.Error}";
                 fail++;
+                row.PunchOk = false;
+                row.PunchFail = true;
+                row.PunchStatus = $"❌ {result.Error}";
+                errorsText.AppendLine($"❌ {row.DocNumber}: {result.Error}");
             }
         }
 
-        AtolStatus = $"Готово: возвратов {ok}, ошибок {fail}. Коррекцию пробейте вручную через сформированные XML.";
-        ShowToast($"Возвраты через АТОЛ: {ok}" + (fail > 0 ? $", ошибок: {fail}" : ""),
-                  fail > 0 && ok == 0);
+        AtolStatus = $"Готово: приходов пробито {ok}, ошибок {fail}";
+        AtolLastError = errorsText.ToString().TrimEnd();
+        StatusText = "Готов к работе";
+        ShowToast($"АТОЛ Online: пробито {ok} из {rows.Count}" + (fail > 0 ? $", ошибок {fail}" : ""),
+            fail > 0 && ok == 0);
     }
 
     // ── Пробить заказы из основного списка ───────────────────────────────────
@@ -1291,7 +1541,8 @@ public class MainViewModel : BaseViewModel
             AtolStatus = $"Пробиваем {i + 1} из {orders.Count}: {order.OrderNum}...";
             StatusText = AtolStatus;
 
-            var result = await AtolApiService.PunchOrderAsync(creds, order, CheckType, PaymentType, Tab);
+            var result = await AtolApiService.PunchOrderAsync(creds, order, CheckType, PaymentType, Tab,
+                SelectedCashier?.FullName ?? AppConstants.CashierName);
 
             if (result.Success)
             {
@@ -1373,19 +1624,22 @@ public class MainViewModel : BaseViewModel
         {
             var vm = new OneCRealizationViewModel(r);
             // Все строки выбираются по умолчанию.
-            // Строки без чека добавятся как Regular (для пробития sell),
-            // строки с пробитым чеком — как коррекции (для пары refund+correction).
+            // Реализации из 1С без фискального чека формируются как XML чеков коррекции.
             vm.PropertyChanged += (_, _) =>
             {
                 OnPropertyChanged(nameof(SelectedOneCCount));
                 OnPropertyChanged(nameof(SelectedNoCheckCount));
                 OnPropertyChanged(nameof(SelectedHasCheckCount));
+                OnPropertyChanged(nameof(CanPunchSelectedRealizationsViaAtol));
             };
             LoadedRealizations.Add(vm);
         }
 
         ShowLoadedRealizations = LoadedRealizations.Count > 0;
         OnPropertyChanged(nameof(SelectedOneCCount));
+        OnPropertyChanged(nameof(SelectedNoCheckCount));
+        OnPropertyChanged(nameof(SelectedHasCheckCount));
+        OnPropertyChanged(nameof(CanPunchSelectedRealizationsViaAtol));
         OnPropertyChanged(nameof(TotalOneCLoaded));
 
         var withCheck    = realizations.Count(r => r.HasCheck);
@@ -1402,58 +1656,54 @@ public class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(SelectedOneCCount));
         OnPropertyChanged(nameof(SelectedNoCheckCount));
         OnPropertyChanged(nameof(SelectedHasCheckCount));
+        OnPropertyChanged(nameof(CanPunchSelectedRealizationsViaAtol));
     }
 
-    private void AddSelectedToOrders()
+    private async Task AddSelectedToOrdersAsync()
     {
-        var existing      = new HashSet<string>(Orders.Select(o => o.OrderNum));
-        int addedRegular  = 0;
+        var selected = LoadedRealizations.Where(r => r.IsSelected).ToList();
+        if (selected.Count == 0)
+        {
+            ShowToast("Нет выбранных реализаций для добавления", true);
+            return;
+        }
+
+        OneCStatus = $"Догружаем ставки НДС из 1С для {selected.Count} реализаций…";
+        var errors = await PrepareOneCRealizationsAsync(selected);
+        if (errors.Count > 0)
+        {
+            ShowRealizationVatErrors(errors, stopped: false);
+        }
+
+        selected = selected.Where(IsRealizationVatReady).ToList();
+        if (selected.Count == 0)
+        {
+            OneCStatus = "Добавление остановлено: нет реализаций с определенной ставкой НДС";
+            return;
+        }
+
+        var existing = new HashSet<string>(Orders.Select(o =>
+            !string.IsNullOrWhiteSpace(o.CorrectionNumber) ? o.CorrectionNumber : o.OrderNum));
         int addedCorrect  = 0;
 
-        foreach (var r in LoadedRealizations.Where(r => r.IsSelected))
+        foreach (var r in selected)
         {
-            var key = string.IsNullOrEmpty(r.OrderNumber) ? r.DocNumber : r.OrderNumber;
+            var key = r.DocNumber;
             if (existing.Contains(key)) continue;
 
-            var entry = new OrderEntry
-            {
-                OrderNum         = r.OrderNumber,
-                OrderDate        = r.OrderDate,
-                Amount           = r.Amount,
-                CustomerName     = r.CustomerName,
-                CorrectionDate   = r.DocDate,
-                CorrectionNumber = r.DocNumber,
-                IsService        = r.IsService,
-                City             = r.City,
-            };
-
-            // Если у реализации уже пробит чек — добавляем как исправительный кейс.
-            // Сценарий не определяем автоматически (нет описания, как в Obsidian) —
-            // пользователь выберет вручную через combobox в карточке.
-            if (r.HasCheck)
-            {
-                entry.DocumentType         = SourceDocumentType.Realization;
-                entry.OriginalFiscalNumber = r.FiscalNumber ?? string.Empty;
-                entry.OriginalCheckAmount  = r.Amount;
-                entry.CorrectAmount        = r.Amount;
-                entry.CorrectionScenario   = CorrectionScenario.Unknown;
-                entry.Kind                 = OrderKind.RefundCorrectionPair;
-                entry.Notes                = "Реализация с пробитым чеком из 1С — выберите сценарий коррекции";
-                addedCorrect++;
-            }
-            else
-            {
-                addedRegular++;
-            }
+            var entry = BuildCorrectionOrderFromRealization(r);
+            addedCorrect++;
 
             Orders.Add(entry);
             existing.Add(key);
         }
 
         // OrderCount / CanPunchOrdersViaAtol обновятся через Orders.CollectionChanged
-        var total = addedRegular + addedCorrect;
-        if (total > 0)
-            ShowToast($"Добавлено: {addedRegular} обычных + {addedCorrect} коррекций", false);
+        OneCStatus = addedCorrect > 0
+            ? $"Добавлено в список коррекций: {addedCorrect}"
+            : "Нет новых реализаций для добавления";
+        if (addedCorrect > 0)
+            ShowToast($"Добавлено коррекций: {addedCorrect}", false);
         else
             ShowToast("Нет новых реализаций для добавления", true);
     }
@@ -1491,7 +1741,15 @@ public class MainViewModel : BaseViewModel
             return;
         }
 
+        ShowGenerationResults(results);
+    }
+
+    public int OrderCount => Orders.Count;
+
+    private void ShowGenerationResults(List<GenerationResult> results)
+    {
         SelectedEntry = null;
+        Results.Clear();
         AllResultEntries.Clear();
         foreach (var r in results)
         {
@@ -1501,19 +1759,19 @@ public class MainViewModel : BaseViewModel
         ShowResults = AllResultEntries.Count > 0;
         StatusText  = $"Сформировано {Results.Count} чек(ов)";
 
-        // Авто-выбор первого → предпросмотр
         if (AllResultEntries.Count > 0)
             SelectedEntry = AllResultEntries[0];
 
         var xmlCount  = Results.Select(r => r.XmlPath).Where(p => !string.IsNullOrEmpty(p)).Distinct().Count();
-        var docxCount = Results.Count(r => r.HasDocx);
+        var docxCount = Results.Select(r => r.DocxPath)
+            .Where(p => !string.IsNullOrEmpty(p))
+            .Distinct()
+            .Count();
         var toastMsg  = docxCount > 0
             ? $"Готово! Создано {xmlCount} XML + {docxCount} DOCX"
             : $"Готово! Создано {xmlCount} XML";
         ShowToast(toastMsg, false);
     }
-
-    public int OrderCount => Orders.Count;
 
     private System.Windows.Threading.DispatcherTimer? _toastTimer;
 

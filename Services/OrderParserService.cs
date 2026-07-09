@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using AtolGenerator.Constants;
 using AtolGenerator.Models;
 
@@ -105,7 +105,6 @@ public static class OrderParserService
                         string.Equals(p.Service, serviceType, StringComparison.OrdinalIgnoreCase) &&
                         city.Contains(p.City, StringComparison.OrdinalIgnoreCase));
             }
-
             // ФИО покупателя — пробуем несколько паттернов
             var customerName = string.Empty;
             var mFio = RxFio1.Match(part);
@@ -134,6 +133,7 @@ public static class OrderParserService
                 Amount       = amount,
                 CustomerName = customerName,
                 IsService    = isService,
+                ServiceType  = serviceType,
                 City         = city,
                 AgentInfo    = agent,
             });

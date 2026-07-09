@@ -100,6 +100,15 @@ public static class CorrectionGeneratorService
     /// <summary>7) Чек пробит другой датой → sell_correction с правильной base_date.</summary>
     private static List<CheckData> BuildWrongDate(OrderEntry o, GenerationParams p)
     {
+        if (o.DocumentType == SourceDocumentType.Realization &&
+            !string.IsNullOrWhiteSpace(o.OriginalFiscalNumber))
+        {
+            var amount = o.CorrectAmount ?? o.Amount;
+            var refund = MakeRefundCheckData(o, p, amount: o.OriginalCheckAmount ?? amount, includeOriginalFp: true);
+            var correction = MakeCorrectionCheckData(o, p, amount: amount, isExpense: false);
+            return new List<CheckData> { refund, correction };
+        }
+
         var corr = MakeCorrectionCheckData(o, p, amount: o.Amount, isExpense: false);
         return new List<CheckData> { corr };
     }
@@ -122,7 +131,7 @@ public static class CorrectionGeneratorService
         var paymentType = ResolvePaymentType(o, p, paymentIsCashOverride);
         bool isService  = ResolveIsService(o);
         string tab      = ResolveTab(o);
-        var items       = BuildOneItem(o, amount, isService, tab, operationKind: "refund");
+        var items       = BuildItems(o, amount, isService, tab, operationKind: "refund");
 
         return new CheckData
         {
@@ -139,7 +148,9 @@ public static class CorrectionGeneratorService
             CashierShort         = p.Cashier.ShortName,
             AdditionalCheckProps = includeOriginalFp ? (o.OriginalFiscalNumber ?? string.Empty) : string.Empty,
             UserAttributeName    = "Номер реализации",
-            UserAttributeValue   = !string.IsNullOrEmpty(o.OrderNum) ? o.OrderNum : string.Empty,
+            UserAttributeValue   = !string.IsNullOrEmpty(o.CorrectionNumber)
+                ? o.CorrectionNumber
+                : (!string.IsNullOrEmpty(o.OrderNum) ? o.OrderNum : string.Empty),
         };
     }
 
@@ -153,9 +164,16 @@ public static class CorrectionGeneratorService
         bool isService  = ResolveIsService(o);
         string tab      = ResolveTab(o);
 
-        var baseNumber = !string.IsNullOrEmpty(o.OrderNum) ? o.OrderNum : "б/н";
-        var baseDate   = !string.IsNullOrEmpty(o.OrderDate)
-            ? ToIsoDateOrToday(o.OrderDate.Split(' ').FirstOrDefault() ?? string.Empty)
+        var baseNumber = !string.IsNullOrEmpty(o.CorrectionNumber)
+            ? o.CorrectionNumber
+            : (!string.IsNullOrEmpty(o.OrderNum) ? o.OrderNum : "б/н");
+        var rawBaseDate = !string.IsNullOrEmpty(o.CorrectionDate)
+            ? o.CorrectionDate
+            : (!string.IsNullOrEmpty(o.OrderDate)
+                ? o.OrderDate.Split(' ').FirstOrDefault() ?? string.Empty
+                : string.Empty);
+        var baseDate = !string.IsNullOrEmpty(rawBaseDate)
+            ? ToIsoDateOrToday(rawBaseDate)
             : DateTime.Today.ToString("yyyy-MM-dd");
 
         return new CheckData
@@ -171,6 +189,7 @@ public static class CorrectionGeneratorService
             IsService            = isService,
             CorrectionBaseDate   = baseDate,
             CorrectionBaseNumber = baseNumber,
+            AdditionalCheckProps = o.OriginalFiscalNumber ?? string.Empty,
             CashierName          = p.Cashier.FullName,
             CashierShort         = p.Cashier.ShortName,
         };
@@ -182,7 +201,7 @@ public static class CorrectionGeneratorService
         var paymentType = ResolvePaymentType(o, p, null);
         bool isService  = ResolveIsService(o);
         string tab      = ResolveTab(o);
-        var items       = BuildOneItem(o, amount, isService, tab, operationKind: "sell");
+        var items       = BuildItems(o, amount, isService, tab, operationKind: "sell");
 
         return new CheckData
         {
@@ -198,11 +217,49 @@ public static class CorrectionGeneratorService
             CashierName          = p.Cashier.FullName,
             CashierShort         = p.Cashier.ShortName,
             UserAttributeName    = "Номер реализации",
-            UserAttributeValue   = !string.IsNullOrEmpty(o.OrderNum) ? o.OrderNum : string.Empty,
+            UserAttributeValue   = !string.IsNullOrEmpty(o.CorrectionNumber)
+                ? o.CorrectionNumber
+                : (!string.IsNullOrEmpty(o.OrderNum) ? o.OrderNum : string.Empty),
         };
     }
 
     // ── Common builders ────────────────────────────────────────────────────────
+
+    private static List<CheckItem> BuildItems(OrderEntry o, double amount, bool isService, string tab, string operationKind)
+    {
+        if (tab == "realization" && o.Items.Count > 0)
+            return BuildRealizationItems(o, isService);
+
+        return BuildOneItem(o, amount, isService, tab, operationKind);
+    }
+
+    private static List<CheckItem> BuildRealizationItems(OrderEntry o, bool isService)
+    {
+        var result = new List<CheckItem>();
+        var vatType = isService ? (o.AgentInfo?.VatType ?? "none") : "vat22";
+
+        foreach (var raw in o.Items.Where(i => !string.IsNullOrWhiteSpace(i.Name) && i.Sum > 0))
+        {
+            var qty = raw.Quantity > 0 ? raw.Quantity : 1;
+            var sum = raw.Sum;
+            result.Add(new CheckItem
+            {
+                Name          = raw.Name.Trim(),
+                Price         = Math.Round(sum / qty, 2),
+                Quantity      = qty,
+                Sum           = sum,
+                PaymentMethod = "full_payment",
+                PaymentObject = isService ? "service" : "commodity",
+                VatType       = vatType,
+                VatSum        = CalcVat(sum, vatType),
+                IsService     = isService,
+            });
+        }
+
+        return result.Count > 0
+            ? result
+            : BuildOneItem(o, o.OriginalCheckAmount ?? o.CorrectAmount ?? o.Amount, isService, "realization", "refund");
+    }
 
     private static List<CheckItem> BuildOneItem(OrderEntry o, double amount, bool isService, string tab, string operationKind)
     {
@@ -248,6 +305,15 @@ public static class CorrectionGeneratorService
             }
         };
     }
+
+    private static double CalcVat(double amount, string vatType) => vatType switch
+    {
+        "vat5"   => Math.Round(amount * 5.0  / 100.0, 2),
+        "vat105" => Math.Round(amount * 5.0  / 105.0, 2),
+        "vat22"  => Math.Round(amount * 22.0 / 122.0, 2),
+        "vat122" => Math.Round(amount * 22.0 / 122.0, 2),
+        _        => amount,
+    };
 
     private static string ResolvePaymentType(OrderEntry o, GenerationParams p, bool? cashOverride)
     {

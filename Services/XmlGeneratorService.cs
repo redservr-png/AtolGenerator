@@ -167,6 +167,9 @@ public static class XmlGeneratorService
             new XElement("cashier", c.CashierName)
         );
 
+        if (!string.IsNullOrWhiteSpace(c.AdditionalCheckProps))
+            correction.Add(new XElement("additional_check_props", c.AdditionalCheckProps));
+
         return correction;
     }
 
