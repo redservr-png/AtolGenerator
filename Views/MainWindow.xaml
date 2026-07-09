@@ -135,7 +135,7 @@
           <TextBlock FontSize="13" FontWeight="SemiBold"
                      Foreground="#F8FAFC" Margin="0,3,0,14">
             <Run Text="Кассир: "/>
-            <Run Text="{Binding SelectedCashierShort}"/>
+            <Run Text="{Binding SelectedCashierShort, Mode=OneWay}"/>
           </TextBlock>
           <TextBlock Text="Готово к работе" FontSize="12"
                      Foreground="#7DD3C7"/>
