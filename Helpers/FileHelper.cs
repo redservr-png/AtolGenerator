@@ -22,4 +22,10 @@ public static class FileHelper
 
     public static string OutputDir =>
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "atol_output");
+
+    public static string TaxcomReportDir =>
+        Path.Combine(OutputDir, "reports", "taxcom");
+
+    public static string AtolReportDir =>
+        Path.Combine(OutputDir, "reports", "atol");
 }

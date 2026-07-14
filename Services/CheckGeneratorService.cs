@@ -19,6 +19,7 @@ public static class CheckGeneratorService
         foreach (var order in p.Orders)
         {
             ValidateCorrectionVat(order);
+            ValidateRepairPairItems(order);
 
             // ── Исправительные кейсы из Obsidian: делегируем спецсервису ──
             if (order.IsCorrection)
@@ -27,12 +28,16 @@ public static class CheckGeneratorService
                 var orderResults = new List<GenerationResult>();
                 foreach (var cd in checks)
                 {
+                    if (string.IsNullOrWhiteSpace(cd.ExternalId))
+                        cd.ExternalId = Guid.NewGuid().ToString("N");
                     var tsC      = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")[..17];
                     var orderNumC = order.OrderNum ?? string.Empty;
                     var safeNumC = FileHelper.SafeFilename(orderNumC);
                     var baseNmC  = $"{tsC}_{safeNumC}_{cd.OperationType}";
                     orderResults.Add(new GenerationResult
                     {
+                        ObsidianCaseId = order.ObsidianCaseId,
+                        ExternalId = cd.ExternalId,
                         OrderNum  = orderNumC,
                         Amount    = cd.Amount,
                         CheckData = cd,
@@ -67,6 +72,7 @@ public static class CheckGeneratorService
                 if (p.Tab == "payment")
                 {
                     bool isService = orderIsService;
+                    var serviceVatType = order.IsOwnService ? "vat122" : "none";
                     var name = $"Аванс от покупателя по заказу № {order.OrderNum}";
                     if (!string.IsNullOrEmpty(order.OrderDate))
                         name += $" от {order.OrderDate}";
@@ -78,8 +84,8 @@ public static class CheckGeneratorService
                         Sum           = amount,
                         PaymentMethod = isService ? "full_prepayment" : "advance",
                         PaymentObject = "payment",
-                        VatType       = isService ? "none" : "vat122",
-                        VatSum        = isService ? amount : CalcVat122(amount),
+                        VatType       = isService ? serviceVatType : "vat122",
+                        VatSum        = isService ? CalcServiceVat(amount, serviceVatType) : CalcVat122(amount),
                         IsService     = isService,
                     });
                 }
@@ -103,7 +109,8 @@ public static class CheckGeneratorService
                         var s     = raw.Sum;
                         var price = Math.Round(s / qty, 2);
                         bool isService = orderIsService;
-                        var serviceVatType = agentInfo?.VatType ?? "none";
+                        var serviceVatType = ServiceClassificationService.ResolveVatType(
+                            order.IsOwnService, agentInfo, "realization");
                         items.Add(new CheckItem
                         {
                             Name          = raw.Name,
@@ -120,9 +127,10 @@ public static class CheckGeneratorService
                 }
             }
 
-            // CheckVatType для итога чека: услуга/агент → none; оплата → vat122; реализация → vat22
+            // Собственная услуга использует vat122 для аванса и vat22 для реализации.
             var checkVatType = orderIsService
-                             ? (p.Tab == "realization" ? agentInfo?.VatType ?? "none" : "none")
+                             ? ServiceClassificationService.ResolveVatType(
+                                 order.IsOwnService, agentInfo, p.Tab)
                              : p.Tab == "payment" ? "vat122" : "vat22";
 
             // ── Build CheckData for XML ──
@@ -173,11 +181,15 @@ public static class CheckGeneratorService
 
             var result = new GenerationResult
             {
+                ObsidianCaseId = order.ObsidianCaseId,
                 OrderNum  = orderNum,
                 Amount    = amount,
                 CheckData = checkData,
                 BaseName  = baseName,
             };
+            if (string.IsNullOrWhiteSpace(checkData.ExternalId))
+                checkData.ExternalId = Guid.NewGuid().ToString("N");
+            result.ExternalId = checkData.ExternalId;
 
             // ── DOCX (только для коррекций, всегда отдельный файл) ──
             if (isCorrection)
@@ -330,8 +342,13 @@ public static class CheckGeneratorService
     private static double CalcVat122(double amount) => Math.Round(amount * 22.0 / 122.0, 2);
     // НДС 22% — сумма уже включает налог в цену (22/122)
     private static double CalcVat22(double amount)  => Math.Round(amount * 22.0 / 122.0, 2);
-    private static double CalcServiceVat(double amount, string vatType) =>
-        vatType == "vat5" ? Math.Round(amount * 5.0 / 100.0, 2) : amount;
+    private static double CalcServiceVat(double amount, string vatType) => vatType switch
+    {
+        "vat5" => Math.Round(amount * 5.0 / 100.0, 2),
+        "vat105" => Math.Round(amount * 5.0 / 105.0, 2),
+        "vat22" or "vat122" => Math.Round(amount * 22.0 / 122.0, 2),
+        _ => amount,
+    };
 
     private static void ValidateCorrectionVat(OrderEntry order)
     {
@@ -348,9 +365,35 @@ public static class CheckGeneratorService
             throw new InvalidOperationException(
                 $"{docNum}: не определена услуга по номенклатуре (доставка/сборка), XML коррекции не сформирован.");
 
-        if (order.AgentInfo is null)
+        if (order.AgentInfo is null && !order.IsOwnService)
             throw new InvalidOperationException(
                 $"{docNum}: не найдена ставка НДС для услуги «{order.ServiceType}» и подразделения «{order.City}», XML коррекции не сформирован.");
+    }
+
+    private static void ValidateRepairPairItems(OrderEntry order)
+    {
+        var plannedPair = !string.IsNullOrWhiteSpace(order.PlannedReverseOperation) &&
+                          !string.IsNullOrWhiteSpace(order.PlannedCorrectOperation);
+        if (!order.IsCorrection ||
+            order.DocumentType != SourceDocumentType.Realization ||
+            (!plannedPair && order.CorrectionScenario != CorrectionScenario.WrongDate) ||
+            string.IsNullOrWhiteSpace(order.OriginalFiscalNumber))
+            return;
+
+        var docNum = !string.IsNullOrWhiteSpace(order.CorrectionNumber)
+            ? order.CorrectionNumber
+            : order.OrderNum;
+        var originalAmount = order.OriginalCheckAmount ?? 0;
+        var itemsAmount = Math.Round(order.Items.Sum(i => i.Sum), 2);
+
+        if (originalAmount <= 0 || order.Items.Count == 0)
+            throw new InvalidOperationException(
+                $"{docNum}: для возврата исправительного комплекта не заполнена сумма старого чека или табличная часть.");
+
+        if (Math.Abs(itemsAmount - originalAmount) > 0.01)
+            throw new InvalidOperationException(
+                $"{docNum}: сумма строк возврата ({itemsAmount:N2}) не равна сумме старого чека ({originalAmount:N2}). " +
+                "Перезагрузите реализацию из 1С или исправьте табличную часть перед формированием XML.");
     }
 
     private static string ToIsoDate(string ddMmYyyy)

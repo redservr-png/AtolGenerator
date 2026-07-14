@@ -24,9 +24,12 @@ public static class XmlGeneratorService
 
     private static XElement BuildCheckXml(CheckData c)
     {
+        if (string.IsNullOrWhiteSpace(c.ExternalId))
+            c.ExternalId = Guid.NewGuid().ToString("N");
+
         var chk = new XElement("check",
             new XElement("timestamp",   DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss")),
-            new XElement("external_id", Guid.NewGuid().ToString("N")),
+            new XElement("external_id", c.ExternalId),
             new XElement("is_bso",      "false")
         );
 
@@ -99,17 +102,14 @@ public static class XmlGeneratorService
                 new XElement("type", c.CheckVatType),
                 new XElement("sum",  Fmt(totalVat)))));
 
-        receipt.Add(new XElement("total",   Fmt(c.Amount)));
-        receipt.Add(new XElement("cashier", c.CashierName));
+        receipt.Add(new XElement("total", Fmt(c.Amount)));
 
-        // Доп. реквизит чека (тег 1192) — ФП исходного чека для исправительного
-        if (!string.IsNullOrWhiteSpace(c.AdditionalCheckProps))
-            receipt.Add(new XElement("additional_check_props", c.AdditionalCheckProps));
+        receipt.Add(new XElement("cashier", c.CashierName));
 
         // Доп. реквизит пользователя (теги 1084/1085/1086) — например, № реализации
         if (!string.IsNullOrWhiteSpace(c.UserAttributeValue))
         {
-            receipt.Add(new XElement("additional_user_attribute",
+            receipt.Add(new XElement("additional_user_props",
                 new XElement("name",  string.IsNullOrWhiteSpace(c.UserAttributeName) ? "Номер реализации" : c.UserAttributeName),
                 new XElement("value", c.UserAttributeValue)));
         }
@@ -128,9 +128,13 @@ public static class XmlGeneratorService
         if (c.Agent is not null || c.IsService)
         {
             vatType = c.CheckVatType;  // "vat5" для Страхова, "none" для остальных
-            vatSum  = vatType == "vat5"
-                ? Math.Round(c.Amount * 5.0 / 100.0, 2)
-                : c.Amount;
+            vatSum = vatType switch
+            {
+                "vat5" => Math.Round(c.Amount * 5.0 / 100.0, 2),
+                "vat105" => Math.Round(c.Amount * 5.0 / 105.0, 2),
+                "vat22" or "vat122" => Math.Round(c.Amount * 22.0 / 122.0, 2),
+                _ => c.Amount,
+            };
         }
         else if (c.Tab == "realization")
         {
@@ -143,9 +147,9 @@ public static class XmlGeneratorService
             vatSum  = Math.Round(c.Amount * 22.0 / 122.0, 2);  // 22/122 включено в цену
         }
 
-        // Внимание: XSD АТОЛ запрещает additional_user_attribute внутри <correction>.
-        // Разрешены только: device_number, internet. Поэтому тег 1086 здесь НЕ ставим —
-        // номер реализации уже передаётся в <base_number> (тег 1179) внутри correction_info.
+        // В ФФД 1.05 XSD АТОЛ не допускает additional_check_props и
+        // additional_user_props внутри <correction>. Номер реализации уже
+        // передаётся в base_number (тег 1179), ФП хранится вне XML.
         var correction = new XElement("correction",
             new XElement("operation", c.OperationType),
             new XElement("company",
@@ -163,12 +167,10 @@ public static class XmlGeneratorService
             new XElement("vats",
                 new XElement("vat",
                     new XElement("type", vatType),
-                    new XElement("sum",  Fmt(vatSum)))),
-            new XElement("cashier", c.CashierName)
+                    new XElement("sum",  Fmt(vatSum))))
         );
 
-        if (!string.IsNullOrWhiteSpace(c.AdditionalCheckProps))
-            correction.Add(new XElement("additional_check_props", c.AdditionalCheckProps));
+        correction.Add(new XElement("cashier", c.CashierName));
 
         return correction;
     }
@@ -180,6 +182,7 @@ public static class XmlGeneratorService
 
 public class CheckData
 {
+    public string          ExternalId           { get; set; } = string.Empty;
     public string          OperationType        { get; set; } = "sell";
     public bool            IsCorrection         { get; set; }
     public string          Tab                  { get; set; } = "payment";
@@ -191,7 +194,7 @@ public class CheckData
     public bool            IsService            { get; set; }
     public string          CorrectionBaseDate   { get; set; } = string.Empty;
     public string          CorrectionBaseNumber { get; set; } = "б/н";
-    public string          AdditionalCheckProps { get; set; } = string.Empty;  // тег 1192: ФП исходного чека
+    public string          AdditionalCheckProps { get; set; } = string.Empty;  // ФП исходного чека (API/карточка; не XML ФФД 1.05)
     public string          UserAttributeName    { get; set; } = string.Empty;  // тег 1085: наименование доп.реквизита
     public string          UserAttributeValue   { get; set; } = string.Empty;  // тег 1086: значение (например, № реализации)
     public string          CashierName          { get; set; } = AppConstants.CashierName;

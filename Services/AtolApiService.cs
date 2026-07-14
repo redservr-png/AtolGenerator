@@ -206,6 +206,12 @@ public static class AtolApiService
 
     private static (string Type, double Sum) CalcVat(OrderEntry order, string checkType, string tab, double amount)
     {
+        if (order.IsOwnService)
+        {
+            var ownServiceVat = tab == "payment" ? "vat122" : "vat22";
+            return (ownServiceVat, Math.Round(amount * 22.0 / 122.0, 2));
+        }
+
         if (order.IsService)
         {
             var serviceVat = order.AgentInfo?.VatType ?? "none";
@@ -322,7 +328,12 @@ public static class AtolApiService
 
         string vatType;
         double vatSum;
-        if (r.IsService)
+        if (r.IsOwnService)
+        {
+            vatType = "vat22";
+            vatSum = Math.Round(r.Amount * 22.0 / 122.0, 2);
+        }
+        else if (r.IsService)
         {
             // НДС по городу реализации: Страхов → vat5, остальные → none
             vatType = AppConstants.GetServiceVatTypeByCity(r.City);
@@ -371,8 +382,8 @@ public static class AtolApiService
                 cashier  = cashierName,
                 // Тег 1192 — ФП исходного чека (если есть)
                 additional_check_props = string.IsNullOrEmpty(r.FiscalNumber) ? null : r.FiscalNumber,
-                // Тег 1086 — доп.реквизит пользователя: номер реализации 1С
-                additional_user_attribute = string.IsNullOrEmpty(r.DocNumber) ? null : new
+                // Теги 1084/1085/1086 — доп. реквизит пользователя: номер реализации 1С
+                additional_user_props = string.IsNullOrEmpty(r.DocNumber) ? null : new
                 {
                     name  = "Номер реализации",
                     value = r.DocNumber,
@@ -425,7 +436,7 @@ public static class AtolApiService
         if (string.IsNullOrWhiteSpace(cashierName))
             cashierName = AppConstants.CashierName;
 
-        if (order.IsService && order.AgentInfo is null)
+        if (order.IsService && order.AgentInfo is null && !order.IsOwnService)
             return new AtolPunchResult
             {
                 Error = $"Для услуги {order.OrderNum} не найден агент/поставщик. Проверьте подразделение и номенклатуру в 1С."
@@ -483,8 +494,8 @@ public static class AtolApiService
                     payments = new[] { new { type = payType, sum = order.Amount } },
                     vats     = new[] { new { type = vatType, sum = vatSum } },
                     cashier  = cashierName,
-                    // Тег 1086 (additional_user_attribute) запрещён в correction по схеме АТОЛ —
-                    // номер реализации идёт только в correction_info.base_number (тег 1179).
+                    // Теги 1084-1086 и 1192 не поддерживаются correction в ФФД 1.05.
+                    // Номер реализации идёт только в correction_info.base_number (тег 1179).
                 }
             };
         }
@@ -515,8 +526,8 @@ public static class AtolApiService
                     additional_check_props = checkType == "sell_refund" && !string.IsNullOrWhiteSpace(order.OriginalFiscalNumber)
                         ? order.OriginalFiscalNumber
                         : null,
-                    additional_user_attribute = (tab == "realization" || checkType == "sell_refund")
-                                                && !string.IsNullOrWhiteSpace(realizationNum)
+                    additional_user_props = (tab == "realization" || checkType == "sell_refund")
+                                            && !string.IsNullOrWhiteSpace(realizationNum)
                         ? new { name = "Номер реализации", value = realizationNum }
                         : null,
                 }

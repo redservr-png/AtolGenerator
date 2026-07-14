@@ -5,6 +5,8 @@ namespace AtolGenerator.Models;
 
 public class GenerationResult
 {
+    public string     ObsidianCaseId { get; set; } = string.Empty;
+    public string     ExternalId     { get; set; } = string.Empty;
     public string     OrderNum    { get; set; } = string.Empty;
     public double     Amount      { get; set; }
     public string     XmlPath     { get; set; } = string.Empty;

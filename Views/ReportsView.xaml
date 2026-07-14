@@ -1,0 +1,513 @@
+<UserControl x:Class="AtolGenerator.Views.ReportsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="{DynamicResource BrushBg}">
+  <UserControl.Resources>
+    <Style x:Key="ReportTabItem" TargetType="TabItem">
+      <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Padding" Value="18,10"/>
+      <Setter Property="Margin" Value="0,0,4,0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabItem">
+            <Border x:Name="TabBorder"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="0,0,0,2"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter ContentSource="Header"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource BrushSurface1}"/>
+                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+                <Setter Property="Foreground" Value="{DynamicResource BrushAccent}"/>
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource BrushSurface3}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="ReportTabControl" TargetType="TabControl">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabControl">
+            <Grid KeyboardNavigation.TabNavigation="Local">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="46"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
+              <Border Grid.Row="0"
+                      Background="{DynamicResource BrushSurface2}"
+                      BorderBrush="{DynamicResource BrushBorder}"
+                      BorderThickness="1"
+                      CornerRadius="7,7,0,0"
+                      Padding="6,0">
+                <TabPanel IsItemsHost="True" VerticalAlignment="Stretch"/>
+              </Border>
+              <Border Grid.Row="1"
+                      Background="{DynamicResource BrushSurface1}"
+                      BorderBrush="{DynamicResource BrushBorder}"
+                      BorderThickness="1,0,1,1"
+                      CornerRadius="0,0,7,7">
+                <ContentPresenter ContentSource="SelectedContent"/>
+              </Border>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="ReportGrid" TargetType="DataGrid">
+      <Setter Property="Background" Value="{DynamicResource BrushSurface1}"/>
+      <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+      <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BrushBorder}"/>
+      <Setter Property="VerticalGridLinesBrush" Value="Transparent"/>
+      <Setter Property="HeadersVisibility" Value="Column"/>
+      <Setter Property="RowHeight" Value="38"/>
+      <Setter Property="ColumnHeaderHeight" Value="38"/>
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="CanUserAddRows" Value="False"/>
+      <Setter Property="CanUserDeleteRows" Value="False"/>
+      <Setter Property="CanUserResizeRows" Value="False"/>
+      <Setter Property="IsReadOnly" Value="True"/>
+      <Setter Property="AutoGenerateColumns" Value="False"/>
+      <Setter Property="SelectionMode" Value="Single"/>
+      <Setter Property="SelectionUnit" Value="FullRow"/>
+      <Setter Property="EnableRowVirtualization" Value="True"/>
+      <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
+      <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+    </Style>
+
+    <Style TargetType="DataGridColumnHeader">
+      <Setter Property="Background" Value="{DynamicResource BrushSurface2}"/>
+      <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+      <Setter Property="BorderThickness" Value="0,0,1,1"/>
+      <Setter Property="Padding" Value="10,0"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    </Style>
+
+    <Style TargetType="DataGridRow">
+      <Setter Property="Background" Value="{DynamicResource BrushSurface1}"/>
+      <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="{DynamicResource BrushSurface3}"/>
+        </Trigger>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="#1F2563EB"/>
+          <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <Style TargetType="DataGridCell">
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="10,0"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    </Style>
+
+    <Style x:Key="PathLabel" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource BrushText3}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+
+    <Style x:Key="FilterLabel" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource BrushText3}"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="Margin" Value="0,0,6,0"/>
+    </Style>
+  </UserControl.Resources>
+
+  <Grid Margin="24,18,24,20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="14"/>
+      <RowDefinition Height="*"/>
+    </Grid.RowDefinitions>
+
+    <Grid Grid.Row="0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition/>
+        <ColumnDefinition Width="Auto"/>
+      </Grid.ColumnDefinitions>
+      <StackPanel>
+        <TextBlock Text="Работа с отчётами"
+                   Foreground="{DynamicResource BrushText}"
+                   FontSize="23" FontWeight="SemiBold"/>
+        <TextBlock Text="АТОЛ Online · ОФД / Такском · подготовка CSV для 1С"
+                   Foreground="{DynamicResource BrushText3}"
+                   FontSize="12" Margin="0,4,0,0"/>
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <TextBlock Foreground="{DynamicResource BrushText3}" FontSize="12" VerticalAlignment="Center">
+          <Run Text="АТОЛ: "/><Run Text="{Binding AtolChecks.Count, Mode=OneWay}" FontWeight="SemiBold"/>
+          <Run Text="   ОФД: "/><Run Text="{Binding OfdChecks.Count, Mode=OneWay}" FontWeight="SemiBold"/>
+          <Run Text="   Для 1С: "/><Run Text="{Binding ReadyCount, Mode=OneWay}" FontWeight="SemiBold"/>
+        </TextBlock>
+      </StackPanel>
+    </Grid>
+
+    <TabControl Grid.Row="2"
+                Style="{StaticResource ReportTabControl}"
+                ItemContainerStyle="{StaticResource ReportTabItem}"
+                SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+
+      <TabItem Header="История программы">
+        <Grid Margin="16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="16"/>
+              <ColumnDefinition/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="Обновить"
+                    Style="{StaticResource BtnSecondary}" Padding="14,7"
+                    Command="{Binding RefreshLocalHistoryCommand}"/>
+            <Button Grid.Column="1" Content="Выбрать журнал..."
+                    Style="{StaticResource BtnSecondary}" Padding="14,7" Margin="8,0,0,0"
+                    Command="{Binding BrowseLocalHistoryCommand}"/>
+            <TextBlock Grid.Column="3" Text="{Binding LocalFileName}"
+                       ToolTip="{Binding LocalHistoryPath}"
+                       Style="{StaticResource PathLabel}"/>
+            <TextBlock Grid.Column="4" Text="{Binding LocalStatus}"
+                       Foreground="{DynamicResource BrushText2}" FontSize="12"
+                       VerticalAlignment="Center"/>
+          </Grid>
+          <DataGrid Grid.Row="2" Style="{StaticResource ReportGrid}"
+                    ItemsSource="{Binding LocalHistory}">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Дата чека" Binding="{Binding RegisteredAt, StringFormat={}{0:dd.MM.yyyy HH:mm:ss}}" Width="150"/>
+              <DataGridTextColumn Header="Операция" Binding="{Binding Operation}" Width="125"/>
+              <DataGridTextColumn Header="Заказ" Binding="{Binding OrderNumber}" Width="130"/>
+              <DataGridTextColumn Header="Реализация" Binding="{Binding RealizationNumber}" Width="130"/>
+              <DataGridTextColumn Header="Сумма" Binding="{Binding Amount, StringFormat={}{0:N2}}" Width="95"/>
+              <DataGridTextColumn Header="ФД" Binding="{Binding FiscalDocument}" Width="90"/>
+              <DataGridTextColumn Header="ФПД" Binding="{Binding FiscalSign}" Width="115"/>
+              <DataGridTextColumn Header="Кассир" Binding="{Binding Cashier}" Width="220"/>
+              <DataGridTextColumn Header="UUID" Binding="{Binding Uuid}" Width="250"/>
+            </DataGrid.Columns>
+          </DataGrid>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="АТОЛ Online">
+        <Grid Margin="16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="16"/>
+              <ColumnDefinition/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="Получить из АТОЛ"
+                    Style="{StaticResource BtnPrimary}" Padding="14,7"
+                    Command="{Binding OpenAtolBrowserCommand}"/>
+            <Button Grid.Column="1" Content="Последний отчёт"
+                    Style="{StaticResource BtnSecondary}" Padding="12,7" Margin="8,0,0,0"
+                    Command="{Binding ImportLatestAtolReportCommand}"/>
+            <Button Grid.Column="2" Content="Выбрать CSV..."
+                    Style="{StaticResource BtnSecondary}" Padding="12,7" Margin="8,0,0,0"
+                    Command="{Binding ImportAtolReportCommand}"/>
+            <Button Grid.Column="3" Content="⌂" ToolTip="Открыть папку отчётов АТОЛ"
+                    Style="{StaticResource BtnSecondary}" Width="36" Height="32" Padding="0"
+                    Margin="8,0,0,0" Command="{Binding OpenAtolReportFolderCommand}"/>
+            <Button Grid.Column="4" Content="Открыть чек"
+                    Style="{StaticResource BtnSecondary}" Padding="12,7" Margin="8,0,0,0"
+                    Command="{Binding OpenReceiptCommand}"/>
+            <TextBlock Grid.Column="6" Text="{Binding AtolFileName}"
+                       ToolTip="{Binding AtolReportPath}"
+                       Style="{StaticResource PathLabel}"/>
+            <TextBlock Grid.Column="7" Text="{Binding AtolStatus}"
+                       Foreground="{DynamicResource BrushText2}" FontSize="12"
+                       VerticalAlignment="Center" Margin="12,0,0,0"
+                       MaxWidth="260" TextTrimming="CharacterEllipsis"/>
+          </Grid>
+          <Border Grid.Row="2" Background="{DynamicResource BrushSurface2}"
+                  BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                  CornerRadius="6" Padding="10,8">
+            <DockPanel LastChildFill="True">
+              <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center"
+                         Foreground="{DynamicResource BrushText3}" FontSize="11" Margin="14,0,0,0">
+                <Run Text="Показано "/><Run Text="{Binding AtolVisibleCount, Mode=OneWay}" FontWeight="SemiBold"/>
+                <Run Text=" из "/><Run Text="{Binding AtolChecks.Count, Mode=OneWay}"/>
+              </TextBlock>
+              <WrapPanel VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                  <TextBlock Text="Период" Style="{StaticResource FilterLabel}"/>
+                  <DatePicker SelectedDate="{Binding AtolDateFrom, UpdateSourceTrigger=PropertyChanged}" Width="118"/>
+                  <TextBlock Text="–" Foreground="{DynamicResource BrushText3}" Margin="6,0" VerticalAlignment="Center"/>
+                  <DatePicker SelectedDate="{Binding AtolDateTo, UpdateSourceTrigger=PropertyChanged}" Width="118"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                  <TextBlock Text="Тип" Style="{StaticResource FilterLabel}"/>
+                  <ComboBox ItemsSource="{Binding AtolTypeOptions}" SelectedItem="{Binding AtolTypeFilter}"
+                            Width="150"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                  <TextBlock Text="Источник" Style="{StaticResource FilterLabel}"/>
+                  <ComboBox ItemsSource="{Binding AtolSourceOptions}" SelectedItem="{Binding AtolSourceFilter}"
+                            Width="115"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                  <TextBlock Text="Статус" Style="{StaticResource FilterLabel}"/>
+                  <ComboBox ItemsSource="{Binding AtolStatusOptions}" SelectedItem="{Binding AtolStatusFilter}"
+                            Width="130"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="Поиск" Style="{StaticResource FilterLabel}"/>
+                  <TextBox Text="{Binding AtolSearchText, UpdateSourceTrigger=PropertyChanged}" Width="170"/>
+                  <Button Content="Сбросить" Style="{StaticResource BtnSecondary}" Padding="10,5"
+                          Margin="8,0,0,0" Command="{Binding ClearAtolFiltersCommand}"/>
+                </StackPanel>
+              </WrapPanel>
+            </DockPanel>
+          </Border>
+
+          <DataGrid Grid.Row="4" Style="{StaticResource ReportGrid}"
+                    ItemsSource="{Binding AtolChecksView}"
+                    SelectedItem="{Binding SelectedAtolCheck}">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Дата чека" Binding="{Binding RegisteredAt, StringFormat={}{0:dd.MM.yyyy HH:mm:ss}}" Width="150"/>
+              <DataGridTextColumn Header="Тип" Binding="{Binding CheckType}" Width="145"/>
+              <DataGridTextColumn Header="Источник" Binding="{Binding Source}" Width="95"/>
+              <DataGridTextColumn Header="Сумма" Binding="{Binding Amount, StringFormat={}{0:N2}}" Width="95"/>
+              <DataGridTextColumn Header="ФД" Binding="{Binding FiscalDocument}" Width="85"/>
+              <DataGridTextColumn Header="ФПД" Binding="{Binding FiscalSign}" Width="115"/>
+              <DataGridTextColumn Header="Основание" Binding="{Binding BaseNumber}" Width="170"/>
+              <DataGridTextColumn Header="External Id" Binding="{Binding ExternalId}" Width="260"/>
+              <DataGridTextColumn Header="UUID" Binding="{Binding Uuid}" Width="250"/>
+              <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="120"/>
+            </DataGrid.Columns>
+          </DataGrid>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="ОФД / Такском">
+        <Grid Margin="16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="10"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="16"/>
+              <ColumnDefinition/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="Получить из Такском"
+                    Style="{StaticResource BtnPrimary}" Padding="14,7"
+                    Command="{Binding OpenTaxcomBrowserCommand}"/>
+            <Button Grid.Column="1" Content="Последний отчёт"
+                    Style="{StaticResource BtnSecondary}" Padding="12,7" Margin="8,0,0,0"
+                    Command="{Binding ImportLatestOfdReportCommand}"/>
+            <Button Grid.Column="2" Content="Выбрать файл..."
+                    Style="{StaticResource BtnSecondary}" Padding="12,7" Margin="8,0,0,0"
+                    Command="{Binding ImportOfdReportCommand}"/>
+            <Button Grid.Column="3" Content="⌂" ToolTip="Открыть папку отчётов Такскома"
+                    Style="{StaticResource BtnSecondary}" Width="36" Height="32" Padding="0"
+                    Margin="8,0,0,0" Command="{Binding OpenTaxcomReportFolderCommand}"/>
+            <TextBlock Grid.Column="5" Text="{Binding OfdFileName}"
+                       ToolTip="{Binding OfdReportPath}"
+                       Style="{StaticResource PathLabel}"/>
+            <TextBlock Grid.Column="6" Text="{Binding OfdStatus}"
+                       Foreground="{DynamicResource BrushText2}" FontSize="12"
+                       VerticalAlignment="Center" Margin="12,0,0,0"
+                       MaxWidth="280" TextTrimming="CharacterEllipsis"/>
+          </Grid>
+          <Border Grid.Row="2" Background="{DynamicResource BrushSurface2}"
+                  BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                  CornerRadius="6" Padding="10,8">
+            <DockPanel LastChildFill="True">
+              <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center"
+                         Foreground="{DynamicResource BrushText3}" FontSize="11" Margin="14,0,0,0">
+                <Run Text="Показано "/><Run Text="{Binding OfdVisibleCount, Mode=OneWay}" FontWeight="SemiBold"/>
+                <Run Text=" из "/><Run Text="{Binding OfdChecks.Count, Mode=OneWay}"/>
+              </TextBlock>
+              <WrapPanel VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                  <TextBlock Text="Период" Style="{StaticResource FilterLabel}"/>
+                  <DatePicker SelectedDate="{Binding OfdDateFrom, UpdateSourceTrigger=PropertyChanged}" Width="118"/>
+                  <TextBlock Text="–" Foreground="{DynamicResource BrushText3}" Margin="6,0" VerticalAlignment="Center"/>
+                  <DatePicker SelectedDate="{Binding OfdDateTo, UpdateSourceTrigger=PropertyChanged}" Width="118"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                  <TextBlock Text="Операция" Style="{StaticResource FilterLabel}"/>
+                  <ComboBox ItemsSource="{Binding OfdOperationOptions}" SelectedItem="{Binding OfdOperationFilter}"
+                            Width="135"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                  <TextBlock Text="Торговая точка" Style="{StaticResource FilterLabel}"/>
+                  <ComboBox ItemsSource="{Binding OfdTradingPointOptions}" SelectedItem="{Binding OfdTradingPointFilter}"
+                            Width="155"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                  <TextBlock Text="ККТ" Style="{StaticResource FilterLabel}"/>
+                  <ComboBox ItemsSource="{Binding OfdKktOptions}" SelectedItem="{Binding OfdKktFilter}"
+                            Width="145"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="Поиск" Style="{StaticResource FilterLabel}"/>
+                  <TextBox Text="{Binding OfdSearchText, UpdateSourceTrigger=PropertyChanged}" Width="170"/>
+                  <Button Content="Сбросить" Style="{StaticResource BtnSecondary}" Padding="10,5"
+                          Margin="8,0,0,0" Command="{Binding ClearOfdFiltersCommand}"/>
+                </StackPanel>
+              </WrapPanel>
+            </DockPanel>
+          </Border>
+
+          <DataGrid Grid.Row="4" Style="{StaticResource ReportGrid}"
+                    ItemsSource="{Binding OfdChecksView}">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Дата чека" Binding="{Binding RegisteredAt, StringFormat={}{0:dd.MM.yyyy HH:mm:ss}}" Width="160"/>
+              <DataGridTextColumn Header="Документ" Binding="{Binding Document}" Width="200"/>
+              <DataGridTextColumn Header="Операция" Binding="{Binding Operation}" Width="140"/>
+              <DataGridTextColumn Header="Торговая точка" Binding="{Binding TradingPoint}" Width="170"/>
+              <DataGridTextColumn Header="Название ККТ" Binding="{Binding KktName}" Width="170"/>
+              <DataGridTextColumn Header="Сумма" Binding="{Binding Amount, StringFormat={}{0:N2}}" Width="110"/>
+              <DataGridTextColumn Header="ФД" Binding="{Binding FiscalDocument}" Width="100"/>
+              <DataGridTextColumn Header="ФПД" Binding="{Binding FiscalSign}" Width="130"/>
+              <DataGridTextColumn Header="Ссылка на чек" Binding="{Binding ReceiptUrl}" Width="*" MinWidth="340"/>
+            </DataGrid.Columns>
+          </DataGrid>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="Загрузка в 1С">
+        <Grid Margin="16">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
+          </Grid.RowDefinitions>
+
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="18"/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="18"/>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="18"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="Выбрать XML..."
+                    Style="{StaticResource BtnSecondary}" Padding="12,7"
+                    Command="{Binding ImportXmlCommand}"/>
+            <TextBlock Grid.Column="1" Text="{Binding XmlFileName}" ToolTip="{Binding XmlPath}"
+                       Style="{StaticResource PathLabel}" Margin="8,0,0,0"/>
+            <Button Grid.Column="3" Content="CSV АТОЛ..."
+                    Style="{StaticResource BtnSecondary}" Padding="12,7"
+                    Command="{Binding ImportAtolReportCommand}"/>
+            <TextBlock Grid.Column="4" Text="{Binding AtolFileName}" ToolTip="{Binding AtolReportPath}"
+                       Style="{StaticResource PathLabel}" Margin="8,0,0,0"/>
+            <Button Grid.Column="6" Content="Отчёт ОФД..."
+                    Style="{StaticResource BtnSecondary}" Padding="12,7"
+                    Command="{Binding ImportOfdReportCommand}"/>
+            <TextBlock Grid.Column="7" Text="{Binding OfdFileName}" ToolTip="{Binding OfdReportPath}"
+                       Style="{StaticResource PathLabel}" Margin="8,0,0,0"/>
+            <Button Grid.Column="9" Content="Сопоставить"
+                    Style="{StaticResource BtnPrimary}" Padding="14,7"
+                    Command="{Binding BuildMatchesCommand}"/>
+          </Grid>
+
+          <DataGrid Grid.Row="2" Style="{StaticResource ReportGrid}"
+                    ItemsSource="{Binding ExportRows}">
+            <DataGrid.RowStyle>
+              <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding IsReady}" Value="False">
+                    <Setter Property="Background" Value="#16EF4444"/>
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </DataGrid.RowStyle>
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Реализация" Binding="{Binding RealizationNumber}" Width="130"/>
+              <DataGridTextColumn Header="Тип чека" Binding="{Binding CheckType}" Width="125"/>
+              <DataGridTextColumn Header="Режим" Binding="{Binding WriteMode}" Width="115"/>
+              <DataGridTextColumn Header="Дата чека" Binding="{Binding RegisteredAt, StringFormat={}{0:dd.MM.yyyy HH:mm:ss}}" Width="150"/>
+              <DataGridTextColumn Header="ФД" Binding="{Binding FiscalDocument}" Width="85"/>
+              <DataGridTextColumn Header="ФПД" Binding="{Binding FiscalSign}" Width="115"/>
+              <DataGridTextColumn Header="Проверка ОФД" Binding="{Binding OfdStatus}" Width="130"/>
+              <DataGridTextColumn Header="Результат" Binding="{Binding Status}" Width="230"/>
+              <DataGridTextColumn Header="Комментарий для 1С" Binding="{Binding Comment}" Width="360"/>
+              <DataGridTextColumn Header="External Id" Binding="{Binding ExternalId}" Width="250"/>
+            </DataGrid.Columns>
+          </DataGrid>
+
+          <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <TextBlock Text="{Binding MatchingStatus}"
+                         Foreground="{DynamicResource BrushText2}"
+                         FontSize="12" VerticalAlignment="Center"/>
+              <TextBlock Text="{Binding ExportPath}" ToolTip="{Binding ExportPath}"
+                         Style="{StaticResource PathLabel}" Margin="16,0,0,0" MaxWidth="420"/>
+            </StackPanel>
+            <Button Grid.Column="1" Content="Сохранить CSV для 1С..."
+                    Style="{StaticResource BtnPrimary}" Padding="16,8"
+                    Command="{Binding ExportOneCCsvCommand}"/>
+          </Grid>
+        </Grid>
+      </TabItem>
+    </TabControl>
+  </Grid>
+</UserControl>

@@ -1,15 +1,16 @@
 using AtolGenerator.Models;
+using AtolGenerator.Services;
 
 namespace AtolGenerator.Constants;
 
 // ── Данные кассира ────────────────────────────────────────────────────────────
 public class CashierInfo
 {
-    public string FullName     { get; init; } = string.Empty;  // в XML и предпросмотре
-    public string ShortName    { get; init; } = string.Empty;  // "Фамилия И.О." — подпись
-    public string Position     { get; init; } = string.Empty;  // "от Должности" — DOCX шапка
-    public string NameGenitive { get; init; } = string.Empty;  // "Фамилии И.О." — DOCX шапка
-    public string Display      { get; init; } = string.Empty;  // для выпадающего списка
+    public string FullName     { get; set; } = string.Empty;  // в XML и предпросмотре
+    public string ShortName    { get; set; } = string.Empty;  // "Фамилия И.О." — подпись
+    public string Position     { get; set; } = string.Empty;  // "от Должности" — DOCX шапка
+    public string NameGenitive { get; set; } = string.Empty;  // "Фамилии И.О." — DOCX шапка
+    public string Display      { get; set; } = string.Empty;  // для выпадающего списка
 
     public override string ToString() => Display;
 }
@@ -26,7 +27,9 @@ public class KktData
 public static class AppConstants
 {
     // ── Кассиры ──────────────────────────────────────────────────────────────
-    public static readonly IReadOnlyList<CashierInfo> Cashiers = new List<CashierInfo>
+    public static IReadOnlyList<CashierInfo> Cashiers => ApplicationSettingsStore.Current.Cashiers;
+
+    public static List<CashierInfo> CreateDefaultCashiers() => new()
     {
         new()
         {
@@ -46,7 +49,8 @@ public static class AppConstants
         },
     };
 
-    public static CashierInfo DefaultCashier => Cashiers[0];
+    public static CashierInfo DefaultCashier =>
+        Cashiers.FirstOrDefault() ?? CreateDefaultCashiers()[0];
 
     // Обратная совместимость
     public const string CashierName    = "Консультант-аналитик 1С Полюшков Константин Николаевич";
@@ -66,7 +70,9 @@ public static class AppConstants
     public const string RecipientName  = "ИП Шевелеву Е.Н.";
 
     // ИП Страхов Дмитрий Михайлович — УСН 5% (vat5), остальные агенты — без НДС (none)
-    public static readonly IReadOnlyList<ServiceProvider> ServiceProviders = new List<ServiceProvider>
+    public static IReadOnlyList<ServiceProvider> ServiceProviders => ApplicationSettingsStore.Current.Agents;
+
+    public static List<ServiceProvider> CreateDefaultServiceProviders() => new()
     {
         new("Доставка", "Грязовец",     "ИП Страхов Дмитрий Михайлович", "463224431946", "+79992601825", "vat5"),
         new("Сборка",   "Иваново",      "Воронков Р.А.",                  "370260964433", "+79611189433"),

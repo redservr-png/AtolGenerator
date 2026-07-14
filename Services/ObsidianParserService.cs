@@ -23,6 +23,14 @@ public static class ObsidianParserService
         @"^\s*-\s*\[(?<done>[ xX])\]\s*(?<body>.+)$",
         RegexOptions.Compiled);
 
+    private static readonly Regex RxCaseId = new(
+        @"\s*<!--\s*atol-case:\s*(?<id>[a-zA-Z0-9-]+)\s*-->\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private static readonly Regex RxScenario = new(
+        @"\s*<!--\s*atol-scenario:\s*(?<scenario>[a-zA-Z]+)\s*-->\s*",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     // Номер документа: т0000123456 (т или Т, потом 10 цифр — стандарт УТ 10.3)
     // Делаем диапазон 7-11 чтобы поддержать редкие усечённые форматы, но в большинстве случаев — 10.
     private static readonly Regex RxDocNumber = new(
@@ -73,26 +81,86 @@ public static class ObsidianParserService
     /// <summary>Парсит произвольный текст со строками-кейсами.</summary>
     public static List<OrderEntry> ParseText(string text)
     {
-        var result = new List<OrderEntry>();
+        return ParseDocument(text)
+            .Where(x => !x.IsCompleted)
+            .Select(x => x.PrimaryDocument)
+            .Where(x => x.DocumentType != SourceDocumentType.Unknown)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Разбирает весь рабочий журнал, включая закрытые строки, периоды и связанные
+    /// документы, записанные отступом под основной задачей.
+    /// </summary>
+    public static List<ObsidianCaseRecord> ParseDocument(string text)
+    {
+        var result = new List<ObsidianCaseRecord>();
         if (string.IsNullOrWhiteSpace(text)) return result;
 
-        foreach (var rawLine in text.Split('\n'))
+        var period = string.Empty;
+        ObsidianCaseRecord? current = null;
+        var lines = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+        for (var index = 0; index < lines.Length; index++)
         {
-            var line = rawLine.TrimEnd('\r').Trim();
-            if (line.Length == 0) continue;
+            var rawLine = lines[index];
+            var trimmed = rawLine.Trim();
+            if (trimmed.StartsWith("## ", StringComparison.Ordinal))
+            {
+                period = trimmed[3..].Trim();
+                current = null;
+                continue;
+            }
 
-            // Заголовки «## СЕНТЯБРЬ 2025», «=====», ссылки и т.д. — пропускаем
-            if (!line.StartsWith("-")) continue;
+            var taskMatch = RxTaskLine.Match(rawLine);
+            if (taskMatch.Success)
+            {
+                var rawBody = taskMatch.Groups["body"].Value.Trim();
+                var idMatch = RxCaseId.Match(rawBody);
+                var caseId = idMatch.Success ? idMatch.Groups["id"].Value : string.Empty;
+                var scenarioMatch = RxScenario.Match(rawBody);
+                var scenario = scenarioMatch.Success &&
+                               Enum.TryParse<CorrectionScenario>(scenarioMatch.Groups["scenario"].Value,
+                                   true, out var parsedScenario)
+                    ? parsedScenario
+                    : (CorrectionScenario?)null;
+                var body = RxScenario.Replace(
+                    RxCaseId.Replace(rawBody, string.Empty), string.Empty).Trim();
+                var entry = ParseBody(body) ?? new OrderEntry
+                {
+                    DocumentType = SourceDocumentType.Unknown,
+                    Notes = body,
+                };
+                if (scenario.HasValue)
+                {
+                    entry.CorrectionScenario = scenario.Value;
+                    entry.Kind = scenario.Value.ToOrderKind();
+                }
+                entry.ObsidianCaseId = caseId;
+                current = new ObsidianCaseRecord
+                {
+                    CaseId = caseId,
+                    IsCompleted = taskMatch.Groups["done"].Value.Trim().Equals("x", StringComparison.OrdinalIgnoreCase),
+                    LineNumber = index + 1,
+                    Period = period,
+                    RawBody = body,
+                    ScenarioOverride = scenario,
+                    PrimaryDocument = entry,
+                };
+                result.Add(current);
+                continue;
+            }
 
-            var taskMatch = RxTaskLine.Match(line);
-            if (!taskMatch.Success) continue;
-
-            var done = taskMatch.Groups["done"].Value.Trim().ToLowerInvariant() == "x";
-            if (done) continue;   // [x] — уже сделано, пропускаем
-
-            var body = taskMatch.Groups["body"].Value.Trim();
-            var entry = ParseBody(body);
-            if (entry is not null) result.Add(entry);
+            // Дополнительный документ относится к предыдущей задаче только когда
+            // он записан с отступом, как в исходном Obsidian-журнале.
+            if (current is not null && rawLine.Length > rawLine.TrimStart().Length)
+            {
+                var related = ParseBody(trimmed);
+                if (related is not null)
+                {
+                    related.ObsidianCaseId = current.CaseId;
+                    current.RelatedDocuments.Add(related);
+                }
+            }
         }
 
         return result;
@@ -100,7 +168,7 @@ public static class ObsidianParserService
 
     // ── Внутренняя логика разбора одной строки ──────────────────────────────────
 
-    private static OrderEntry? ParseBody(string body)
+    internal static OrderEntry? ParseBody(string body)
     {
         // 1. Особый случай: «ФП: NNNN ...»
         var fpOnly = RxFpOnly.Match(body);
@@ -214,6 +282,7 @@ public static class ObsidianParserService
         if (!string.IsNullOrEmpty(docNumber)) s = s.Replace(docNumber, "");
         if (!string.IsNullOrEmpty(date))      s = s.Replace(date, "");
         if (!string.IsNullOrEmpty(city))      s = s.Replace($"({city})", "");
+        s = Regex.Replace(s, @"\((кредит|сборка|доставка)\)", "", RegexOptions.IgnoreCase);
         // Убираем «от dd.mm.yyyy» хвосты времени
         s = Regex.Replace(s, @"от\s+\d{1,2}[:.]?\d{0,2}([:.]\d{0,2})?", "", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"\d{1,2}:\d{2}(?::\d{2})?", "");

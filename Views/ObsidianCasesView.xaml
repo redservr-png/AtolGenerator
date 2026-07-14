@@ -1,0 +1,308 @@
+<UserControl x:Class="AtolGenerator.Views.ObsidianCasesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
+             Background="{DynamicResource BrushBg}">
+  <UserControl.Resources>
+    <cv:BoolToVisibilityConverter x:Key="BoolVis"/>
+    <cv:CorrectionScenarioLabelConverter x:Key="ScenarioLabel"/>
+    <Style x:Key="CaseGrid" TargetType="DataGrid">
+      <Setter Property="AutoGenerateColumns" Value="False"/>
+      <Setter Property="CanUserAddRows" Value="False"/>
+      <Setter Property="CanUserDeleteRows" Value="False"/>
+      <Setter Property="CanUserResizeRows" Value="False"/>
+      <Setter Property="HeadersVisibility" Value="Column"/>
+      <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+      <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BrushBorder}"/>
+      <Setter Property="VerticalGridLinesBrush" Value="Transparent"/>
+      <Setter Property="RowHeaderWidth" Value="0"/>
+      <Setter Property="Background" Value="{DynamicResource BrushSurface1}"/>
+      <Setter Property="RowBackground" Value="{DynamicResource BrushSurface1}"/>
+      <Setter Property="AlternatingRowBackground" Value="{DynamicResource BrushSurface2}"/>
+      <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="SelectionMode" Value="Single"/>
+      <Setter Property="SelectionUnit" Value="FullRow"/>
+      <Setter Property="RowHeight" Value="42"/>
+      <Setter Property="ColumnHeaderHeight" Value="38"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
+      <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+    </Style>
+    <Style TargetType="DataGridColumnHeader">
+      <Setter Property="Background" Value="{DynamicResource BrushSurface2}"/>
+      <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+      <Setter Property="BorderThickness" Value="0,0,1,1"/>
+      <Setter Property="Padding" Value="8,0"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    </Style>
+    <Style TargetType="DataGridRow">
+      <Setter Property="Background" Value="{DynamicResource BrushSurface1}"/>
+      <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="Background" Value="{DynamicResource BrushSurface3}"/>
+        </Trigger>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="#1F2563EB"/>
+          <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+    <Style TargetType="DataGridCell">
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="7,0"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    </Style>
+  </UserControl.Resources>
+
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="78"/>
+      <RowDefinition Height="104"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="36"/>
+    </Grid.RowDefinitions>
+
+    <Border Grid.Row="0" Background="{DynamicResource BrushSurface1}"
+            BorderBrush="{DynamicResource BrushBorder}" BorderThickness="0,0,0,1">
+      <Grid Margin="24,0">
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="Исправление чеков" FontSize="22" FontWeight="SemiBold"/>
+          <TextBlock Text="{Binding FilePath}" Foreground="{DynamicResource BrushText3}"
+                     FontSize="11" Margin="0,5,0,0" TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+          <TextBlock Text="Активных: " Foreground="{DynamicResource BrushText3}"/>
+          <TextBlock Text="{Binding ActiveCount, Mode=OneWay}" FontWeight="Bold"/>
+          <TextBlock Text="   Закрытых: " Foreground="{DynamicResource BrushText3}"/>
+          <TextBlock Text="{Binding ClosedCount, Mode=OneWay}" FontWeight="Bold"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="1" Background="{DynamicResource BrushSurface2}"
+            BorderBrush="{DynamicResource BrushBorder}" BorderThickness="0,0,0,1">
+      <Grid Margin="24,10">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="36"/>
+          <RowDefinition Height="48"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="260"/>
+          <ColumnDefinition Width="12"/>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="16"/>
+          <ColumnDefinition Width="180"/>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <TextBox Grid.Column="0" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                 Tag="Поиск по документу или проблеме"/>
+        <CheckBox Grid.Column="2" Content="Показывать закрытые" IsChecked="{Binding ShowClosed}"
+                  VerticalAlignment="Center"/>
+        <ComboBox Grid.Column="4" ItemsSource="{Binding PeriodOptions}"
+                  SelectedItem="{Binding SelectedPeriod}" VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="6" Text="{Binding SourceOfdReportInfo}"
+                   Foreground="{DynamicResource BrushText3}" FontSize="11"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        <StackPanel Grid.Row="1" Grid.ColumnSpan="7" Orientation="Horizontal"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom">
+          <Button Content="Обновить" Style="{StaticResource BtnSecondary}" Command="{Binding SyncCommand}"/>
+          <Button Content="Выбрать строки" Style="{StaticResource BtnSecondary}" Margin="8,0,0,0"
+                  Command="{Binding SelectAllVisibleCommand}"/>
+          <Button Content="Загрузить из 1С" Style="{StaticResource BtnSecondary}" Margin="8,0,0,0"
+                  Command="{Binding FetchOneCDataCommand}"/>
+          <Button Content="Найти исходные чеки в ОФД" Style="{StaticResource BtnSecondary}" Margin="8,0,0,0"
+                  Command="{Binding LoadSourceOfdReportCommand}"/>
+          <Button Content="Передать готовые в работу" Style="{StaticResource BtnPrimary}" Margin="8,0,0,0"
+                  Command="{Binding SendToWorkCommand}"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="2" Margin="24,18">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="2.1*" MinWidth="620"/>
+        <ColumnDefinition Width="18"/>
+        <ColumnDefinition Width="*" MinWidth="330"/>
+      </Grid.ColumnDefinitions>
+
+      <DataGrid Grid.Column="0" Style="{StaticResource CaseGrid}"
+                ItemsSource="{Binding CasesView}" SelectedItem="{Binding SelectedCase}">
+        <DataGrid.Columns>
+          <DataGridTemplateColumn Width="42" CanUserSort="False">
+            <DataGridTemplateColumn.Header>
+              <TextBlock Text="✓" HorizontalAlignment="Center"/>
+            </DataGridTemplateColumn.Header>
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <CheckBox IsChecked="{Binding IsSelected}" HorizontalAlignment="Center"
+                          IsEnabled="{Binding CanEdit}"/>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTemplateColumn Header="Состояние" Width="130">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding StateLabel}" FontWeight="SemiBold" VerticalAlignment="Center">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsCompleted}" Value="True">
+                          <Setter Property="Foreground" Value="{DynamicResource BrushGreen}"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding State.CheckConfirmed}" Value="True">
+                          <Setter Property="Foreground" Value="{DynamicResource BrushAccent2}"/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTextColumn Header="План" Binding="{Binding PlanStatus}" Width="120" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Период" Binding="{Binding PeriodLabel}" Width="125" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Документ" Binding="{Binding DocumentNumber}" Width="125" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Тип" Binding="{Binding DocumentType}" Width="145" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Дата" Binding="{Binding DocumentDate}" Width="145" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Подразделение" Binding="{Binding Department}" Width="125" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Пояснение ошибки" Binding="{Binding EditableProblem}" Width="*" MinWidth="220" IsReadOnly="True"/>
+        </DataGrid.Columns>
+      </DataGrid>
+
+      <Border Grid.Column="2" Background="{DynamicResource BrushSurface1}"
+              BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="8">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Margin="18">
+            <TextBlock Text="Карточка ошибки" FontSize="16" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding SelectedCase.DocumentType}" Foreground="{DynamicResource BrushText3}"
+                       Margin="0,4,0,16"/>
+
+            <Grid Margin="0,0,0,14">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <StackPanel Grid.Column="0">
+                <TextBlock Text="Документ" Style="{StaticResource FieldLabel}"/>
+                <TextBlock Text="{Binding SelectedCase.DocumentNumber}" FontWeight="SemiBold"/>
+              </StackPanel>
+              <StackPanel Grid.Column="1">
+                <TextBlock Text="Исправленная сумма" Style="{StaticResource FieldLabel}"/>
+                <TextBlock Text="{Binding SelectedCase.AmountText}" FontWeight="SemiBold"/>
+              </StackPanel>
+            </Grid>
+
+            <TextBlock Text="Пояснение ошибки" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding SelectedCase.EditableProblem, UpdateSourceTrigger=PropertyChanged}"
+                     AcceptsReturn="True" TextWrapping="Wrap" MinHeight="88"
+                     IsReadOnly="{Binding SelectedCase.IsCompleted}"/>
+            <Button Content="Сохранить пояснение в Obsidian" Style="{StaticResource BtnSecondary}"
+                    HorizontalAlignment="Left" Margin="0,8,0,18" Command="{Binding SaveProblemCommand}"/>
+
+            <TextBlock Text="Связанные документы" Style="{StaticResource FieldLabel}"/>
+            <TextBlock Text="{Binding SelectedCase.RelatedDocumentsText}" TextWrapping="Wrap"
+                       Foreground="{DynamicResource BrushText2}" Margin="0,0,0,18"/>
+
+            <TextBlock Text="Сценарий исправления" Style="{StaticResource FieldLabel}"/>
+            <ComboBox ItemsSource="{Binding ScenarioOptions}"
+                      SelectedItem="{Binding SelectedCase.SelectedScenario, Mode=TwoWay}"
+                      IsEnabled="{Binding SelectedCase.CanEdit}" Margin="0,0,0,4">
+              <ComboBox.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding Converter={StaticResource ScenarioLabel}}"/>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Text="{Binding SelectedCase.ScenarioSourceLabel}"
+                       Foreground="{DynamicResource BrushText3}" FontSize="11" Margin="0,0,0,18"/>
+
+            <Border Background="{DynamicResource BrushSurface2}"
+                    BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                    CornerRadius="6" Padding="12" Margin="0,0,0,12">
+              <StackPanel>
+                <Grid Margin="0,0,0,7">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="Исходный чек ОФД" FontSize="14" FontWeight="SemiBold"/>
+                  <TextBlock Grid.Column="1" Text="{Binding SelectedCase.OriginalReceiptStatus}"
+                             Margin="12,0,0,0" FontWeight="SemiBold"
+                             Foreground="{DynamicResource BrushAccent2}"/>
+                </Grid>
+                <TextBlock Text="{Binding SelectedCase.OriginalReceiptDetails}"
+                           TextWrapping="Wrap" Foreground="{DynamicResource BrushText2}"/>
+              </StackPanel>
+            </Border>
+
+            <Border Background="{DynamicResource BrushSurface2}"
+                    BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                    CornerRadius="6" Padding="12" Margin="0,0,0,18">
+              <StackPanel>
+                <Grid Margin="0,0,0,7">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="План исправления" FontSize="14" FontWeight="SemiBold"/>
+                  <TextBlock Grid.Column="1" Text="{Binding SelectedCase.PlanStatus}"
+                             Margin="12,0,0,0" FontWeight="SemiBold"
+                             Foreground="{DynamicResource BrushAccent2}"/>
+                </Grid>
+                <TextBlock Text="{Binding SelectedCase.PlanMessage}"
+                           TextWrapping="Wrap" Foreground="{DynamicResource BrushText2}"
+                           Margin="0,0,0,9"/>
+                <TextBlock Text="{Binding SelectedCase.PlanChecksText}"
+                           TextWrapping="Wrap" FontWeight="SemiBold"/>
+              </StackPanel>
+            </Border>
+
+            <TextBlock Text="Готовность к закрытию" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,9"/>
+            <Grid Margin="0,0,0,5">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <TextBlock Text="Чек в АТОЛ / ОФД"/>
+              <TextBlock Grid.Column="1" Text="{Binding SelectedCase.CheckStatus}" FontWeight="SemiBold"/>
+            </Grid>
+            <Grid Margin="0,0,0,5">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <TextBlock Text="Служебная записка"/>
+              <TextBlock Grid.Column="1" Text="{Binding SelectedCase.MemoStatus}" FontWeight="SemiBold"/>
+            </Grid>
+            <Grid Margin="0,0,0,14">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <TextBlock Text="Пояснение в 1С"/>
+              <TextBlock Grid.Column="1" Text="{Binding SelectedCase.OneCStatus}" FontWeight="SemiBold"/>
+            </Grid>
+
+            <Button Content="Проверить чек по отчёту..." Style="{StaticResource BtnPrimary}"
+                    Command="{Binding VerifyReportCommand}"/>
+            <Button Content="Проверить служебки" Style="{StaticResource BtnSecondary}"
+                    Margin="0,7,0,0" Command="{Binding VerifyMemosCommand}"/>
+            <Button Content="Служебка проверена вручную" Style="{StaticResource BtnGhost}"
+                    Margin="0,7,0,0" Command="{Binding MarkMemoVerifiedCommand}"/>
+            <Button Content="Запись в 1С подтверждена" Style="{StaticResource BtnSecondary}"
+                    Margin="0,7,0,0" Command="{Binding MarkOneCRecordedCommand}"/>
+            <Button Content="Открыть служебку" Style="{StaticResource BtnGhost}"
+                    Margin="0,7,0,0" Command="{Binding OpenServiceNoteCommand}"/>
+
+            <TextBlock Text="{Binding SelectedCase.LastMessage}" Foreground="{DynamicResource BrushText3}"
+                       FontSize="11" TextWrapping="Wrap" Margin="0,14,0,0"/>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="3" Background="{DynamicResource BrushSurface1}"
+            BorderBrush="{DynamicResource BrushBorder}" BorderThickness="0,1,0,0">
+      <TextBlock Text="{Binding Status}" Margin="24,0" VerticalAlignment="Center"
+                 Foreground="{DynamicResource BrushText2}" TextTrimming="CharacterEllipsis"/>
+    </Border>
+  </Grid>
+</UserControl>

@@ -12,6 +12,14 @@ namespace AtolGenerator.ViewModels;
 
 public class MainViewModel : BaseViewModel
 {
+    private string _activeWorkspace = "main";
+
+    public ReportsViewModel Reports { get; } = new();
+    public ObsidianCasesViewModel ObsidianCases { get; }
+    public bool ShowMainWorkspace => _activeWorkspace == "main";
+    public bool ShowReportsWorkspace => _activeWorkspace == "reports";
+    public bool ShowObsidianWorkspace => _activeWorkspace == "obsidian";
+
     // ── Tab ──────────────────────────────────────────────────────────────────
     private string _tab = "payment";
     public string Tab
@@ -87,7 +95,7 @@ public class MainViewModel : BaseViewModel
     public bool ShowItemsSection  => IsRealizationTab && !IsCorrection;
 
     // ── Кассир ───────────────────────────────────────────────────────────────
-    public IReadOnlyList<CashierInfo> AvailableCashiers => AppConstants.Cashiers;
+    public ObservableCollection<CashierInfo> AvailableCashiers { get; } = new();
 
     private CashierInfo _selectedCashier = AppConstants.DefaultCashier;
     public CashierInfo SelectedCashier
@@ -332,21 +340,6 @@ public class MainViewModel : BaseViewModel
         set => Set(ref _showAtolPanel, value);
     }
 
-    // ── Obsidian (кейсы коррекций) ───────────────────────────────────────────
-    private bool   _showObsidianPanel;
-    private string _obsidianMdPath    = string.Empty;
-    private string _obsidianPasteText = string.Empty;
-    private string _obsidianStatus    = string.Empty;
-
-    public bool   ShowObsidianPanel
-    {
-        get => _showObsidianPanel;
-        set => Set(ref _showObsidianPanel, value);
-    }
-    public string ObsidianMdPath    { get => _obsidianMdPath;    set => Set(ref _obsidianMdPath,    value); }
-    public string ObsidianPasteText { get => _obsidianPasteText; set => Set(ref _obsidianPasteText, value); }
-    public string ObsidianStatus    { get => _obsidianStatus;    set => Set(ref _obsidianStatus,    value); }
-
     private bool _showOfdToolsPanel;
     public bool ShowOfdToolsPanel
     {
@@ -365,6 +358,7 @@ public class MainViewModel : BaseViewModel
     public ICommand DeleteItemCommand      { get; }
     public ICommand SwitchTabCommand       { get; }
     public ICommand OpenWorkspaceCommand   { get; }
+    public ICommand OpenSettingsCommand    { get; }
     public ICommand ImportExcelCommand     { get; }
     public ICommand ToggleOneCPanelCommand     { get; }
     public ICommand TestOneCCommand            { get; }
@@ -381,10 +375,6 @@ public class MainViewModel : BaseViewModel
     public ICommand ApplyToOneCCommand         { get; }
     public ICommand ApplyOfdReportToOneCCommand { get; }
     public ICommand ApplyXmlAndOfdToOneCCommand { get; }
-    public ICommand ToggleObsidianPanelCommand  { get; }
-    public ICommand BrowseMdFileCommand         { get; }
-    public ICommand LoadObsidianCasesCommand    { get; }
-    public ICommand FetchAmountsFromOneCCommand { get; }
     public ICommand EditOrderCommand            { get; }
 
     // ── Skipped rows from Excel import ───────────────────────────────────────
@@ -394,6 +384,9 @@ public class MainViewModel : BaseViewModel
 
     public MainViewModel()
     {
+        ObsidianCases = new ObsidianCasesViewModel();
+        ObsidianCases.SendToWorkRequested += AddObsidianCasesToWork;
+
         // Любое изменение списка заказов автоматически обновляет
         // флаги доступности кнопки «Пробить в АТОЛ» и подсказку.
         Orders.CollectionChanged += (_, __) =>
@@ -416,6 +409,7 @@ public class MainViewModel : BaseViewModel
         DeleteItemCommand  = new RelayCommand(o => { if (o is OrderItemViewModel vm) CurrentItems.Remove(vm); });
         SwitchTabCommand       = new RelayCommand(t => { if (t is string s) Tab = s; });
         OpenWorkspaceCommand   = new RelayCommand(t => OpenWorkspace(t?.ToString()));
+        OpenSettingsCommand    = new RelayCommand(OpenSettings);
         ImportExcelCommand     = new RelayCommand(_ => ImportExcel());
         ToggleOneCPanelCommand     = new RelayCommand(_ => ShowOneCPanel = !ShowOneCPanel);
         TestOneCCommand            = new AsyncRelayCommand(TestOneCAsync);
@@ -432,10 +426,6 @@ public class MainViewModel : BaseViewModel
         ApplyToOneCCommand         = new AsyncRelayCommand(ApplyToOneCAsync);
         ApplyOfdReportToOneCCommand = new AsyncRelayCommand(ApplyOfdReportToOneCAsync);
         ApplyXmlAndOfdToOneCCommand = new AsyncRelayCommand(ApplyXmlAndOfdToOneCAsync);
-        ToggleObsidianPanelCommand  = new RelayCommand(_ => ShowObsidianPanel = !ShowObsidianPanel);
-        BrowseMdFileCommand         = new RelayCommand(_ => BrowseMdFile());
-        LoadObsidianCasesCommand    = new RelayCommand(_ => LoadObsidianCases());
-        FetchAmountsFromOneCCommand = new AsyncRelayCommand(FetchAmountsFromOneCAsync);
         EditOrderCommand            = new RelayCommand(o => EditOrder(o as OrderEntry));
 
         // Загружаем сохранённые настройки АТОЛ
@@ -454,22 +444,39 @@ public class MainViewModel : BaseViewModel
             OneCPassword = savedOneC.Password;
         }
 
-        // Загружаем сохранённый путь к Obsidian-файлу
-        var savedObs = ObsidianSettings.Load();
-        ObsidianMdPath = savedObs.MdFilePath;
+        ReloadApplicationSettings();
     }
 
     // ── Logic ─────────────────────────────────────────────────────────────────
 
     private void OpenWorkspace(string? target)
     {
+        if (target is "reports" or "ofd")
+        {
+            SetWorkspace("reports");
+            ShowOfdToolsPanel = false;
+            StatusText = "Работа с отчётами";
+            return;
+        }
+
+        if (target == "obsidian")
+        {
+            SetWorkspace("obsidian");
+            ShowOfdToolsPanel = false;
+            ObsidianCases.Activate();
+            StatusText = "Исправление чеков";
+            return;
+        }
+
+        if (target is not ("atol" or "settings"))
+            SetWorkspace("main");
+
         switch (target)
         {
             case "refunds":
                 Tab = "payment";
                 CheckType = "sell_refund";
                 ShowOneCPanel = false;
-                ShowObsidianPanel = false;
                 ShowOfdToolsPanel = false;
                 StatusText = "Возвраты по заказам";
                 break;
@@ -478,29 +485,13 @@ public class MainViewModel : BaseViewModel
                 Tab = "realization";
                 CheckType = "sell_correction";
                 ShowOneCPanel = true;
-                ShowObsidianPanel = false;
                 ShowOfdToolsPanel = false;
                 StatusText = "Коррекции реализаций 1С";
                 break;
 
-            case "obsidian":
-                ShowObsidianPanel = true;
-                ShowOfdToolsPanel = false;
-                StatusText = "Кейсы коррекций Obsidian";
-                break;
-
-            case "ofd":
-                Tab = "realization";
-                ShowOneCPanel = true;
-                ShowObsidianPanel = false;
-                ShowOfdToolsPanel = true;
-                StatusText = "XML + ОФД → 1С";
-                break;
-
             case "atol":
-                ShowAtolPanel = true;
-                ShowOfdToolsPanel = false;
-                StatusText = "Настройки АТОЛ Online";
+            case "settings":
+                OpenSettings();
                 break;
 
             case "payment":
@@ -519,6 +510,59 @@ public class MainViewModel : BaseViewModel
                 StatusText = "Реализации";
                 break;
         }
+    }
+
+    private void SetWorkspace(string workspace)
+    {
+        if (string.Equals(_activeWorkspace, workspace, StringComparison.Ordinal)) return;
+        _activeWorkspace = workspace;
+        OnPropertyChanged(nameof(ShowMainWorkspace));
+        OnPropertyChanged(nameof(ShowReportsWorkspace));
+        OnPropertyChanged(nameof(ShowObsidianWorkspace));
+    }
+
+    private void OpenSettings()
+    {
+        var dialog = new Views.SettingsWindow
+        {
+            Owner = System.Windows.Application.Current?.MainWindow,
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        ReloadApplicationSettings();
+        ObsidianCases.ReloadSettings();
+
+        var atol = AtolCredentials.Load();
+        AtolLogin = atol.Login;
+        AtolPassword = atol.Password;
+        AtolGroupCode = atol.GroupCode;
+
+        var oneC = OneCConnectionSettings.Load();
+        OneCServer = oneC.Server;
+        OneCDatabase = oneC.Database;
+        OneCUser = oneC.User;
+        OneCPassword = oneC.Password;
+
+        StatusText = "Настройки сохранены";
+        ShowToast("Настройки сохранены", false);
+    }
+
+    private void ReloadApplicationSettings()
+    {
+        var settings = ApplicationSettingsStore.Current;
+        AvailableCashiers.Clear();
+        foreach (var cashier in settings.Cashiers)
+            AvailableCashiers.Add(cashier);
+
+        SelectedCashier = AvailableCashiers.FirstOrDefault(c => string.Equals(
+            c.ShortName, settings.SelectedCashierShortName, StringComparison.OrdinalIgnoreCase))
+            ?? AvailableCashiers.FirstOrDefault()
+            ?? AppConstants.DefaultCashier;
+
+        if (!string.IsNullOrWhiteSpace(SelectedServiceType))
+            RefreshCities();
+        if (!string.IsNullOrWhiteSpace(SelectedCity))
+            PickAgent();
     }
 
     private void RefreshCities()
@@ -1023,141 +1067,6 @@ public class MainViewModel : BaseViewModel
                 : System.Windows.MessageBoxImage.Information);
     }
 
-    // ── Obsidian: загрузка кейсов коррекций ───────────────────────────────────
-    private void BrowseMdFile()
-    {
-        var dlg = new Microsoft.Win32.OpenFileDialog
-        {
-            Title  = "Выберите файл «Исправить чеки.md»",
-            Filter = "Markdown (*.md)|*.md|Все файлы (*.*)|*.*",
-        };
-        if (!string.IsNullOrEmpty(ObsidianMdPath) && System.IO.File.Exists(ObsidianMdPath))
-            dlg.InitialDirectory = System.IO.Path.GetDirectoryName(ObsidianMdPath);
-
-        if (dlg.ShowDialog() != true) return;
-        ObsidianMdPath = dlg.FileName;
-        // Сохраняем путь, чтобы при следующем запуске уже был выбран
-        new ObsidianSettings { MdFilePath = ObsidianMdPath }.Save();
-    }
-
-    private void LoadObsidianCases()
-    {
-        // Источник: текст из textbox имеет приоритет над файлом — пользователь
-        // мог вставить нужные строки точечно
-        List<OrderEntry> parsed;
-        try
-        {
-            if (!string.IsNullOrWhiteSpace(ObsidianPasteText))
-                parsed = ObsidianParserService.ParseText(ObsidianPasteText);
-            else if (!string.IsNullOrWhiteSpace(ObsidianMdPath) && System.IO.File.Exists(ObsidianMdPath))
-                parsed = ObsidianParserService.ParseFile(ObsidianMdPath);
-            else
-            {
-                ObsidianStatus = "⚠ Выберите файл или вставьте строки";
-                return;
-            }
-        }
-        catch (Exception ex)
-        {
-            ObsidianStatus = $"⚠ Ошибка чтения: {ex.Message}";
-            return;
-        }
-
-        if (parsed.Count == 0)
-        {
-            ObsidianStatus = "Не найдено ни одной активной строки (- [ ] ...). Возможно все уже отмечены [x].";
-            return;
-        }
-
-        // Автоопределение типа коррекции по описанию
-        CorrectionTypeDetector.DetectAll(parsed);
-
-        // Распределяем по вкладкам по типу документа
-        var realizationCases = parsed
-            .Where(o => o.DocumentType == SourceDocumentType.Realization)
-            .ToList();
-        var paymentCases = parsed
-            .Where(o => o.DocumentType != SourceDocumentType.Realization)
-            .ToList();
-
-        // Подтверждение перед загрузкой
-        var dlg = System.Windows.MessageBox.Show(
-            $"Найдено кейсов:\n" +
-            $"  • Реализации: {realizationCases.Count}\n" +
-            $"  • Оплаты/ПКО/РКО/Прочее: {paymentCases.Count}\n\n" +
-            $"Добавить их в основной список заказов?\n\n" +
-            $"Да — добавятся к существующим заказам\n" +
-            $"Нет — основной список будет очищен перед загрузкой\n" +
-            $"Отмена — выйти",
-            "Загрузка кейсов коррекций",
-            System.Windows.MessageBoxButton.YesNoCancel,
-            System.Windows.MessageBoxImage.Question);
-        if (dlg == System.Windows.MessageBoxResult.Cancel) return;
-        if (dlg == System.Windows.MessageBoxResult.No) Orders.Clear();
-
-        // Кладём в основной список. CollectionChanged автоматически обновит все
-        // зависимые свойства (OrderCount, CanPunchOrdersViaAtol, CorrectionPunchHint и т.д.).
-        int added = 0;
-        foreach (var c in parsed)
-        {
-            Orders.Add(c);
-            added++;
-        }
-
-        // Автопереключение на ту вкладку, где кейсов больше
-        Tab = realizationCases.Count >= paymentCases.Count ? "realization" : "payment";
-
-        ObsidianStatus = $"✓ Загружено {added} кейсов " +
-                         $"(Реализаций: {realizationCases.Count}, Прочих: {paymentCases.Count}). " +
-                         $"Активная вкладка: {(Tab == "realization" ? "Реализация" : "Оплата")}";
-    }
-
-    /// <summary>
-    /// Догружает суммы документов из 1С для всех заказов в списке Orders, у которых
-    /// есть номер документа и тип ≠ FpOnly/Unknown. Заполняет CorrectAmount; если
-    /// Amount был 0 — подставляет правильную сумму. OriginalCheckAmount не трогает —
-    /// он заполняется вручную для сценариев «чек большей/меньшей суммой».
-    /// </summary>
-    private async Task FetchAmountsFromOneCAsync()
-    {
-        if (Orders.Count == 0)
-        {
-            ObsidianStatus = "⚠ Список пуст — сначала загрузите кейсы";
-            return;
-        }
-        if (string.IsNullOrWhiteSpace(OneCServer) || string.IsNullOrWhiteSpace(OneCDatabase))
-        {
-            ObsidianStatus = "⚠ Заполните настройки 1С в правой панели";
-            return;
-        }
-
-        ObsidianStatus = $"Догружаем суммы из 1С для {Orders.Count} записей…";
-        var settings = BuildOneCSettings();
-
-        // Берём только записи, для которых вообще возможен запрос в 1С
-        var targets = Orders
-            .Where(o => !string.IsNullOrEmpty(o.OrderNum)
-                     && o.DocumentType is not (SourceDocumentType.Unknown or SourceDocumentType.FpOnly or SourceDocumentType.KkmCheck))
-            .ToList();
-        if (targets.Count == 0)
-        {
-            ObsidianStatus = "Нет записей пригодных для добора (нужен № документа и тип ≠ ФП/ЧекККМ)";
-            return;
-        }
-
-        var result = await Task.Run(() => OneCService.FetchAmountsFromOneC(settings, targets));
-
-        // CollectionChanged не вызывается при изменении свойств элементов, поэтому
-        // принудительно перерисуем карточки — заменим коллекцию на тот же набор
-        var snapshot = Orders.ToList();
-        Orders.Clear();
-        foreach (var e in snapshot) Orders.Add(e);
-
-        ObsidianStatus = $"✓ Сумм: {result.Filled} / {result.Total} • ФП: {result.FilledFp}" +
-                         $"  (не найдено: {result.NotFound}, пропущено: {result.Skipped})" +
-                         (result.Errors.Count > 0 ? $", ошибок: {result.Errors.Count}" : string.Empty);
-    }
-
     /// <summary>Открывает модальное окно редактирования записи.</summary>
     private void EditOrder(OrderEntry? order)
     {
@@ -1187,6 +1096,7 @@ public class MainViewModel : BaseViewModel
     /// <summary>Создаёт независимую копию OrderEntry (мелкое клонирование).</summary>
     private static OrderEntry CloneOrderEntry(OrderEntry s) => new()
     {
+        ObsidianCaseId        = s.ObsidianCaseId,
         OrderNum             = s.OrderNum,
         OrderDate            = s.OrderDate,
         Amount               = s.Amount,
@@ -1201,6 +1111,7 @@ public class MainViewModel : BaseViewModel
         CorrectionDate       = s.CorrectionDate,
         CorrectionNumber     = s.CorrectionNumber,
         IsService            = s.IsService,
+        IsOwnService         = s.IsOwnService,
         ServiceType          = s.ServiceType,
         City                 = s.City,
         Kind                 = s.Kind,
@@ -1212,11 +1123,17 @@ public class MainViewModel : BaseViewModel
         Notes                = s.Notes,
         OriginalPaymentWasCash = s.OriginalPaymentWasCash,
         CorrectPaymentIsCash   = s.CorrectPaymentIsCash,
+        PlannedReverseOperation = s.PlannedReverseOperation,
+        PlannedCorrectOperation = s.PlannedCorrectOperation,
+        PlannedVatType = s.PlannedVatType,
+        OriginalCheckDate = s.OriginalCheckDate,
+        OriginalCheckOperation = s.OriginalCheckOperation,
     };
 
     /// <summary>Копирует поля из источника в цель (используется после редактирования).</summary>
     private static void ApplyOrderEntry(OrderEntry from, OrderEntry to)
     {
+        to.ObsidianCaseId        = from.ObsidianCaseId;
         to.OrderNum             = from.OrderNum;
         to.OrderDate            = from.OrderDate;
         to.Amount               = from.Amount;
@@ -1231,6 +1148,7 @@ public class MainViewModel : BaseViewModel
         to.CorrectionDate       = from.CorrectionDate;
         to.CorrectionNumber     = from.CorrectionNumber;
         to.IsService            = from.IsService;
+        to.IsOwnService         = from.IsOwnService;
         to.ServiceType          = from.ServiceType;
         to.City                 = from.City;
         to.Kind                 = from.Kind;
@@ -1242,6 +1160,11 @@ public class MainViewModel : BaseViewModel
         to.Notes                = from.Notes;
         to.OriginalPaymentWasCash = from.OriginalPaymentWasCash;
         to.CorrectPaymentIsCash   = from.CorrectPaymentIsCash;
+        to.PlannedReverseOperation = from.PlannedReverseOperation;
+        to.PlannedCorrectOperation = from.PlannedCorrectOperation;
+        to.PlannedVatType = from.PlannedVatType;
+        to.OriginalCheckDate = from.OriginalCheckDate;
+        to.OriginalCheckOperation = from.OriginalCheckOperation;
     }
 
     private void SaveAtolSettings()
@@ -1328,7 +1251,7 @@ public class MainViewModel : BaseViewModel
                     continue;
                 }
 
-                if (row.Source.AgentInfo is null)
+                if (row.Source.AgentInfo is null && !row.Source.IsOwnService)
                 {
                     var city = string.IsNullOrWhiteSpace(row.City) ? "подразделение не заполнено" : row.City;
                     errors.Add($"{row.DocNumber}: для услуги «{row.Source.ServiceType}» и подразделения «{city}» не найдена ставка НДС");
@@ -1341,7 +1264,8 @@ public class MainViewModel : BaseViewModel
 
     private static bool IsRealizationVatReady(OneCRealizationViewModel row) =>
         !row.Source.IsService ||
-        (!string.IsNullOrWhiteSpace(row.Source.ServiceType) && row.Source.AgentInfo is not null);
+        (!string.IsNullOrWhiteSpace(row.Source.ServiceType) &&
+         (row.Source.AgentInfo is not null || row.Source.IsOwnService));
 
     private void ShowRealizationVatErrors(List<string> errors, bool stopped)
     {
@@ -1374,6 +1298,7 @@ public class MainViewModel : BaseViewModel
             CorrectionDate   = r.DocDate,
             CorrectionNumber = r.DocNumber,
             IsService        = r.IsService,
+            IsOwnService     = r.Source.IsOwnService,
             ServiceType      = r.Source.ServiceType,
             City             = r.City,
             DocumentType     = SourceDocumentType.Realization,
@@ -1424,6 +1349,7 @@ public class MainViewModel : BaseViewModel
         CorrectionDate   = r.DocDate,
         CorrectionNumber = r.DocNumber,
         IsService        = r.IsService,
+        IsOwnService     = r.Source.IsOwnService,
         ServiceType      = r.Source.ServiceType,
         City             = r.City,
         DocumentType     = SourceDocumentType.Realization,
@@ -1744,10 +1670,37 @@ public class MainViewModel : BaseViewModel
         ShowGenerationResults(results);
     }
 
+    private void AddObsidianCasesToWork(IReadOnlyList<OrderEntry> entries)
+    {
+        var added = 0;
+        foreach (var entry in entries)
+        {
+            if (!string.IsNullOrWhiteSpace(entry.ObsidianCaseId) &&
+                Orders.Any(x => x.ObsidianCaseId.Equals(entry.ObsidianCaseId, StringComparison.OrdinalIgnoreCase)))
+                continue;
+            Orders.Add(entry);
+            added++;
+        }
+
+        if (added == 0)
+        {
+            ShowToast("Выбранные случаи уже находятся в рабочем списке", true);
+            return;
+        }
+
+        var realizationCount = entries.Count(x => x.DocumentType == SourceDocumentType.Realization);
+        Tab = realizationCount >= entries.Count - realizationCount ? "realization" : "payment";
+        SetWorkspace("main");
+        ShowOfdToolsPanel = false;
+        StatusText = $"Добавлено из Obsidian: {added}";
+        ShowToast($"Добавлено в работу: {added}", false);
+    }
+
     public int OrderCount => Orders.Count;
 
     private void ShowGenerationResults(List<GenerationResult> results)
     {
+        ObsidianCases.RecordGenerated(results);
         SelectedEntry = null;
         Results.Clear();
         AllResultEntries.Clear();

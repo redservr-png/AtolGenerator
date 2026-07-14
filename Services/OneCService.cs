@@ -53,6 +53,7 @@ public class OneCRealization
     public string CustomerName   { get; set; } = string.Empty;
     public double Amount         { get; set; }
     public bool   IsService      { get; set; }  // агентский договор
+    public bool   IsOwnService   { get; set; }
     public string City           { get; set; } = string.Empty;
     public bool   HasCheck       { get; set; }  // чек уже пробит
     public string CheckNumber    { get; set; } = string.Empty;
@@ -226,32 +227,48 @@ public static class OneCService
     /// Загружает табличную часть (Товары или Услуги) документа реализации по номеру документа.
     /// </summary>
     public static List<OneCRealizationItem> LoadRealizationItems(
-        OneCConnectionSettings s, string docNumber, bool isService)
+        OneCConnectionSettings s, string docNumber, DateTime docDate, bool isService)
     {
         dynamic? conn = null;
         dynamic? connector = null;
         var result = new List<OneCRealizationItem>();
 
-        Log($"=== LoadRealizationItems: docNumber={docNumber}, isService={isService} ===");
+        Log($"=== LoadRealizationItems: docNumber={docNumber}, docDate={docDate:dd.MM.yyyy}, isService={isService} ===");
 
         try
         {
             connector = CreateConnector();
             conn      = connector.Connect(s.ConnectionString);
 
-            var tableName = isService ? "Услуги" : "Товары";
-            var query     = conn.NewObject("Запрос");
-            query.Текст = $"""
+            var query = conn.NewObject("Запрос");
+            query.Текст = """
                 ВЫБРАТЬ
                     Строки.Номенклатура.Наименование КАК Наименование,
                     Строки.Количество                КАК Количество,
                     Строки.Сумма                     КАК Сумма
                 ИЗ
-                    Документ.РеализацияТоваровУслуг.{tableName} КАК Строки
+                    Документ.РеализацияТоваровУслуг.Товары КАК Строки
                 ГДЕ
                     Строки.Ссылка.Номер = &НомерДок
+                    И Строки.Ссылка.Дата >= &НачалоДня
+                    И Строки.Ссылка.Дата < &КонецДня
+
+                ОБЪЕДИНИТЬ ВСЕ
+
+                ВЫБРАТЬ
+                    Строки.Номенклатура.Наименование КАК Наименование,
+                    Строки.Количество                КАК Количество,
+                    Строки.Сумма                     КАК Сумма
+                ИЗ
+                    Документ.РеализацияТоваровУслуг.Услуги КАК Строки
+                ГДЕ
+                    Строки.Ссылка.Номер = &НомерДок
+                    И Строки.Ссылка.Дата >= &НачалоДня
+                    И Строки.Ссылка.Дата < &КонецДня
                 """;
             query.УстановитьПараметр("НомерДок", docNumber);
+            query.УстановитьПараметр("НачалоДня", docDate.Date);
+            query.УстановитьПараметр("КонецДня", docDate.Date.AddDays(1));
 
             var queryResult = query.Выполнить();
             var selection   = queryResult.Выбрать();
@@ -286,10 +303,22 @@ public static class OneCService
         OneCConnectionSettings s, OneCRealization realization)
     {
         if (realization.Items.Count == 0 && !string.IsNullOrWhiteSpace(realization.DocNumber))
-            realization.Items = LoadRealizationItems(s, realization.DocNumber, realization.IsService);
+        {
+            if (!DateTime.TryParseExact(realization.DocDate, "dd.MM.yyyy",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var docDate))
+                throw new InvalidOperationException(
+                    $"{realization.DocNumber}: не определена дата реализации для загрузки табличной части.");
+
+            realization.Items = LoadRealizationItems(
+                s, realization.DocNumber, docDate, realization.IsService);
+        }
 
         if (string.IsNullOrWhiteSpace(realization.ServiceType))
             realization.ServiceType = DetectServiceType(realization.Items.Select(i => i.Name));
+
+        if (ServiceClassificationService.ApplyOwnDeliveryRule(realization))
+            return;
 
         if (realization.IsService && realization.AgentInfo is null)
             realization.AgentInfo = ResolveServiceProvider(realization.City, realization.ServiceType);
@@ -384,6 +413,24 @@ public static class OneCService
                     if (string.IsNullOrEmpty(order.CustomerName) && !string.IsNullOrEmpty(customer))
                         order.CustomerName = customer;
                     // IsService не меняем — метод вызывается только для уже помеченных услуг
+
+                    if (ServiceClassificationService.IsOwnDeliveryDepartmentName(order.City))
+                    {
+                        try
+                        {
+                            var ownServiceItems = LoadBuyerOrderItems(conn, order.OrderNum);
+                            if (order.Items.Count == 0) order.Items = ownServiceItems;
+                            if (ServiceClassificationService.ApplyOwnDeliveryRule(order))
+                            {
+                                Log($"  {order.OrderNum}: собственная доставка России, НДС 22%, без агента");
+                                continue;
+                            }
+                        }
+                        catch (Exception itemEx)
+                        {
+                            Log($"  {order.OrderNum}: не удалось проверить номенклатуру собственной доставки — {itemEx.Message}");
+                        }
+                    }
 
                     // Ищем поставщика по городу + типу услуги
                     if (order.IsService && !string.IsNullOrEmpty(order.City))
@@ -810,6 +857,7 @@ public static class OneCService
                     // У Заказа покупателя его нет — для него выбираем только сумму.
                     bool hasFpField = HasFiscalNumberField(o.DocumentType);
                     var fpSelectPart = hasFpField ? ", Док.ЧекНомерФП КАК ЧекНомерФП" : "";
+                    var detailsSelectPart = FetchDetailsSelectPart(o.DocumentType);
 
                     var query = conn.NewObject("Запрос");
                     query.Текст = $"""
@@ -817,6 +865,7 @@ public static class OneCService
                             Док.СуммаДокумента  КАК Сумма,
                             Док.Дата             КАК ДатаДок
                             {fpSelectPart}
+                            {detailsSelectPart}
                         ИЗ
                             Документ.{metaName} КАК Док
                         ГДЕ
@@ -838,7 +887,13 @@ public static class OneCService
                     }
 
                     var sum = ToDouble(sel.Сумма);
+                    var documentDate = ToDateTime(sel.ДатаДок);
                     o.CorrectAmount = sum;
+                    if (documentDate > DateTime.MinValue)
+                    {
+                        o.OrderDate = documentDate.ToString("dd.MM.yyyy HH:mm:ss");
+                        o.CorrectionDate = documentDate.ToString("dd.MM.yyyy");
+                    }
                     // Если Amount был 0 (типично для строк из Obsidian без «суммы» в тексте) —
                     // подставляем правильную сумму как основную.
                     if (o.Amount <= 0) o.Amount = sum;
@@ -859,6 +914,8 @@ public static class OneCService
                         }
                         catch { /* нет поля — пропускаем */ }
                     }
+
+                    ApplyFetchedDetails(o, sel);
 
                     res.Filled++;
                     Log($"  {o.OrderNum} ({metaName}): сумма={sum}, ФП={o.OriginalFiscalNumber}");
@@ -883,6 +940,104 @@ public static class OneCService
 
         Log($"=== FetchAmounts: заполнено {res.Filled}, не найдено {res.NotFound}, пропущено {res.Skipped} ===");
         return res;
+    }
+
+    public static void EnrichCorrectionOrderForReceipt(
+        OneCConnectionSettings settings,
+        Models.OrderEntry order)
+    {
+        if (order.DocumentType != Models.SourceDocumentType.Realization)
+            return;
+        if (!DateTime.TryParseExact(order.OrderDate, "dd.MM.yyyy HH:mm:ss",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var documentDate) &&
+            !DateTime.TryParseExact(order.OrderDate, "dd.MM.yyyy",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out documentDate))
+            return;
+
+        var realization = new OneCRealization
+        {
+            DocNumber = order.OrderNum,
+            DocDate = documentDate.ToString("dd.MM.yyyy"),
+            Amount = order.CorrectAmount ?? order.Amount,
+            IsService = order.IsService,
+            IsOwnService = order.IsOwnService,
+            City = order.City,
+            CustomerName = order.CustomerName,
+            ServiceType = order.ServiceType,
+            AgentInfo = order.AgentInfo,
+        };
+        EnrichRealizationForReceipt(settings, realization);
+        order.Items = realization.Items.Select(x => new Models.OrderItem
+        {
+            Name = x.Name,
+            Quantity = x.Quantity,
+            Sum = x.Sum,
+        }).ToList();
+        order.IsService = realization.IsService;
+        order.IsOwnService = realization.IsOwnService;
+        order.ServiceType = realization.ServiceType;
+        order.AgentInfo = realization.AgentInfo;
+    }
+
+    private static List<Models.OrderItem> LoadBuyerOrderItems(dynamic connection, string orderNumber)
+    {
+        var query = connection.NewObject("Запрос");
+        query.Текст = """
+            ВЫБРАТЬ
+                Строки.Номенклатура.Наименование КАК Наименование,
+                Строки.Количество                КАК Количество,
+                Строки.Сумма                     КАК Сумма
+            ИЗ
+                Документ.ЗаказПокупателя.Товары КАК Строки
+            ГДЕ
+                Строки.Ссылка.Номер = &НомерЗаказа
+                И Строки.Ссылка.ПометкаУдаления = ЛОЖЬ
+            """;
+        query.УстановитьПараметр("НомерЗаказа", orderNumber);
+
+        var result = new List<Models.OrderItem>();
+        var selection = query.Выполнить().Выбрать();
+        while ((bool)selection.Следующий())
+        {
+            result.Add(new Models.OrderItem
+            {
+                Name = Str(selection.Наименование),
+                Quantity = ToDouble(selection.Количество),
+                Sum = ToDouble(selection.Сумма),
+            });
+        }
+
+        return result;
+    }
+
+    private static string FetchDetailsSelectPart(Models.SourceDocumentType type) => type switch
+    {
+        Models.SourceDocumentType.Realization => """
+            , Док.Подразделение.Наименование КАК Подразделение
+            , Док.ДоговорКонтрагента.Наименование КАК Договор
+            , Док.Сделка.КонтактноеЛицоКонтрагента.Наименование КАК Покупатель
+            """,
+        Models.SourceDocumentType.BuyerOrder => """
+            , Док.Подразделение.Наименование КАК Подразделение
+            , Док.ДоговорКонтрагента.Наименование КАК Договор
+            , Док.КонтактноеЛицоКонтрагента.Наименование КАК Покупатель
+            """,
+        _ => string.Empty,
+    };
+
+    private static void ApplyFetchedDetails(Models.OrderEntry order, dynamic selection)
+    {
+        if (order.DocumentType is not (Models.SourceDocumentType.Realization or Models.SourceDocumentType.BuyerOrder))
+            return;
+
+        var city = Str(selection.Подразделение);
+        var contract = Str(selection.Договор);
+        var customer = Str(selection.Покупатель);
+        if (!string.IsNullOrWhiteSpace(city)) order.City = city;
+        if (!string.IsNullOrWhiteSpace(customer)) order.CustomerName = customer;
+        order.IsService = contract.Contains("агент", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Маппинг SourceDocumentType → имя документа в метаданных 1С УТ 10.3.</summary>

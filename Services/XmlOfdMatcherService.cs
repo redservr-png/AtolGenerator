@@ -70,9 +70,11 @@ public static class XmlOfdMatcherService
             }
             else if (receipt is not null)
             {
-                // sell_refund — номер реализации в additional_user_attribute или в позиции
-                baseNumber = receipt.Element("additional_user_attribute")?
-                                    .Element("value")?.Value ?? string.Empty;
+                // sell_refund — номер реализации в additional_user_props.
+                // Старое имя оставлено как fallback для ранее созданных XML.
+                var userProps = receipt.Element("additional_user_props")
+                                ?? receipt.Element("additional_user_attribute");
+                baseNumber = userProps?.Element("value")?.Value ?? string.Empty;
                 if (string.IsNullOrEmpty(baseNumber))
                 {
                     // fallback: парсим из имени позиции (если совсем старый XML)

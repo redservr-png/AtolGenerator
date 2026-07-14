@@ -34,7 +34,7 @@ public partial class CorrectionEditorWindow : Window
 
         // Для реализаций с уже пробитым чеком "другая дата" — это именно
         // исправительный комплект: sell_refund + sell_correction.
-        Entry.Kind = IsRealizationRepairPair()
+        Entry.Kind = IsRepairPair()
             ? OrderKind.RefundCorrectionPair
             : Entry.CorrectionScenario.ToOrderKind();
 
@@ -96,14 +96,14 @@ public partial class CorrectionEditorWindow : Window
         if (RepairPairPanel is null)
             return;
 
-        var isRepair = IsRealizationRepairPair();
+        var isRepair = IsRepairPair();
         RepairPairPanel.Visibility = isRepair ? Visibility.Visible : Visibility.Collapsed;
         RefreshRepairTotals();
     }
 
     private void EnsureRepairPairItems()
     {
-        if (!IsRealizationRepairPair() || Entry.Items.Count > 0)
+        if (!IsRepairPair() || Entry.Items.Count > 0)
             return;
 
         var amount = Entry.OriginalCheckAmount ?? Entry.CorrectAmount ?? Entry.Amount;
@@ -117,13 +117,13 @@ public partial class CorrectionEditorWindow : Window
 
     private bool ValidateRepairPair()
     {
-        if (!IsRealizationRepairPair())
+        if (!IsRepairPair())
             return true;
 
         if (string.IsNullOrWhiteSpace(Entry.OriginalFiscalNumber))
         {
             MessageBox.Show(
-                "Для исправительного комплекта нужен ФП исходного чека — он попадёт в тег 1192.",
+                "Для исправительного комплекта нужен ФП исходного чека из 1С или отчёта ОФД.",
                 "Проверка исправительного комплекта",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -190,9 +190,11 @@ public partial class CorrectionEditorWindow : Window
                                           ?? RefundItemsTotalText.Foreground;
     }
 
-    private bool IsRealizationRepairPair()
-        => Entry.DocumentType == SourceDocumentType.Realization
-           && Entry.CorrectionScenario == CorrectionScenario.WrongDate;
+    private bool IsRepairPair()
+        => (!string.IsNullOrWhiteSpace(Entry.PlannedReverseOperation) &&
+            !string.IsNullOrWhiteSpace(Entry.PlannedCorrectOperation)) ||
+           (Entry.DocumentType == SourceDocumentType.Realization &&
+            Entry.CorrectionScenario == CorrectionScenario.WrongDate);
 
     private string DefaultRepairItemName()
     {
@@ -200,6 +202,8 @@ public partial class CorrectionEditorWindow : Window
             ? Entry.CorrectionNumber
             : Entry.OrderNum;
         var prefix = Entry.IsService || Entry.AgentInfo is not null ? "Услуга" : "Товар";
-        return $"{prefix} по реализации {docNum}";
+        return Entry.DocumentType == SourceDocumentType.Realization
+            ? $"{prefix} по реализации {docNum}"
+            : $"{prefix} по документу {docNum}";
     }
 }

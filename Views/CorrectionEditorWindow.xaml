@@ -6,8 +6,8 @@
         Width="1020" Height="760" MinWidth="860" MinHeight="620"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize" ShowInTaskbar="False"
-        Background="{StaticResource BrushBg}"
-        Foreground="{StaticResource BrushText}"
+        Background="{DynamicResource BrushBg}"
+        Foreground="{DynamicResource BrushText}"
         FontFamily="Segoe UI" FontSize="13">
 
     <Window.Resources>
@@ -19,55 +19,55 @@
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="FontSize"   Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource BrushText2}"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
             <Setter Property="Margin"     Value="0,0,0,4"/>
         </Style>
 
         <Style x:Key="SectionTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Foreground" Value="{StaticResource BrushText}"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
         </Style>
 
         <Style x:Key="MutedText" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="{StaticResource BrushText3}"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushText3}"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
 
         <Style x:Key="PanelBorder" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource BrushSurface1}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+            <Setter Property="Background" Value="{DynamicResource BrushSurface1}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="8"/>
             <Setter Property="Padding" Value="16"/>
         </Style>
 
         <Style x:Key="SoftPanelBorder" TargetType="Border" BasedOn="{StaticResource PanelBorder}">
-            <Setter Property="Background" Value="{StaticResource BrushSurface2}"/>
+            <Setter Property="Background" Value="{DynamicResource BrushSurface2}"/>
         </Style>
 
         <Style TargetType="TextBox">
-            <Setter Property="Background"   Value="{StaticResource BrushSurface2}"/>
-            <Setter Property="Foreground"   Value="{StaticResource BrushText}"/>
-            <Setter Property="BorderBrush"  Value="{StaticResource BrushBorder}"/>
+            <Setter Property="Background"   Value="{DynamicResource BrushSurface2}"/>
+            <Setter Property="Foreground"   Value="{DynamicResource BrushText}"/>
+            <Setter Property="BorderBrush"  Value="{DynamicResource BrushBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding"      Value="10,7"/>
             <Setter Property="FontSize"     Value="13"/>
-            <Setter Property="CaretBrush"   Value="{StaticResource BrushAccent}"/>
+            <Setter Property="CaretBrush"   Value="{DynamicResource BrushAccent}"/>
         </Style>
 
         <Style TargetType="ComboBox">
-            <Setter Property="Background"      Value="{StaticResource BrushSurface2}"/>
-            <Setter Property="Foreground"      Value="{StaticResource BrushText}"/>
-            <Setter Property="BorderBrush"     Value="{StaticResource BrushBorder}"/>
+            <Setter Property="Background"      Value="{DynamicResource BrushSurface2}"/>
+            <Setter Property="Foreground"      Value="{DynamicResource BrushText}"/>
+            <Setter Property="BorderBrush"     Value="{DynamicResource BrushBorder}"/>
             <Setter Property="Padding"         Value="10,7"/>
             <Setter Property="FontSize"        Value="13"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
 
         <Style x:Key="BtnPrimary" TargetType="Button">
-            <Setter Property="Background"  Value="{StaticResource BrushAccent}"/>
+            <Setter Property="Background"  Value="{DynamicResource BrushAccent}"/>
             <Setter Property="Foreground"  Value="White"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding"     Value="20,9"/>
@@ -77,9 +77,9 @@
         </Style>
 
         <Style x:Key="BtnGhost" TargetType="Button">
-            <Setter Property="Background"  Value="{StaticResource BrushSurface2}"/>
-            <Setter Property="Foreground"  Value="{StaticResource BrushText}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+            <Setter Property="Background"  Value="{DynamicResource BrushSurface2}"/>
+            <Setter Property="Foreground"  Value="{DynamicResource BrushText}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding"     Value="14,8"/>
             <Setter Property="FontSize"    Value="13"/>
@@ -87,24 +87,24 @@
         </Style>
 
         <Style TargetType="DataGrid">
-            <Setter Property="Background" Value="{StaticResource BrushSurface1}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+            <Setter Property="Background" Value="{DynamicResource BrushSurface1}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="GridLinesVisibility" Value="Horizontal"/>
-            <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource BrushBorder}"/>
-            <Setter Property="RowBackground" Value="{StaticResource BrushSurface1}"/>
-            <Setter Property="AlternatingRowBackground" Value="{StaticResource BrushSurface2}"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BrushBorder}"/>
+            <Setter Property="RowBackground" Value="{DynamicResource BrushSurface1}"/>
+            <Setter Property="AlternatingRowBackground" Value="{DynamicResource BrushSurface2}"/>
             <Setter Property="HeadersVisibility" Value="Column"/>
             <Setter Property="CanUserResizeRows" Value="False"/>
             <Setter Property="AutoGenerateColumns" Value="False"/>
         </Style>
 
         <Style TargetType="DataGridColumnHeader">
-            <Setter Property="Background" Value="{StaticResource BrushSurface2}"/>
-            <Setter Property="Foreground" Value="{StaticResource BrushText2}"/>
+            <Setter Property="Background" Value="{DynamicResource BrushSurface2}"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="10,8"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
         </Style>
 
         <Style TargetType="DataGridCell">
@@ -130,8 +130,8 @@
                 <StackPanel>
                     <TextBlock Text="Редактирование коррекции"
                                FontSize="20" FontWeight="Bold"
-                               Foreground="{StaticResource BrushText}"/>
-                    <TextBlock Text="Проверьте основание, суммы, ФП для тега 1192 и табличную часть возврата."
+                               Foreground="{DynamicResource BrushText}"/>
+                    <TextBlock Text="Проверьте основание, суммы, ФП исходного чека и табличную часть возврата."
                                Style="{StaticResource MutedText}" Margin="0,3,0,0"/>
                 </StackPanel>
 
@@ -139,7 +139,7 @@
                         BorderBrush="#332563EB" BorderThickness="1"
                         Padding="10,5" VerticalAlignment="Top">
                     <TextBlock Text="{Binding Kind, Converter={StaticResource KindLabel}}"
-                               Foreground="{StaticResource BrushAccent}"
+                               Foreground="{DynamicResource BrushAccent}"
                                FontSize="12" FontWeight="Bold"/>
                 </Border>
             </Grid>
@@ -217,13 +217,13 @@
                         <StackPanel>
                             <DockPanel Margin="0,0,0,12">
                                 <Border DockPanel.Dock="Left" Width="4" Height="32"
-                                        Background="{StaticResource BrushOrange}" CornerRadius="2"
+                                        Background="{DynamicResource BrushOrange}" CornerRadius="2"
                                         Margin="0,0,10,0"/>
                                 <StackPanel>
-                                    <TextBlock Text="Исправительный комплект по реализации"
+                                    <TextBlock Text="Исправительный комплект"
                                                FontSize="16" FontWeight="Bold"
-                                               Foreground="{StaticResource BrushOrange}"/>
-                                    <TextBlock Text="XML будет состоять из двух чеков: возврат ошибочного чека с табличной частью и правильная коррекция без табличной части."
+                                               Foreground="{DynamicResource BrushOrange}"/>
+                                    <TextBlock Text="Сначала отменяется исходный ошибочный чек, затем формируется правильный чек по рассчитанному плану."
                                                Style="{StaticResource MutedText}"/>
                                 </StackPanel>
                             </DockPanel>
@@ -237,9 +237,12 @@
 
                                 <Border Grid.Column="0" Style="{StaticResource SoftPanelBorder}">
                                     <StackPanel>
-                                        <TextBlock Text="1. Возврат старого чека" Style="{StaticResource SectionTitle}"/>
-                                        <TextBlock Text="Операция: sell_refund. Тег 1192 берётся из ФП исходного чека."
-                                                   Style="{StaticResource MutedText}" Margin="0,3,0,12"/>
+                                        <TextBlock Text="1. Отмена старого чека" Style="{StaticResource SectionTitle}"/>
+                                        <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,12">
+                                            <Run Text="Операция: "/>
+                                            <Run Text="{Binding PlannedReverseOperation}" FontWeight="SemiBold"/>
+                                            <Run Text=". ФП исходного чека сохранён в карточке и служебной записке."/>
+                                        </TextBlock>
 
                                         <Grid Margin="0,0,0,10">
                                             <Grid.ColumnDefinitions>
@@ -253,14 +256,14 @@
                                                          ToolTip="Итоговая сумма возвратного чека"/>
                                             </StackPanel>
                                             <StackPanel Grid.Column="2">
-                                                <TextBlock Text="ФП старого чека (1192)" Style="{StaticResource FieldLabel}"/>
+                                                <TextBlock Text="ФП старого чека" Style="{StaticResource FieldLabel}"/>
                                                 <TextBox Text="{Binding OriginalFiscalNumber, UpdateSourceTrigger=PropertyChanged}"
                                                          ToolTip="Фискальный признак ошибочного чека"/>
                                             </StackPanel>
                                         </Grid>
 
                                         <DockPanel Margin="0,2,0,6">
-                                            <TextBlock Text="Табличная часть возврата"
+                                            <TextBlock Text="Табличная часть отмены"
                                                        Style="{StaticResource FieldLabel}"
                                                        DockPanel.Dock="Left"/>
                                             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
@@ -300,9 +303,12 @@
 
                                 <Border Grid.Column="2" Style="{StaticResource SoftPanelBorder}">
                                     <StackPanel>
-                                        <TextBlock Text="2. Правильная коррекция" Style="{StaticResource SectionTitle}"/>
-                                        <TextBlock Text="Операция: sell_correction. Для ФФД 1.05 табличная часть здесь не формируется."
-                                                   Style="{StaticResource MutedText}" Margin="0,3,0,12"/>
+                                        <TextBlock Text="2. Правильный чек" Style="{StaticResource SectionTitle}"/>
+                                        <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,12">
+                                            <Run Text="Операция: "/>
+                                            <Run Text="{Binding PlannedCorrectOperation}" FontWeight="SemiBold"/>
+                                            <Run Text=". Для чека коррекции ФФД 1.05 табличная часть не формируется."/>
+                                        </TextBlock>
 
                                         <TextBlock Text="Исправленная сумма, ₽" Style="{StaticResource FieldLabel}"/>
                                         <TextBox Text="{Binding CorrectAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
@@ -324,8 +330,8 @@
                                             </StackPanel>
                                         </Grid>
 
-                                        <Border Background="{StaticResource BrushSurface1}"
-                                                BorderBrush="{StaticResource BrushBorder}"
+                                        <Border Background="{DynamicResource BrushSurface1}"
+                                                BorderBrush="{DynamicResource BrushBorder}"
                                                 BorderThickness="1" CornerRadius="6"
                                                 Padding="10" Margin="0,12,0,0">
                                             <Grid>
@@ -334,7 +340,7 @@
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="НДС" FontWeight="Bold"
-                                                           Foreground="{StaticResource BrushAccent2}"
+                                                           Foreground="{DynamicResource BrushAccent2}"
                                                            Margin="0,0,12,0"/>
                                                 <StackPanel Grid.Column="1">
                                                     <TextBlock>
@@ -343,9 +349,7 @@
                                                     </TextBlock>
                                                     <TextBlock>
                                                         <Run Text="Агент / ставка: "/>
-                                                        <Run Text="{Binding AgentInfo.Name, TargetNullValue='товарная реализация'}"/>
-                                                        <Run Text=" "/>
-                                                        <Run Text="{Binding AgentInfo.VatType, TargetNullValue='vat22'}"/>
+                                                        <Run Text="{Binding AgentVatDisplay}"/>
                                                     </TextBlock>
                                                 </StackPanel>
                                             </Grid>
@@ -382,9 +386,9 @@
                             </StackPanel>
 
                             <StackPanel Grid.Row="2" Grid.ColumnSpan="3">
-                                <TextBlock Text="ФП исходного чека (тег 1192)" Style="{StaticResource FieldLabel}"/>
+                                <TextBlock Text="ФП исходного чека" Style="{StaticResource FieldLabel}"/>
                                 <TextBox Text="{Binding OriginalFiscalNumber, UpdateSourceTrigger=PropertyChanged}"
-                                         ToolTip="Фискальный признак ошибочного чека. Для исправительных чеков записывается в тег 1192"/>
+                                         ToolTip="Фискальный признак ошибочного чека из 1С и отчёта ОФД"/>
                             </StackPanel>
                         </Grid>
                     </Border>

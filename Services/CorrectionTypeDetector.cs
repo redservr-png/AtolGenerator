@@ -17,17 +17,18 @@ public static class CorrectionTypeDetector
         var n = e.Notes?.ToLowerInvariant() ?? string.Empty;
 
         // ── 1. Чек большей / меньшей суммой (приоритетно — может пересекаться с другими) ──
-        if (Contains(n, "больш", "сумм"))
+        if (Contains(n, "больш", "сум") || n.Contains("пробит больше"))
         {
             e.CorrectionScenario = CorrectionScenario.CheckLargerAmount;
         }
-        else if (Contains(n, "меньш", "сумм"))
+        else if (Contains(n, "меньш", "сум"))
         {
             e.CorrectionScenario = CorrectionScenario.CheckSmallerAmount;
         }
         // ── 2. «Не пробит» / «Не вышел» — нужно доплатить базу (без refund — чека и так нет) ──
         else if (n.Contains("не пробит") || n.Contains("не вышел")
               || n.Contains("чек не пробит") || n.Contains("чека не было")
+              || n.Contains("чека нет")
               || n.Contains("не день в день") || n.Contains("следующий день")
               || n.Contains("на следующий"))
         {
@@ -78,6 +79,7 @@ public static class CorrectionTypeDetector
               || n.Contains("оплата на удалении") || n.Contains("документ удалён")
               || n.Contains("документ удален") || n.Contains("док удсален")
               || n.Contains("док удалён") || n.Contains("док удален")
+              || n.Contains("реализация удалена") || n.Contains("реализация отменена")
               || n.Contains("помечена на удаление") || n.Contains("помечен на удаление")
               || n.Contains("помечена удаление") || n.Contains("чек удалить")
               || n.Contains("не платил") || n.Contains("чек аннулировался")

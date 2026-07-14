@@ -3,11 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:AtolGenerator.ViewModels"
         xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
+        xmlns:views="clr-namespace:AtolGenerator.Views"
         Title="АТОЛ Чек-генератор"
         Icon="/Resources/app.ico"
         Height="900" Width="1440"
         MinHeight="720" MinWidth="1180"
-        Background="{StaticResource BrushBg}"
+        Background="{DynamicResource BrushBg}"
         WindowStartupLocation="CenterScreen">
 
   <Window.DataContext>
@@ -31,7 +32,7 @@
 
     <!-- Стиль текста в ячейках DataGrid -->
     <Style x:Key="DataGridTextStyle" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="{StaticResource BrushText2}"/>
+      <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
       <Setter Property="FontSize"   Value="12"/>
       <Setter Property="Padding"    Value="0,0,4,0"/>
       <Setter Property="VerticalAlignment" Value="Center"/>
@@ -51,8 +52,8 @@
 
     <!-- ══════════ SIDEBAR ══════════ -->
     <Border Grid.Row="0" Grid.RowSpan="3" Grid.Column="0"
-            Background="#14202B"
-            BorderBrush="#243244"
+            Background="{DynamicResource BrushSidebarBg}"
+            BorderBrush="{DynamicResource BrushSidebarBorder}"
             BorderThickness="0,0,1,0">
       <Grid Margin="16,18">
         <Grid.RowDefinitions>
@@ -75,102 +76,104 @@
           </Border>
           <TextBlock Text="АТОЛ&#x0a;Чек-генератор"
                      FontSize="14" FontWeight="Bold"
-                     Foreground="#F8FAFC"
+                     Foreground="{DynamicResource BrushSidebarText}"
                      LineHeight="18" VerticalAlignment="Center"/>
         </StackPanel>
 
         <StackPanel Grid.Row="1">
           <TextBlock Text="РАБОЧИЕ СЦЕНАРИИ" FontSize="11"
-                     Foreground="#8DA0B8" Margin="0,0,0,10"/>
+                     Foreground="{DynamicResource BrushSidebarMuted}" Margin="0,0,0,10"/>
           <Button Style="{StaticResource BtnGhost}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="refunds">
-            <TextBlock Text="↩  Возвраты по заказам" Foreground="#F8FAFC"/>
+            <TextBlock Text="↩  Возвраты по заказам" Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource BtnGhost}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="realizationCorrections">
-            <TextBlock Text="⚡  Коррекции реализаций 1С" Foreground="#F8FAFC"/>
+            <TextBlock Text="⚡  Коррекции реализаций 1С" Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource BtnGhost}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="obsidian">
-            <TextBlock Text="▧  Кейсы Obsidian" Foreground="#D9E2EC"/>
+            <TextBlock Text="▧  Исправление чеков" Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource BtnGhost}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,22"
                   Command="{Binding OpenWorkspaceCommand}"
-                  CommandParameter="ofd">
-            <TextBlock Text="⇄  XML + ОФД → 1С" Foreground="#D9E2EC"/>
+                  CommandParameter="reports">
+            <TextBlock Text="▤  Отчёты" Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
 
           <TextBlock Text="ДОПОЛНИТЕЛЬНО" FontSize="11"
-                     Foreground="#8DA0B8" Margin="0,0,0,10"/>
+                     Foreground="{DynamicResource BrushSidebarMuted}" Margin="0,0,0,10"/>
           <Button Style="{StaticResource BtnGhost}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="payment">
-            <TextBlock Text="▣  Оплаты / приход" Foreground="#D9E2EC"/>
+            <TextBlock Text="▣  Оплаты / приход" Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource BtnGhost}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,22"
-                  Command="{Binding OpenWorkspaceCommand}"
-                  CommandParameter="atol">
-            <TextBlock Text="🔑  Настройки АТОЛ Online" Foreground="#D9E2EC"/>
+                  Command="{Binding OpenSettingsCommand}">
+            <TextBlock Text="⚙  Настройки" Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
         </StackPanel>
 
         <StackPanel Grid.Row="3">
-          <Separator Background="#314154" Margin="0,0,0,14"/>
-          <TextBlock Text="Кассир" FontSize="11" Foreground="#8DA0B8"/>
+          <Separator Background="{DynamicResource BrushSidebarSeparator}" Margin="0,0,0,14"/>
+          <TextBlock Text="Кассир" FontSize="11" Foreground="{DynamicResource BrushSidebarMuted}"/>
           <TextBlock FontSize="13" FontWeight="SemiBold"
-                     Foreground="#F8FAFC" Margin="0,3,0,14">
+                     Foreground="{DynamicResource BrushSidebarText}" Margin="0,3,0,14">
             <Run Text="Кассир: "/>
             <Run Text="{Binding SelectedCashierShort, Mode=OneWay}"/>
           </TextBlock>
           <TextBlock Text="Готово к работе" FontSize="12"
-                     Foreground="#7DD3C7"/>
+                     Foreground="{DynamicResource BrushSidebarStatus}"/>
         </StackPanel>
       </Grid>
     </Border>
 
     <!-- ══════════ HEADER ══════════ -->
     <Border Grid.Row="0" Grid.Column="1"
-            Background="{StaticResource BrushSurface1}"
-            BorderBrush="{StaticResource BrushBorder}"
+            Background="{DynamicResource BrushSurface1}"
+            BorderBrush="{DynamicResource BrushBorder}"
             BorderThickness="0,0,0,1">
       <Grid Margin="18,0">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <Button Content="📋  Кейсы коррекций"
+          <Button Content="Исправление чеков"
                   Style="{StaticResource BtnSecondary}"
                   Padding="12,7" FontSize="12" Margin="0,0,8,0"
                   ToolTip="Загрузка списка чеков для исправления из Obsidian-файла"
-                  Command="{Binding ToggleObsidianPanelCommand}"/>
-          <Button Content="🔑  АТОЛ Online"
+                  Command="{Binding OpenWorkspaceCommand}"
+                  CommandParameter="obsidian"/>
+          <Button Content="⚙  Настройки"
                   Style="{StaticResource BtnSecondary}"
                   Padding="12,7" FontSize="12" Margin="0,0,12,0"
-                  Command="{Binding ToggleAtolPanelCommand}"/>
+                  Command="{Binding OpenSettingsCommand}"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
           <TextBlock Text="ИП Шевелев Е.Н. · ИНН 352526561274 · ФФД 1.05"
-                     FontSize="12" Foreground="{StaticResource BrushText2}"
+                     FontSize="12" Foreground="{DynamicResource BrushText2}"
                      VerticalAlignment="Center"/>
-          <Ellipse Width="8" Height="8" Fill="{StaticResource BrushGreen}" Margin="14,0,0,0"/>
+          <Ellipse Width="8" Height="8" Fill="{DynamicResource BrushGreen}" Margin="14,0,0,0"/>
         </StackPanel>
       </Grid>
     </Border>
 
     <!-- ══════════ CONTENT ══════════ -->
-    <ScrollViewer Grid.Row="1" Grid.Column="1" VerticalScrollBarVisibility="Auto">
+    <ScrollViewer Grid.Row="1" Grid.Column="1"
+                  VerticalScrollBarVisibility="Auto"
+                  Visibility="{Binding ShowMainWorkspace, Converter={StaticResource BoolVis}}">
       <Grid Margin="24,20,24,20">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto"/>  <!-- Row 0: основной контент -->
@@ -187,7 +190,7 @@
         <StackPanel Grid.Row="0" Grid.Column="0">
 
           <!-- Tabs -->
-          <Border Background="{StaticResource BrushSurface2}"
+          <Border Background="{DynamicResource BrushSurface2}"
                   CornerRadius="10" Padding="4"
                   Visibility="Collapsed">
             <Grid>
@@ -211,7 +214,7 @@
             <StackPanel>
               <!-- Section title -->
               <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
                         CornerRadius="2" Margin="0,0,7,0"/>
                 <TextBlock Text="ТИП ЧЕКА" Style="{StaticResource SectionTitle}" Margin="0"/>
               </StackPanel>
@@ -237,7 +240,7 @@
               <StackPanel Margin="0,14,0,0"
                           Visibility="{Binding ShowPaymentType, Converter={StaticResource BoolVis}}">
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                  <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                  <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
                           CornerRadius="2" Margin="0,0,7,0"/>
                   <TextBlock Text="ТИП ОПЛАТЫ" Style="{StaticResource SectionTitle}" Margin="0"/>
                 </StackPanel>
@@ -255,7 +258,7 @@
                       BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,10,0,0">
                 <StackPanel>
                   <TextBlock Text="⚡ ДАННЫЕ КОРРЕКЦИИ" FontSize="11" FontWeight="Bold"
-                             Foreground="{StaticResource BrushOrange}"
+                             Foreground="{DynamicResource BrushOrange}"
                              Margin="0,0,0,10"/>
                   <Grid>
                     <Grid.ColumnDefinitions>
@@ -286,7 +289,7 @@
           <Border Style="{StaticResource Card}" Margin="0,0,0,14">
             <StackPanel>
               <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
                         CornerRadius="2" Margin="0,0,7,0"/>
                 <TextBlock Text="МАССОВЫЙ ВВОД ЗАКАЗОВ" Style="{StaticResource SectionTitle}" Margin="0"/>
               </StackPanel>
@@ -317,19 +320,19 @@
 
               <!-- 1C settings panel -->
               <Border Visibility="{Binding OneCPanelVisible, Converter={StaticResource BoolVis}}"
-                      Background="{StaticResource BrushSurface2}"
-                      BorderBrush="{StaticResource BrushBorder}"
+                      Background="{DynamicResource BrushSurface2}"
+                      BorderBrush="{DynamicResource BrushBorder}"
                       BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,10,0,0">
                 <StackPanel>
                   <TextBlock Text="ПОДКЛЮЧЕНИЕ К 1С" FontSize="11" FontWeight="Bold"
-                             Foreground="{StaticResource BrushAccent2}" Margin="0,0,0,10"/>
+                             Foreground="{DynamicResource BrushAccent2}" Margin="0,0,0,10"/>
 
                   <!-- V83 not found warning -->
                   <Border Background="#1AFF6B00" BorderBrush="#44FF6B00"
                           BorderThickness="1" CornerRadius="6" Padding="10,7" Margin="0,0,0,10"
                           Visibility="{Binding IsOneCAvailable, Converter={StaticResource InvBoolVis}}">
                     <TextBlock Text="⚠️ Компонент V83.COMConnector не найден. Установите клиент 1С на этот компьютер."
-                               FontSize="12" Foreground="{StaticResource BrushOrange}" TextWrapping="Wrap"/>
+                               FontSize="12" Foreground="{DynamicResource BrushOrange}" TextWrapping="Wrap"/>
                   </Border>
 
                   <Grid Margin="0,0,0,8">
@@ -390,7 +393,7 @@
                             Command="{Binding LoadFromOneCCommand}"/>
                   </WrapPanel>
                   <TextBlock Text="{Binding OneCStatus}"
-                             FontSize="12" Foreground="{StaticResource BrushText2}"
+                             FontSize="12" Foreground="{DynamicResource BrushText2}"
                              Margin="0,8,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
               </Border>
@@ -407,7 +410,7 @@
             </Grid.ColumnDefinitions>
             <Separator Grid.Column="0" VerticalAlignment="Center"/>
             <TextBlock Grid.Column="1" Text="или введите один заказ вручную"
-                       Foreground="{StaticResource BrushText3}" FontSize="12"
+                       Foreground="{DynamicResource BrushText3}" FontSize="12"
                        Margin="10,0"/>
             <Separator Grid.Column="2" VerticalAlignment="Center"/>
           </Grid>
@@ -416,7 +419,7 @@
           <Border Style="{StaticResource Card}" Margin="0,0,0,14">
             <StackPanel>
               <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
                         CornerRadius="2" Margin="0,0,7,0"/>
                 <TextBlock Text="ДАННЫЕ ОДНОГО ЧЕКА" Style="{StaticResource SectionTitle}" Margin="0"/>
               </StackPanel>
@@ -460,12 +463,12 @@
 
               <!-- Agent panel -->
               <Border Visibility="{Binding ShowAgentPanel, Converter={StaticResource BoolVis}}"
-                      Background="{StaticResource BrushSurface2}"
-                      BorderBrush="{StaticResource BrushBorder}"
+                      Background="{DynamicResource BrushSurface2}"
+                      BorderBrush="{DynamicResource BrushBorder}"
                       BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,10,0,0">
                 <StackPanel>
                   <TextBlock Text="ПОСТАВЩИК УСЛУГИ" FontSize="11" FontWeight="Bold"
-                             Foreground="{StaticResource BrushAccent2}"
+                             Foreground="{DynamicResource BrushAccent2}"
                              Margin="0,0,0,10"/>
                   <Grid>
                     <Grid.ColumnDefinitions>
@@ -483,7 +486,7 @@
                     </StackPanel>
                   </Grid>
                   <TextBlock Text="{Binding AgentInfoText}"
-                             FontSize="12" Foreground="{StaticResource BrushText2}"
+                             FontSize="12" Foreground="{DynamicResource BrushText2}"
                              Margin="0,8,0,0" LineHeight="22"
                              TextWrapping="Wrap"/>
                 </StackPanel>
@@ -494,7 +497,7 @@
                           Margin="0,10,0,0">
                 <Separator/>
                 <TextBlock Text="ТОВАРНЫЕ ПОЗИЦИИ" FontSize="11" FontWeight="Bold"
-                           Foreground="{StaticResource BrushText3}" Margin="0,0,0,8"/>
+                           Foreground="{DynamicResource BrushText3}" Margin="0,0,0,8"/>
                 <ItemsControl ItemsSource="{Binding CurrentItems}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -542,67 +545,16 @@
         <!-- ════ RIGHT COLUMN ════ -->
         <StackPanel Grid.Row="0" Grid.Column="2">
 
-          <!-- Кейсы коррекций из Obsidian -->
-          <Border Background="{StaticResource BrushSurface1}"
-                  BorderBrush="{StaticResource BrushBorder}"
-                  BorderThickness="1" CornerRadius="10" Padding="16"
-                  Margin="0,0,0,14"
-                  Visibility="{Binding ShowObsidianPanel, Converter={StaticResource BoolVis}}">
-            <StackPanel>
-              <TextBlock Text="📋  КЕЙСЫ КОРРЕКЦИЙ ИЗ OBSIDIAN"
-                         FontSize="11" FontWeight="Bold"
-                         Foreground="{StaticResource BrushAccent2}" Margin="0,0,0,10"/>
-              <TextBlock Text="Источник 1 — путь к файлу «Исправить чеки.md»"
-                         FontSize="10" Foreground="{StaticResource BrushText3}"
-                         Margin="0,0,0,4"/>
-              <Grid Margin="0,0,0,8">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition/>
-                  <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBox Grid.Column="0"
-                         Text="{Binding ObsidianMdPath, UpdateSourceTrigger=PropertyChanged}"
-                         Tag="C:\Obsidian\...\Исправить чеки.md"
-                         IsReadOnly="True"/>
-                <Button Grid.Column="1"
-                        Content="..." MinWidth="32" Margin="6,0,0,0"
-                        Style="{StaticResource BtnSecondary}"
-                        Command="{Binding BrowseMdFileCommand}"
-                        ToolTip="Выбрать файл"/>
-              </Grid>
-              <TextBlock Text="Источник 2 — или вставьте строки сюда (приоритет над файлом, если не пусто)"
-                         FontSize="10" Foreground="{StaticResource BrushText3}"
-                         Margin="0,4,0,4"/>
-              <TextBox Text="{Binding ObsidianPasteText, UpdateSourceTrigger=PropertyChanged}"
-                       AcceptsReturn="True" TextWrapping="Wrap"
-                       VerticalScrollBarVisibility="Auto"
-                       MinHeight="80" MaxHeight="180"
-                       Tag="- [ ] Реализация товаров и услуг т0000XXXXX от dd.mm.yyyy ..."/>
-              <Button Content="📥  Загрузить кейсы"
-                      Style="{StaticResource BtnPrimary}"
-                      Padding="11,8" FontSize="13" Margin="0,10,0,0"
-                      Command="{Binding LoadObsidianCasesCommand}"/>
-              <Button Content="🔄  Догрузить из 1С (суммы + ФП)"
-                      Style="{StaticResource BtnSecondary}"
-                      Padding="11,7" FontSize="12" Margin="0,6,0,0"
-                      Command="{Binding FetchAmountsFromOneCCommand}"
-                      ToolTip="Для каждого кейса по типу+номеру документа берёт из 1С: сумму (записывается в CorrectAmount) и фискальный признак исходного чека ЧекНомерФП (записывается в OriginalFiscalNumber для тега 1192). Для «Чек большей/меньшей суммой» ОШИБОЧНУЮ сумму нужно вводить вручную в карточке (✏)."/>
-              <TextBlock Text="{Binding ObsidianStatus}"
-                         FontSize="12" Foreground="{StaticResource BrushText2}"
-                         Margin="0,8,0,0" TextWrapping="Wrap"/>
-            </StackPanel>
-          </Border>
-
           <!-- АТОЛ Online panel -->
-          <Border Background="{StaticResource BrushSurface1}"
-                  BorderBrush="{StaticResource BrushBorder}"
+          <Border Background="{DynamicResource BrushSurface1}"
+                  BorderBrush="{DynamicResource BrushBorder}"
                   BorderThickness="1" CornerRadius="10" Padding="16"
                   Margin="0,0,0,14"
                   Visibility="{Binding ShowAtolPanel, Converter={StaticResource BoolVis}}">
             <StackPanel>
               <TextBlock Text="🔑  АТОЛ ONLINE — НАСТРОЙКИ API"
                          FontSize="11" FontWeight="Bold"
-                         Foreground="{StaticResource BrushAccent2}" Margin="0,0,0,10"/>
+                         Foreground="{DynamicResource BrushAccent2}" Margin="0,0,0,10"/>
               <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/>
@@ -635,7 +587,7 @@
                         Command="{Binding TestAtolConnectionCommand}"/>
               </WrapPanel>
               <TextBlock Text="{Binding AtolStatus}"
-                         FontSize="12" Foreground="{StaticResource BrushText2}"
+                         FontSize="12" Foreground="{DynamicResource BrushText2}"
                          Margin="0,8,0,0" TextWrapping="Wrap"/>
               <!-- Блок ошибок (показывается когда есть ошибки) -->
               <Border Background="#1AFF4444" BorderBrush="#44FF4444"
@@ -646,15 +598,15 @@
                   <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                     <TextBlock Text="❌  Ошибки пробития:"
                                FontSize="11" FontWeight="Bold"
-                               Foreground="{StaticResource BrushRed}"/>
+                               Foreground="{DynamicResource BrushRed}"/>
                     <TextBlock Text="{Binding AtolLogPath, StringFormat='  (лог: {0})'}"
-                               FontSize="10" Foreground="{StaticResource BrushText3}"
+                               FontSize="10" Foreground="{DynamicResource BrushText3}"
                                VerticalAlignment="Center"/>
                   </StackPanel>
                   <ScrollViewer MaxHeight="100" VerticalScrollBarVisibility="Auto"
                                 HorizontalScrollBarVisibility="Disabled">
                     <TextBlock Text="{Binding AtolLastError}"
-                               FontSize="11" Foreground="{StaticResource BrushRed}"
+                               FontSize="11" Foreground="{DynamicResource BrushRed}"
                                TextWrapping="Wrap" FontFamily="Consolas"/>
                   </ScrollViewer>
                 </StackPanel>
@@ -667,11 +619,11 @@
             <StackPanel>
               <Grid Margin="0,0,0,10">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                  <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                  <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
                           CornerRadius="2" Margin="0,0,7,0"/>
                   <TextBlock Text="ДОКУМЕНТЫ К ПРОБИТИЮ" Style="{StaticResource SectionTitle}" Margin="0"/>
                   <TextBlock Text="{Binding OrderCount, StringFormat=' ({0})'}"
-                             FontSize="12" Foreground="{StaticResource BrushText3}"
+                             FontSize="12" Foreground="{DynamicResource BrushText3}"
                              VerticalAlignment="Center"/>
                 </StackPanel>
                 <Button Content="🗑 Очистить"
@@ -684,7 +636,7 @@
 
               <!-- Empty placeholder -->
               <TextBlock Text="Заказы не добавлены"
-                         Foreground="{StaticResource BrushText3}" FontSize="13"
+                         Foreground="{DynamicResource BrushText3}" FontSize="13"
                          HorizontalAlignment="Center" Padding="0,14"
                          Visibility="{Binding OrderCount, Mode=OneWay, Converter={StaticResource ZeroVis}}"/>
 
@@ -692,8 +644,8 @@
               <ItemsControl ItemsSource="{Binding Orders}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                    <Border Background="{StaticResource BrushSurface2}"
-                            BorderBrush="{StaticResource BrushBorder}"
+                    <Border Background="{DynamicResource BrushSurface2}"
+                            BorderBrush="{DynamicResource BrushBorder}"
                             BorderThickness="1" CornerRadius="8"
                             Padding="0,8,10,8" Margin="0,0,0,6"
                             ToolTip="{Binding Notes}">
@@ -713,7 +665,7 @@
                           <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{Binding OrderNum}"
                                        FontFamily="Courier New" FontSize="12"
-                                       Foreground="{StaticResource BrushAccent2}"/>
+                                       Foreground="{DynamicResource BrushAccent2}"/>
                             <!-- Чип с типом документа из 1С (Реализация/Опл.картой/ПКО/...) -->
                             <Border Background="#332288CC" BorderBrush="#882288CC"
                                     BorderThickness="1" CornerRadius="3"
@@ -732,7 +684,7 @@
                             </Border>
                           </StackPanel>
                           <TextBlock Text="{Binding OrderDate}"
-                                     FontSize="11" Foreground="{StaticResource BrushText3}"
+                                     FontSize="11" Foreground="{DynamicResource BrushText3}"
                                      Margin="0,1,0,0"/>
                           <!-- Сценарий коррекции (видим только для коррекций) -->
                           <TextBlock FontSize="10" Foreground="#FFAA66"
@@ -747,7 +699,7 @@
                         </StackPanel>
                         <TextBlock Grid.Column="3"
                                    FontWeight="Bold" FontSize="14"
-                                   Foreground="{StaticResource BrushGreen}"
+                                   Foreground="{DynamicResource BrushGreen}"
                                    VerticalAlignment="Center" Margin="8,0">
                           <TextBlock.Text>
                             <MultiBinding StringFormat="{}{0:N0} ₽">
@@ -780,23 +732,23 @@
           </Border>
 
           <!-- Generate box -->
-          <Border Background="{StaticResource BrushSurface1}"
-                  BorderBrush="{StaticResource BrushBorder}"
+          <Border Background="{DynamicResource BrushSurface1}"
+                  BorderBrush="{DynamicResource BrushBorder}"
                   BorderThickness="1" CornerRadius="10" Padding="16">
             <StackPanel>
-              <TextBlock FontSize="13" Foreground="{StaticResource BrushText2}"
+              <TextBlock FontSize="13" Foreground="{DynamicResource BrushText2}"
                          Margin="0,0,0,12" LineHeight="22">
                 <Run Text="Будет создано: "/>
                 <Run Text="{Binding OrderCount, Mode=OneWay}" FontWeight="Bold"
-                     Foreground="{StaticResource BrushText}"/>
+                     Foreground="{DynamicResource BrushText}"/>
                 <Run Text=" чек(ов) + "/>
                 <Run Text="{Binding OrderCount, Mode=OneWay}" FontWeight="Bold"
-                     Foreground="{StaticResource BrushText}"/>
+                     Foreground="{DynamicResource BrushText}"/>
                 <Run Text=" служебных записок"/>
               </TextBlock>
               <!-- Выбор кассира -->
               <TextBlock Text="Кассир" FontSize="11"
-                         Foreground="{StaticResource BrushText3}" Margin="0,0,0,4"/>
+                         Foreground="{DynamicResource BrushText3}" Margin="0,0,0,4"/>
               <ComboBox ItemsSource="{Binding AvailableCashiers}"
                         SelectedItem="{Binding SelectedCashier, Mode=TwoWay}"
                         Margin="0,0,0,12" Padding="10,7" FontSize="12">
@@ -841,65 +793,9 @@
                          TextWrapping="Wrap" TextAlignment="Center"
                          Visibility="{Binding ShowCorrectionPunchHint, Converter={StaticResource BoolVis}}"/>
               <TextBlock Text="Файлы сохраняются в папку atol_output/"
-                         FontSize="11" Foreground="{StaticResource BrushText3}"
+                         FontSize="11" Foreground="{DynamicResource BrushText3}"
                          HorizontalAlignment="Center" Margin="0,8,0,0"/>
 
-              <Border Background="{StaticResource BrushSurface2}"
-                      BorderBrush="{StaticResource BrushBorder}"
-                      BorderThickness="1" CornerRadius="8"
-                      Padding="12" Margin="0,12,0,0"
-                      Visibility="{Binding ShowOfdToolsPanel, Converter={StaticResource BoolVis}}">
-                <StackPanel>
-                  <TextBlock Text="XML + ОФД → 1С"
-                             FontSize="11" FontWeight="Bold"
-                             Foreground="{StaticResource BrushAccent2}"
-                             Margin="0,0,0,8"/>
-
-                  <!-- Сопоставление отчёта ОФД -->
-                  <Button Style="{StaticResource BtnSecondary}"
-                          Command="{Binding MatchOfdReportCommand}"
-                          Padding="0,9"
-                          ToolTip="Сопоставить сводный отчёт ОФД (Excel) с локальным журналом пробитых чеков. Результат — Excel с привязкой к номеру реализации 1С.">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                      <TextBlock Text="📊" FontSize="14" Margin="0,0,8,0"/>
-                      <TextBlock Text="Сопоставить отчёт ОФД с реализациями" FontSize="13"/>
-                    </StackPanel>
-                  </Button>
-
-                  <!-- Применить отчёт ОФД к 1С — основной workflow для коррекций через XML -->
-                  <Button Style="{StaticResource BtnSecondary}"
-                          Command="{Binding ApplyOfdReportToOneCCommand}"
-                          Margin="0,8,0,0" Padding="0,9"
-                          ToolTip="Загрузить сводный отчёт ОФД и записать ФПД/№ ФД/ДатаПечатиЧека в документы РеализацияТоваровУслуг 1С. Привязка идёт по тегу 1086 (номер реализации, который вшит в XML с v1.7.4).">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                      <TextBlock Text="🚀" FontSize="14" Margin="0,0,8,0"/>
-                      <TextBlock Text="Применить отчёт ОФД к 1С" FontSize="13" FontWeight="SemiBold"/>
-                    </StackPanel>
-                  </Button>
-
-                  <!-- Применить из локального журнала пробитий (только для чеков пробитых через API) -->
-                  <Button Style="{StaticResource BtnSecondary}"
-                          Command="{Binding ApplyToOneCCommand}"
-                          Margin="0,8,0,0" Padding="0,9"
-                          ToolTip="Применить к 1С из локального журнала punched_checks.jsonl (заполняется только при пробитии через АТОЛ Online API, т.е. для sell/sell_refund — не для коррекций).">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                      <TextBlock Text="⤓" FontSize="12" Margin="0,0,8,0" Opacity="0.7"/>
-                      <TextBlock Text="Применить из журнала (API)" FontSize="12" Opacity="0.85"/>
-                    </StackPanel>
-                  </Button>
-
-                  <!-- Применить старый XML + ОФД (для чеков пробитых до v1.7.4 без тега 1086) -->
-                  <Button Style="{StaticResource BtnSecondary}"
-                          Command="{Binding ApplyXmlAndOfdToOneCCommand}"
-                          Margin="0,8,0,0" Padding="0,9"
-                          ToolTip="Для чеков, пробитых ДО v1.7.4 (без тега 1086): выбираете старый XML с base_number, потом сводный отчёт ОФД. Программа сопоставляет по сумме, записывает в 1С пропуская уже заполненные.">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                      <TextBlock Text="🔁" FontSize="12" Margin="0,0,8,0" Opacity="0.85"/>
-                      <TextBlock Text="Сопоставить XML+ОФД → 1С (старые чеки)" FontSize="12" Opacity="0.95"/>
-                    </StackPanel>
-                  </Button>
-                </StackPanel>
-              </Border>
             </StackPanel>
           </Border>
 
@@ -914,12 +810,12 @@
                            Text="{Binding SkippedRows.Count, StringFormat='ПРОПУЩЕНО {0} СТРОК — ЧЕКИ УЖЕ ПРОБИТЫ'}"/>
               </StackPanel>
               <TextBlock Text="Для исправления нужны данные из оригинального чека (Такском / 1С). Пробейте вручную."
-                         FontSize="12" Foreground="{StaticResource BrushText2}" Margin="0,0,0,10" TextWrapping="Wrap"/>
+                         FontSize="12" Foreground="{DynamicResource BrushText2}" Margin="0,0,0,10" TextWrapping="Wrap"/>
               <ItemsControl ItemsSource="{Binding SkippedRows}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate>
-                    <Border Background="{StaticResource BrushSurface2}"
-                            BorderBrush="{StaticResource BrushBorder}"
+                    <Border Background="{DynamicResource BrushSurface2}"
+                            BorderBrush="{DynamicResource BrushBorder}"
                             BorderThickness="1" CornerRadius="6"
                             Padding="10,7" Margin="0,0,0,5">
                       <Grid>
@@ -931,11 +827,11 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="{Binding OrderNum}"
                                    FontFamily="Courier New" FontSize="12"
-                                   Foreground="{StaticResource BrushAccent2}"/>
+                                   Foreground="{DynamicResource BrushAccent2}"/>
                         <TextBlock Grid.Column="1" Text="{Binding OrderDate}"
-                                   FontSize="12" Foreground="{StaticResource BrushText2}"/>
+                                   FontSize="12" Foreground="{DynamicResource BrushText2}"/>
                         <TextBlock Grid.Column="2" Text="{Binding CheckDate, StringFormat='Чек: {0}'}"
-                                   FontSize="12" Foreground="{StaticResource BrushText2}"/>
+                                   FontSize="12" Foreground="{DynamicResource BrushText2}"/>
                         <TextBlock Grid.Column="3"
                                    Text="{Binding Amount, StringFormat={}{0:N2} ₽}"
                                    FontSize="12" FontWeight="SemiBold"/>
@@ -951,8 +847,8 @@
 
         <!-- ════ РЕЗУЛЬТАТЫ + ПРЕДПРОСМОТР (Row 1, полноширинный мастер-деталь) ════ -->
         <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
-                Background="{StaticResource BrushSurface1}"
-                BorderBrush="{StaticResource BrushBorder}"
+                Background="{DynamicResource BrushSurface1}"
+                BorderBrush="{DynamicResource BrushBorder}"
                 BorderThickness="1" CornerRadius="10" Padding="16"
                 Margin="0,14,0,0"
                 Visibility="{Binding ShowResults, Converter={StaticResource BoolVis}}">
@@ -968,13 +864,13 @@
 
               <!-- Заголовок -->
               <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
-                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
                         CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center"/>
                 <TextBlock Style="{StaticResource SectionTitle}" Margin="0">
                   <Run Text="РЕЗУЛЬТАТЫ"/>
-                  <Run Text=" · " Foreground="{StaticResource BrushText3}"/>
+                  <Run Text=" · " Foreground="{DynamicResource BrushText3}"/>
                   <Run Text="{Binding Results.Count, Mode=OneWay}"
-                       Foreground="{StaticResource BrushText3}" FontWeight="Normal"/>
+                       Foreground="{DynamicResource BrushText3}" FontWeight="Normal"/>
                 </TextBlock>
               </StackPanel>
 
@@ -1003,8 +899,8 @@
                       <Setter.Value>
                         <ControlTemplate TargetType="ListBoxItem">
                           <Border x:Name="card"
-                                  Background="{StaticResource BrushSurface2}"
-                                  BorderBrush="{StaticResource BrushBorder}"
+                                  Background="{DynamicResource BrushSurface2}"
+                                  BorderBrush="{DynamicResource BrushBorder}"
                                   BorderThickness="1.5" CornerRadius="8"
                                   Padding="11">
                             <ContentPresenter/>
@@ -1016,10 +912,10 @@
                               <Setter TargetName="card" Property="Background"  Value="#0A1A2A1F"/>
                             </DataTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                              <Setter TargetName="card" Property="BorderBrush" Value="{StaticResource BrushAccent2}"/>
+                              <Setter TargetName="card" Property="BorderBrush" Value="{DynamicResource BrushAccent2}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                              <Setter TargetName="card" Property="BorderBrush" Value="{StaticResource BrushAccent}"/>
+                              <Setter TargetName="card" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
                               <Setter TargetName="card" Property="Background"  Value="#12203A"/>
                             </Trigger>
                           </ControlTemplate.Triggers>
@@ -1045,19 +941,19 @@
                         </StackPanel.Style>
                         <TextBlock Text="{Binding DisplayOrderNum}"
                                    FontFamily="Courier New" FontSize="12"
-                                   Foreground="{StaticResource BrushAccent2}"
+                                   Foreground="{DynamicResource BrushAccent2}"
                                    Margin="0,0,0,5"/>
                         <Grid>
                           <Grid.ColumnDefinitions>
                             <ColumnDefinition/><ColumnDefinition Width="Auto"/>
                           </Grid.ColumnDefinitions>
                           <TextBlock Grid.Column="0" Text="{Binding Single.XmlFilename}"
-                                     FontSize="11" Foreground="{StaticResource BrushText2}"
+                                     FontSize="11" Foreground="{DynamicResource BrushText2}"
                                      TextTrimming="CharacterEllipsis"/>
                           <Border Grid.Column="1" Background="#21F0D020"
                                   CornerRadius="3" Padding="5,1" Margin="5,0,0,0">
                             <TextBlock Text="XML" FontSize="10" FontWeight="Bold"
-                                       Foreground="{StaticResource BrushYellow}"/>
+                                       Foreground="{DynamicResource BrushYellow}"/>
                           </Border>
                         </Grid>
                         <Grid Margin="0,4,0,0"
@@ -1066,12 +962,12 @@
                             <ColumnDefinition/><ColumnDefinition Width="Auto"/>
                           </Grid.ColumnDefinitions>
                           <TextBlock Grid.Column="0" Text="{Binding Single.DocxFilename}"
-                                     FontSize="11" Foreground="{StaticResource BrushText2}"
+                                     FontSize="11" Foreground="{DynamicResource BrushText2}"
                                      TextTrimming="CharacterEllipsis"/>
                           <Border Grid.Column="1" Background="#212DD4A0"
                                   CornerRadius="3" Padding="5,1" Margin="5,0,0,0">
                             <TextBlock Text="DOCX" FontSize="10" FontWeight="Bold"
-                                       Foreground="{StaticResource BrushGreen}"/>
+                                       Foreground="{DynamicResource BrushGreen}"/>
                           </Border>
                         </Grid>
                       </StackPanel>
@@ -1093,10 +989,10 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
                           <Border Background="#202DD4A0" CornerRadius="4" Padding="5,2" Margin="0,0,7,0">
                             <TextBlock Text="📋 ИСПРАВЛЕНИЕ" FontSize="10" FontWeight="Bold"
-                                       Foreground="{StaticResource BrushGreen}"/>
+                                       Foreground="{DynamicResource BrushGreen}"/>
                           </Border>
                           <TextBlock Text="{Binding PairLabel}" FontSize="11"
-                                     Foreground="{StaticResource BrushText3}"
+                                     Foreground="{DynamicResource BrushText3}"
                                      VerticalAlignment="Center"
                                      TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
@@ -1109,16 +1005,16 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
                               <TextBlock Text="Возврат прихода" FontSize="10"
-                                         Foreground="{StaticResource BrushGreen}" Margin="0,0,0,2"/>
+                                         Foreground="{DynamicResource BrushGreen}" Margin="0,0,0,2"/>
                               <TextBlock Text="{Binding RefundXmlFilename}" FontSize="11"
-                                         Foreground="{StaticResource BrushText2}"
+                                         Foreground="{DynamicResource BrushText2}"
                                          TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                             <Border Grid.Column="1" Background="#21F0D020"
                                     CornerRadius="3" Padding="5,1" Margin="5,0,0,0"
                                     VerticalAlignment="Center">
                               <TextBlock Text="XML" FontSize="10" FontWeight="Bold"
-                                         Foreground="{StaticResource BrushYellow}"/>
+                                         Foreground="{DynamicResource BrushYellow}"/>
                             </Border>
                           </Grid>
                         </Border>
@@ -1131,16 +1027,16 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
                               <TextBlock Text="Коррекция прихода" FontSize="10"
-                                         Foreground="{StaticResource BrushAccent2}" Margin="0,0,0,2"/>
+                                         Foreground="{DynamicResource BrushAccent2}" Margin="0,0,0,2"/>
                               <TextBlock Text="{Binding CorrectionXmlFilename}" FontSize="11"
-                                         Foreground="{StaticResource BrushText2}"
+                                         Foreground="{DynamicResource BrushText2}"
                                          TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                             <Border Grid.Column="1" Background="#21F0D020"
                                     CornerRadius="3" Padding="5,1" Margin="5,0,0,0"
                                     VerticalAlignment="Center">
                               <TextBlock Text="XML" FontSize="10" FontWeight="Bold"
-                                         Foreground="{StaticResource BrushYellow}"/>
+                                         Foreground="{DynamicResource BrushYellow}"/>
                             </Border>
                           </Grid>
                         </Border>
@@ -1152,12 +1048,12 @@
             </DockPanel>
 
             <!-- ── Вертикальный разделитель ── -->
-            <Border Grid.Column="1" Background="{StaticResource BrushBorder}" Margin="0,2"/>
+            <Border Grid.Column="1" Background="{DynamicResource BrushBorder}" Margin="0,2"/>
 
             <!-- ── Правая панель: предпросмотр выбранного чека ── -->
             <DockPanel Grid.Column="2" Margin="16,0,0,0">
               <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
-                <Border Width="3" Height="13" Background="{StaticResource BrushAccent2}"
+                <Border Width="3" Height="13" Background="{DynamicResource BrushAccent2}"
                         CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center"/>
                 <TextBlock Text="ПРЕДПРОСМОТР ЧЕКА" Style="{StaticResource SectionTitle}" Margin="0"/>
               </StackPanel>
@@ -1165,7 +1061,7 @@
               <!-- Подсказка, если ничего не выбрано -->
               <TextBlock DockPanel.Dock="Top"
                          Text="Выберите чек из списка слева"
-                         FontSize="13" Foreground="{StaticResource BrushText3}"
+                         FontSize="13" Foreground="{DynamicResource BrushText3}"
                          HorizontalAlignment="Center" Margin="0,40,0,0">
                 <TextBlock.Style>
                   <Style TargetType="TextBlock">
@@ -1180,8 +1076,8 @@
               </TextBlock>
 
               <!-- Кассовая лента -->
-              <Border Background="{StaticResource BrushSurface2}"
-                      BorderBrush="{StaticResource BrushBorder}"
+              <Border Background="{DynamicResource BrushSurface2}"
+                      BorderBrush="{DynamicResource BrushBorder}"
                       BorderThickness="1" CornerRadius="7" Padding="14">
                 <Border.Style>
                   <Style TargetType="Border">
@@ -1197,7 +1093,7 @@
                               HorizontalScrollBarVisibility="Auto">
                   <TextBlock Text="{Binding SelectedReceiptPreview}"
                              FontFamily="Courier New" FontSize="12.5"
-                             Foreground="{StaticResource BrushText2}"
+                             Foreground="{DynamicResource BrushText2}"
                              TextWrapping="NoWrap" LineHeight="20"/>
                 </ScrollViewer>
               </Border>
@@ -1207,8 +1103,8 @@
 
         <!-- ════ 1С РЕАЛИЗАЦИИ — полноширинная таблица ════ -->
         <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
-                Background="{StaticResource BrushSurface1}"
-                BorderBrush="{StaticResource BrushBorder}"
+                Background="{DynamicResource BrushSurface1}"
+                BorderBrush="{DynamicResource BrushBorder}"
                 BorderThickness="1" CornerRadius="10" Padding="16"
                 Margin="0,14,0,0"
                 Visibility="{Binding ShowLoadedRealizations, Converter={StaticResource BoolVis}}">
@@ -1223,17 +1119,17 @@
               </Grid.ColumnDefinitions>
 
               <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                <Border Width="3" Height="13" Background="{StaticResource BrushAccent}"
+                <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
                         CornerRadius="2" Margin="0,0,7,0"/>
                 <TextBlock Style="{StaticResource SectionTitle}" Margin="0">
                   <Run Text="РЕАЛИЗАЦИИ ИЗ 1С"/>
                 </TextBlock>
-                <TextBlock FontSize="12" Foreground="{StaticResource BrushText3}" Margin="8,0,0,0"
+                <TextBlock FontSize="12" Foreground="{DynamicResource BrushText3}" Margin="8,0,0,0"
                            VerticalAlignment="Center">
                   <Run Text="{Binding TotalOneCLoaded, Mode=OneWay}"/>
                   <Run Text=" записей · выбрано: "/>
                   <Run Text="{Binding SelectedOneCCount, Mode=OneWay}" FontWeight="Bold"
-                       Foreground="{StaticResource BrushAccent2}"/>
+                       Foreground="{DynamicResource BrushAccent2}"/>
                 </TextBlock>
               </StackPanel>
 
@@ -1295,22 +1191,22 @@
                       RowHeaderWidth="0"
                       MaxHeight="420"
                       BorderThickness="1"
-                      BorderBrush="{StaticResource BrushBorder}"
-                      Background="{StaticResource BrushSurface2}"
-                      RowBackground="{StaticResource BrushSurface1}"
-                      AlternatingRowBackground="{StaticResource BrushSurface2}"
-                      Foreground="{StaticResource BrushText}"
+                      BorderBrush="{DynamicResource BrushBorder}"
+                      Background="{DynamicResource BrushSurface2}"
+                      RowBackground="{DynamicResource BrushSurface1}"
+                      AlternatingRowBackground="{DynamicResource BrushSurface2}"
+                      Foreground="{DynamicResource BrushText}"
                       HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Auto">
 
               <DataGrid.Resources>
                 <Style TargetType="DataGridColumnHeader">
-                  <Setter Property="Background"   Value="{StaticResource BrushSurface2}"/>
-                  <Setter Property="Foreground"   Value="{StaticResource BrushText3}"/>
+                  <Setter Property="Background"   Value="{DynamicResource BrushSurface2}"/>
+                  <Setter Property="Foreground"   Value="{DynamicResource BrushText3}"/>
                   <Setter Property="FontSize"     Value="11"/>
                   <Setter Property="FontWeight"   Value="Bold"/>
                   <Setter Property="Padding"      Value="8,6"/>
-                  <Setter Property="BorderBrush"  Value="{StaticResource BrushBorder}"/>
+                  <Setter Property="BorderBrush"  Value="{DynamicResource BrushBorder}"/>
                   <Setter Property="BorderThickness" Value="0,0,0,1"/>
                 </Style>
                 <Style TargetType="DataGridCell">
@@ -1389,7 +1285,7 @@
                     <Style TargetType="TextBlock">
                       <Setter Property="FontWeight"         Value="SemiBold"/>
                       <Setter Property="HorizontalAlignment" Value="Right"/>
-                      <Setter Property="Foreground"         Value="{StaticResource BrushGreen}"/>
+                      <Setter Property="Foreground"         Value="{DynamicResource BrushGreen}"/>
                       <Setter Property="Padding"            Value="0,0,8,0"/>
                     </Style>
                   </DataGridTextColumn.ElementStyle>
@@ -1418,7 +1314,7 @@
                             <Style.Triggers>
                               <DataTrigger Binding="{Binding IsService}" Value="True">
                                 <Setter Property="Text"       Value="🔧"/>
-                                <Setter Property="Foreground" Value="{StaticResource BrushText}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
                               </DataTrigger>
                             </Style.Triggers>
                           </Style>
@@ -1447,7 +1343,7 @@
                           </Style>
                         </Border.Style>
                         <TextBlock Text="пробит" FontSize="10" FontWeight="Bold"
-                                   Foreground="{StaticResource BrushRed}"
+                                   Foreground="{DynamicResource BrushRed}"
                                    ToolTip="{Binding CheckDate}"/>
                       </Border>
                     </DataTemplate>
@@ -1478,13 +1374,13 @@
                                    ToolTip="{Binding PunchStatus}">
                           <TextBlock.Style>
                             <Style TargetType="TextBlock">
-                              <Setter Property="Foreground" Value="{StaticResource BrushText3}"/>
+                              <Setter Property="Foreground" Value="{DynamicResource BrushText3}"/>
                               <Style.Triggers>
                                 <DataTrigger Binding="{Binding PunchOk}" Value="True">
-                                  <Setter Property="Foreground" Value="{StaticResource BrushGreen}"/>
+                                  <Setter Property="Foreground" Value="{DynamicResource BrushGreen}"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding PunchFail}" Value="True">
-                                  <Setter Property="Foreground" Value="{StaticResource BrushRed}"/>
+                                  <Setter Property="Foreground" Value="{DynamicResource BrushRed}"/>
                                 </DataTrigger>
                               </Style.Triggers>
                             </Style>
@@ -1504,24 +1400,34 @@
       </Grid>
     </ScrollViewer>
 
+    <Grid Grid.Row="1" Grid.Column="1"
+          Visibility="{Binding ShowReportsWorkspace, Converter={StaticResource BoolVis}}">
+      <views:ReportsView DataContext="{Binding Reports}"/>
+    </Grid>
+
+    <Grid Grid.Row="1" Grid.Column="1"
+          Visibility="{Binding ShowObsidianWorkspace, Converter={StaticResource BoolVis}}">
+      <views:ObsidianCasesView DataContext="{Binding ObsidianCases}"/>
+    </Grid>
+
     <!-- ══════════ STATUS BAR ══════════ -->
     <Border Grid.Row="2" Grid.Column="1"
-            Background="{StaticResource BrushSurface1}"
-            BorderBrush="{StaticResource BrushBorder}"
+            Background="{DynamicResource BrushSurface1}"
+            BorderBrush="{DynamicResource BrushBorder}"
             BorderThickness="0,1,0,0">
       <Grid Margin="22,0">
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <Ellipse Width="7" Height="7" Fill="{StaticResource BrushGreen}">
+          <Ellipse Width="7" Height="7" Fill="{DynamicResource BrushGreen}">
             <Ellipse.Effect>
               <DropShadowEffect Color="{StaticResource ColorGreen}" BlurRadius="5"
                                 ShadowDepth="0" Opacity="1"/>
             </Ellipse.Effect>
           </Ellipse>
           <TextBlock Text="{Binding StatusText}" Margin="10,0,0,0"
-                     FontSize="12" Foreground="{StaticResource BrushText2}"/>
+                     FontSize="12" Foreground="{DynamicResource BrushText2}"/>
         </StackPanel>
         <TextBlock Text="ИНН 352526561274 · https://alleyadoma.ru"
-                   FontSize="12" Foreground="{StaticResource BrushText3}"
+                   FontSize="12" Foreground="{DynamicResource BrushText3}"
                    HorizontalAlignment="Right" VerticalAlignment="Center"/>
       </Grid>
     </Border>
@@ -1532,15 +1438,15 @@
             Margin="0,14,18,0" MaxWidth="320"
             Visibility="{Binding ToastVisible, Converter={StaticResource BoolVis}}"
             Panel.ZIndex="999">
-      <Border Background="{StaticResource BrushSurface2}"
+      <Border Background="{DynamicResource BrushSurface2}"
               BorderThickness="1" CornerRadius="9"
               Padding="15,10">
         <Border.Style>
           <Style TargetType="Border">
-            <Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
             <Style.Triggers>
               <DataTrigger Binding="{Binding ToastIsError}" Value="True">
-                <Setter Property="BorderBrush" Value="{StaticResource BrushRed}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BrushRed}"/>
               </DataTrigger>
             </Style.Triggers>
           </Style>
@@ -1549,7 +1455,7 @@
           <DropShadowEffect BlurRadius="28" ShadowDepth="4" Opacity="0.5" Color="#000000"/>
         </Border.Effect>
         <TextBlock Text="{Binding ToastMessage}"
-                   FontSize="13" Foreground="{StaticResource BrushText}"
+                   FontSize="13" Foreground="{DynamicResource BrushText}"
                    TextWrapping="Wrap"/>
       </Border>
     </Border>

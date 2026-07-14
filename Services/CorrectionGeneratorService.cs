@@ -14,6 +14,10 @@ public static class CorrectionGeneratorService
 {
     public static List<CheckData> BuildCheckDataList(OrderEntry order, GenerationParams p)
     {
+        if (!string.IsNullOrWhiteSpace(order.PlannedReverseOperation) ||
+            !string.IsNullOrWhiteSpace(order.PlannedCorrectOperation))
+            return BuildPlanned(order, p);
+
         return order.CorrectionScenario switch
         {
             CorrectionScenario.FullCancel         => BuildFullCancel(order, p),
@@ -28,6 +32,47 @@ public static class CorrectionGeneratorService
             // Unknown — генерация пропускается, пользователь должен выбрать сценарий
             _                                     => new List<CheckData>(),
         };
+    }
+
+    private static List<CheckData> BuildPlanned(OrderEntry o, GenerationParams p)
+    {
+        var result = new List<CheckData>();
+        if (!string.IsNullOrWhiteSpace(o.PlannedReverseOperation))
+        {
+            result.Add(MakeReceiptCheckData(
+                o,
+                p,
+                o.PlannedReverseOperation,
+                o.OriginalCheckAmount ?? o.Amount,
+                includeOriginalFp: true,
+                paymentIsCashOverride: o.OriginalPaymentWasCash));
+        }
+
+        if (!string.IsNullOrWhiteSpace(o.PlannedCorrectOperation))
+        {
+            var amount = o.CorrectAmount ?? o.Amount;
+            if (o.PlannedCorrectOperation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase))
+            {
+                result.Add(MakeCorrectionCheckData(
+                    o,
+                    p,
+                    amount,
+                    isExpense: o.PlannedCorrectOperation == "buy_correction",
+                    paymentIsCashOverride: o.CorrectPaymentIsCash));
+            }
+            else
+            {
+                result.Add(MakeReceiptCheckData(
+                    o,
+                    p,
+                    o.PlannedCorrectOperation,
+                    amount,
+                    includeOriginalFp: false,
+                    paymentIsCashOverride: o.CorrectPaymentIsCash));
+            }
+        }
+
+        return result;
     }
 
     // ── СЦЕНАРИИ ────────────────────────────────────────────────────────────────
@@ -127,15 +172,27 @@ public static class CorrectionGeneratorService
         OrderEntry o, GenerationParams p, double amount,
         bool includeOriginalFp,
         bool? paymentIsCashOverride = null)
+        => MakeReceiptCheckData(o, p, "sell_refund", amount, includeOriginalFp, paymentIsCashOverride);
+
+    private static CheckData MakeReceiptCheckData(
+        OrderEntry o,
+        GenerationParams p,
+        string operation,
+        double amount,
+        bool includeOriginalFp,
+        bool? paymentIsCashOverride)
     {
         var paymentType = ResolvePaymentType(o, p, paymentIsCashOverride);
-        bool isService  = ResolveIsService(o);
-        string tab      = ResolveTab(o);
-        var items       = BuildItems(o, amount, isService, tab, operationKind: "refund");
+        bool isService = ResolveIsService(o);
+        string tab = ResolveTab(o);
+        var operationKind = operation.EndsWith("_refund", StringComparison.OrdinalIgnoreCase)
+            ? "refund"
+            : "sell";
+        var items = BuildItems(o, amount, isService, tab, operationKind);
 
         return new CheckData
         {
-            OperationType        = "sell_refund",
+            OperationType        = operation,
             IsCorrection         = false,
             Tab                  = tab,
             Amount               = amount,
@@ -189,7 +246,6 @@ public static class CorrectionGeneratorService
             IsService            = isService,
             CorrectionBaseDate   = baseDate,
             CorrectionBaseNumber = baseNumber,
-            AdditionalCheckProps = o.OriginalFiscalNumber ?? string.Empty,
             CashierName          = p.Cashier.FullName,
             CashierShort         = p.Cashier.ShortName,
         };
@@ -197,31 +253,7 @@ public static class CorrectionGeneratorService
 
     /// <summary>Создаёт CheckData для нового «правильного» sell-чека (используется в DecreaseAmount).</summary>
     private static CheckData MakeSellCheckData(OrderEntry o, GenerationParams p, double amount)
-    {
-        var paymentType = ResolvePaymentType(o, p, null);
-        bool isService  = ResolveIsService(o);
-        string tab      = ResolveTab(o);
-        var items       = BuildItems(o, amount, isService, tab, operationKind: "sell");
-
-        return new CheckData
-        {
-            OperationType        = "sell",
-            IsCorrection         = false,
-            Tab                  = tab,
-            Amount               = amount,
-            PaymentType          = paymentType,
-            CheckVatType         = ResolveCheckVatType(o, tab, isService),
-            Items                = items,
-            Agent                = o.AgentInfo,
-            IsService            = isService,
-            CashierName          = p.Cashier.FullName,
-            CashierShort         = p.Cashier.ShortName,
-            UserAttributeName    = "Номер реализации",
-            UserAttributeValue   = !string.IsNullOrEmpty(o.CorrectionNumber)
-                ? o.CorrectionNumber
-                : (!string.IsNullOrEmpty(o.OrderNum) ? o.OrderNum : string.Empty),
-        };
-    }
+        => MakeReceiptCheckData(o, p, "sell", amount, includeOriginalFp: false, paymentIsCashOverride: null);
 
     // ── Common builders ────────────────────────────────────────────────────────
 
@@ -236,7 +268,7 @@ public static class CorrectionGeneratorService
     private static List<CheckItem> BuildRealizationItems(OrderEntry o, bool isService)
     {
         var result = new List<CheckItem>();
-        var vatType = isService ? (o.AgentInfo?.VatType ?? "none") : "vat22";
+        var vatType = ResolveCheckVatType(o, "realization", isService);
 
         foreach (var raw in o.Items.Where(i => !string.IsNullOrWhiteSpace(i.Name) && i.Sum > 0))
         {
@@ -276,9 +308,7 @@ public static class CorrectionGeneratorService
             ? "payment"
             : (isService ? "service" : "commodity");
 
-        string vatType = isService
-            ? (o.AgentInfo?.VatType ?? "none")
-            : (tab == "payment" ? "vat122" : "vat22");
+        string vatType = ResolveCheckVatType(o, tab, isService);
 
         double vatSum = vatType switch
         {
@@ -336,7 +366,9 @@ public static class CorrectionGeneratorService
 
     private static string ResolveCheckVatType(OrderEntry o, string tab, bool isService)
     {
-        if (isService) return o.AgentInfo?.VatType ?? "none";
+        if (!string.IsNullOrWhiteSpace(o.PlannedVatType)) return o.PlannedVatType;
+        if (isService)
+            return ServiceClassificationService.ResolveVatType(o.IsOwnService, o.AgentInfo, tab);
         return tab == "payment" ? "vat122" : "vat22";
     }
 
