@@ -33,13 +33,13 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
     public string Period => Record.Period;
     public string PeriodLabel => string.IsNullOrWhiteSpace(Period) ? "Без раздела" : Period;
     public string DocumentNumber => Record.PrimaryDocument.OrderNum;
-    public string DocumentDate => Record.PrimaryDocument.OrderDate;
+    public string DocumentDate => SourceDocumentDate(Record.PrimaryDocument);
     public string Department => Record.PrimaryDocument.City;
     public string DocumentType => DisplayDocumentType(Record.PrimaryDocument.DocumentType);
     public string RelatedDocumentsText => Record.RelatedDocuments.Count == 0
         ? "Нет связанных документов"
         : string.Join("\n", Record.RelatedDocuments.Select(x =>
-            $"{DisplayDocumentType(x.DocumentType)} {x.OrderNum} от {x.OrderDate}".Trim()));
+            $"{DisplayDocumentType(x.DocumentType)} {x.OrderNum} от {SourceDocumentDate(x)}".Trim()));
     public double CorrectAmount => State.ExpectedChecks.LastOrDefault()?.Amount
                                    ?? Record.PrimaryDocument.CorrectAmount
                                    ?? Record.PrimaryDocument.Amount;
@@ -223,6 +223,11 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
         "none" => "без НДС",
         _ => value,
     };
+
+    private static string SourceDocumentDate(OrderEntry entry) =>
+        string.IsNullOrWhiteSpace(entry.SourceDocumentDate)
+            ? entry.OrderDate
+            : entry.SourceDocumentDate;
 
     private static string ValueOrPlaceholder(string value) =>
         string.IsNullOrWhiteSpace(value) ? "Не заполнено" : value;

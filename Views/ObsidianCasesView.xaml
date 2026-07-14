@@ -106,13 +106,13 @@
           <RowDefinition Height="54"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="260"/>
+          <ColumnDefinition Width="240"/>
           <ColumnDefinition Width="12"/>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="16"/>
-          <ColumnDefinition Width="180"/>
+          <ColumnDefinition Width="170"/>
           <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="220"/>
         </Grid.ColumnDefinitions>
         <TextBox Grid.Column="0" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                  Tag="Поиск по документу или проблеме"/>
@@ -120,14 +120,16 @@
                   VerticalAlignment="Center"/>
         <Grid Grid.Column="4" VerticalAlignment="Center">
           <ComboBox ItemsSource="{Binding PeriodOptions}"
-                    SelectedIndex="{Binding SelectedPeriodIndex, Mode=TwoWay}"/>
+                    SelectedItem="{Binding SelectedPeriod, Mode=TwoWay}"
+                    Foreground="Transparent"/>
           <TextBlock Text="{Binding SelectedPeriod}" Margin="11,0,30,0"
                      VerticalAlignment="Center" Foreground="{DynamicResource BrushText}"
                      IsHitTestVisible="False" TextTrimming="CharacterEllipsis"/>
         </Grid>
         <TextBlock Grid.Column="6" Text="{Binding SourceOfdReportInfo}"
                    Foreground="{DynamicResource BrushText3}" FontSize="11"
-                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                   VerticalAlignment="Center" TextAlignment="Right"
+                   TextTrimming="CharacterEllipsis" ToolTip="{Binding SourceOfdReportInfo}"/>
         <Grid Grid.Row="1" Grid.ColumnSpan="7" Margin="0,10,0,0" VerticalAlignment="Center">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto"/>
@@ -155,13 +157,14 @@
 
     <Grid Grid.Row="2" Margin="24,16">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="2.1*" MinWidth="620"/>
+        <ColumnDefinition Width="2.1*" MinWidth="520"/>
         <ColumnDefinition Width="18"/>
-        <ColumnDefinition Width="*" MinWidth="330"/>
+        <ColumnDefinition Width="*" MinWidth="290"/>
       </Grid.ColumnDefinitions>
 
       <DataGrid Grid.Column="0" Style="{StaticResource CaseGrid}"
-                ItemsSource="{Binding CasesView}" SelectedItem="{Binding SelectedCase}">
+                ItemsSource="{Binding CasesView}" SelectedItem="{Binding SelectedCase}"
+                FrozenColumnCount="2">
         <DataGrid.Columns>
           <DataGridTemplateColumn Width="42" CanUserSort="False">
             <DataGridTemplateColumn.Header>
@@ -201,6 +204,9 @@
           <DataGridTextColumn Header="Тип" Binding="{Binding DocumentType}" Width="120" IsReadOnly="True"/>
           <DataGridTextColumn Header="Дата" Binding="{Binding DocumentDate}" Width="138" IsReadOnly="True"/>
           <DataGridTextColumn Header="Подразделение" Binding="{Binding Department}" Width="108" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Номер чека" Binding="{Binding OneCCheckNumberText}" Width="105" IsReadOnly="True"/>
+          <DataGridTextColumn Header="ФП чека" Binding="{Binding OneCFiscalNumberText}" Width="115" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Комментарий 1С" Binding="{Binding OneCCommentText}" Width="220" IsReadOnly="True"/>
           <DataGridTextColumn Header="Пояснение ошибки" Binding="{Binding EditableProblem}" Width="*" MinWidth="170" IsReadOnly="True"/>
         </DataGrid.Columns>
       </DataGrid>
