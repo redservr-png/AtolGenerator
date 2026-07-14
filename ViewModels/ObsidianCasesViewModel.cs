@@ -44,6 +44,15 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
                                    ?? Record.PrimaryDocument.CorrectAmount
                                    ?? Record.PrimaryDocument.Amount;
     public string AmountText => CorrectAmount > 0 ? $"{CorrectAmount:N2} ₽" : "Не загружена";
+    public string OneCDataStatus => State.OneCSnapshot is null ? "Не загружены" : "Загружены";
+    public string OneCDocumentDateText => State.OneCSnapshot is null
+        ? "Не загружена"
+        : ValueOrPlaceholder(Record.PrimaryDocument.OrderDate);
+    public string OneCCheckDateText => Record.PrimaryDocument.OneCCheckDate?.ToString("dd.MM.yyyy HH:mm:ss")
+                                       ?? "Не заполнена";
+    public string OneCCheckNumberText => ValueOrPlaceholder(Record.PrimaryDocument.OneCCheckNumber);
+    public string OneCFiscalNumberText => ValueOrPlaceholder(Record.PrimaryDocument.OriginalFiscalNumber);
+    public string OneCCommentText => ValueOrPlaceholder(Record.PrimaryDocument.OneCComment);
 
     public bool IsSelected
     {
@@ -130,6 +139,12 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
         OnPropertyChanged(nameof(OneCStatus));
         OnPropertyChanged(nameof(LastMessage));
         OnPropertyChanged(nameof(AmountText));
+        OnPropertyChanged(nameof(OneCDataStatus));
+        OnPropertyChanged(nameof(OneCDocumentDateText));
+        OnPropertyChanged(nameof(OneCCheckDateText));
+        OnPropertyChanged(nameof(OneCCheckNumberText));
+        OnPropertyChanged(nameof(OneCFiscalNumberText));
+        OnPropertyChanged(nameof(OneCCommentText));
         OnPropertyChanged(nameof(Department));
         OnPropertyChanged(nameof(DocumentDate));
         OnPropertyChanged(nameof(Plan));
@@ -174,6 +189,9 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
             CorrectPaymentIsCash = source.CorrectPaymentIsCash,
             OriginalCheckDate = State.OriginalReceipt?.RegisteredAt,
             OriginalCheckOperation = State.OriginalReceipt?.Operation ?? string.Empty,
+            OneCComment = source.OneCComment,
+            OneCCheckNumber = source.OneCCheckNumber,
+            OneCCheckDate = source.OneCCheckDate,
             PlannedReverseOperation = Plan.Checks.Count > 1 ||
                                       source.CorrectionScenario == CorrectionScenario.FullCancel
                 ? Plan.Checks.FirstOrDefault()?.Operation ?? string.Empty
@@ -206,6 +224,9 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
         _ => value,
     };
 
+    private static string ValueOrPlaceholder(string value) =>
+        string.IsNullOrWhiteSpace(value) ? "Не заполнено" : value;
+
     private static string DisplayDocumentType(SourceDocumentType type) => type switch
     {
         SourceDocumentType.Realization => "Реализация",
@@ -227,6 +248,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
     private string _filePath = string.Empty;
     private string _searchText = string.Empty;
     private string _selectedPeriod = "Все периоды";
+    private int _selectedPeriodIndex;
     private bool _showClosed;
     private string _status = "Укажите Obsidian-файл в настройках";
     private ObsidianCaseItemViewModel? _selectedCase;
@@ -243,7 +265,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         MarkMemoVerifiedCommand = new RelayCommand(MarkMemoVerified, HasSelectedActive);
         VerifyReportCommand = new RelayCommand(VerifyReport, HasSelectedActive);
         FetchOneCDataCommand = new AsyncRelayCommand(FetchOneCDataAsync);
-        LoadSourceOfdReportCommand = new RelayCommand(LoadSourceOfdReport, HasSelectedActive);
+        LoadSourceOfdReportCommand = new RelayCommand(LoadSourceOfdReport);
         MarkOneCRecordedCommand = new RelayCommand(MarkOneCRecorded, HasSelectedActive);
         SaveProblemCommand = new RelayCommand(SaveProblem, () => SelectedCase?.CanEdit == true);
         OpenServiceNoteCommand = new RelayCommand(OpenServiceNote, () =>
@@ -253,6 +275,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
     }
 
     public event Action<IReadOnlyList<OrderEntry>>? SendToWorkRequested;
+    public Func<(string Path, IReadOnlyList<OfdReportRow> Rows)>? OfdReportProvider { get; set; }
 
     public ObservableCollection<ObsidianCaseItemViewModel> Cases { get; } = new();
     public ObservableCollection<string> PeriodOptions { get; } = new() { "Все периоды" };
@@ -289,6 +312,19 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
             CasesView.Refresh();
         }
     }
+    public int SelectedPeriodIndex
+    {
+        get => _selectedPeriodIndex;
+        set
+        {
+            if (value < 0 || value >= PeriodOptions.Count || !Set(ref _selectedPeriodIndex, value)) return;
+            var period = PeriodOptions[value];
+            if (string.Equals(_selectedPeriod, period, StringComparison.Ordinal)) return;
+            _selectedPeriod = period;
+            OnPropertyChanged(nameof(SelectedPeriod));
+            CasesView.Refresh();
+        }
+    }
     public bool ShowClosed
     {
         get => _showClosed;
@@ -314,6 +350,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
     public void Activate()
     {
         ReloadSettings();
+        TryUseWorkspaceOfdReport();
         Sync();
     }
 
@@ -384,6 +421,9 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
             Cases.Clear();
             foreach (var record in records)
             {
+                record.PrimaryDocument.SourceDocumentDate = record.PrimaryDocument.OrderDate;
+                foreach (var related in record.RelatedDocuments)
+                    related.SourceDocumentDate = related.OrderDate;
                 var state = GetState(record.CaseId);
                 if (state.OneCSnapshot is not null)
                     ApplySnapshot(state.OneCSnapshot, record.PrimaryDocument);
@@ -563,19 +603,38 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
 
     private void LoadSourceOfdReport()
     {
-        var dialog = new OpenFileDialog
+        var selected = SelectedActive().ToList();
+        if (selected.Count == 0)
         {
-            Title = "Выберите сводный отчёт ОФД / Такскома с исходными чеками",
-            Filter = "Excel ОФД (*.xlsx)|*.xlsx|Все файлы|*.*",
-        };
-        if (dialog.ShowDialog() != true) return;
+            Status = "Отметьте строки, для которых нужно найти исходные чеки";
+            return;
+        }
 
         try
         {
-            _sourceOfdRows = ReportImportService.ReadOfdReport(dialog.FileName);
-            _sourceOfdReportPath = dialog.FileName;
-            OnPropertyChanged(nameof(SourceOfdReportInfo));
-            var selected = SelectedActive().ToList();
+            if (!TryUseWorkspaceOfdReport() && _sourceOfdRows.Count == 0)
+            {
+                var latestPath = ReportsViewModel.FindLatestValidTaxcomReport();
+                if (!string.IsNullOrWhiteSpace(latestPath))
+                {
+                    SetSourceOfdReport(latestPath, ReportImportService.ReadOfdReport(latestPath));
+                }
+                else
+                {
+                    var dialog = new OpenFileDialog
+                    {
+                        Title = "Выберите сводный отчёт ОФД / Такскома с исходными чеками",
+                        Filter = "Excel ОФД (*.xlsx)|*.xlsx|Все файлы|*.*",
+                    };
+                    if (dialog.ShowDialog() != true)
+                    {
+                        Status = "Для поиска нужен XLSX-отчёт ОФД / Такскома; CSV АТОЛ для этого не подходит";
+                        return;
+                    }
+                    SetSourceOfdReport(dialog.FileName, ReportImportService.ReadOfdReport(dialog.FileName));
+                }
+            }
+
             var found = 0;
             foreach (var item in selected)
             {
@@ -628,6 +687,23 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         {
             Status = $"Не удалось загрузить отчёт ОФД: {ex.Message}";
         }
+    }
+
+    private bool TryUseWorkspaceOfdReport()
+    {
+        var report = OfdReportProvider?.Invoke();
+        if (report is not { } value || string.IsNullOrWhiteSpace(value.Path) || value.Rows.Count == 0)
+            return false;
+
+        SetSourceOfdReport(value.Path, value.Rows);
+        return true;
+    }
+
+    private void SetSourceOfdReport(string path, IReadOnlyList<OfdReportRow> rows)
+    {
+        _sourceOfdReportPath = path;
+        _sourceOfdRows = rows.ToList();
+        OnPropertyChanged(nameof(SourceOfdReportInfo));
     }
 
     private void VerifyReport()
@@ -862,6 +938,9 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         OriginalCheckAmount = source.OriginalCheckAmount,
         CorrectAmount = source.CorrectAmount,
         Notes = source.Notes,
+        OneCComment = source.OneCComment,
+        OneCCheckNumber = source.OneCCheckNumber,
+        OneCCheckDate = source.OneCCheckDate,
         OriginalPaymentWasCash = source.OriginalPaymentWasCash,
         CorrectPaymentIsCash = source.CorrectPaymentIsCash,
     };
@@ -887,6 +966,9 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         target.OriginalFiscalNumber = snapshot.OriginalFiscalNumber;
         target.OriginalCheckAmount = snapshot.OriginalCheckAmount;
         target.CorrectAmount = snapshot.CorrectAmount;
+        target.OneCComment = snapshot.OneCComment;
+        target.OneCCheckNumber = snapshot.OneCCheckNumber;
+        target.OneCCheckDate = snapshot.OneCCheckDate;
         target.OriginalPaymentWasCash = snapshot.OriginalPaymentWasCash;
         target.CorrectPaymentIsCash = snapshot.CorrectPaymentIsCash;
     }
@@ -915,9 +997,18 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
                      .Distinct(StringComparer.OrdinalIgnoreCase))
             PeriodOptions.Add(period);
 
-        _selectedPeriod = PeriodOptions.Contains(selected) ? selected : "Все периоды";
+        var resolved = PeriodOptions.Contains(selected) ? selected : "Все периоды";
+        _selectedPeriod = resolved;
+        _selectedPeriodIndex = Math.Max(0, PeriodOptions.IndexOf(resolved));
         OnPropertyChanged(nameof(SelectedPeriod));
+        OnPropertyChanged(nameof(SelectedPeriodIndex));
         CasesView.Refresh();
+        Application.Current?.Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                OnPropertyChanged(nameof(SelectedPeriodIndex));
+            }),
+            System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private ObsidianCaseState GetState(string caseId)

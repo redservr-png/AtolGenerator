@@ -6,6 +6,11 @@
   <UserControl.Resources>
     <cv:BoolToVisibilityConverter x:Key="BoolVis"/>
     <cv:CorrectionScenarioLabelConverter x:Key="ScenarioLabel"/>
+    <Style x:Key="WorkflowButton" TargetType="Button" BasedOn="{StaticResource BtnSecondary}">
+      <Setter Property="MinHeight" Value="36"/>
+      <Setter Property="Padding" Value="14,7"/>
+      <Setter Property="FontSize" Value="13"/>
+    </Style>
     <Style x:Key="CaseGrid" TargetType="DataGrid">
       <Setter Property="AutoGenerateColumns" Value="False"/>
       <Setter Property="CanUserAddRows" Value="False"/>
@@ -49,7 +54,7 @@
           <Setter Property="Background" Value="{DynamicResource BrushSurface3}"/>
         </Trigger>
         <Trigger Property="IsSelected" Value="True">
-          <Setter Property="Background" Value="#1F2563EB"/>
+          <Setter Property="Background" Value="{DynamicResource BrushSurface3}"/>
           <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
         </Trigger>
       </Style.Triggers>
@@ -59,13 +64,19 @@
       <Setter Property="Padding" Value="7,0"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
       <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+      <Style.Triggers>
+        <Trigger Property="IsSelected" Value="True">
+          <Setter Property="Background" Value="{DynamicResource BrushSurface3}"/>
+          <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
+        </Trigger>
+      </Style.Triggers>
     </Style>
   </UserControl.Resources>
 
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="78"/>
-      <RowDefinition Height="104"/>
+      <RowDefinition Height="116"/>
       <RowDefinition Height="*"/>
       <RowDefinition Height="36"/>
     </Grid.RowDefinitions>
@@ -89,10 +100,10 @@
 
     <Border Grid.Row="1" Background="{DynamicResource BrushSurface2}"
             BorderBrush="{DynamicResource BrushBorder}" BorderThickness="0,0,0,1">
-      <Grid Margin="24,10">
+      <Grid Margin="24,12">
         <Grid.RowDefinitions>
-          <RowDefinition Height="36"/>
-          <RowDefinition Height="48"/>
+          <RowDefinition Height="38"/>
+          <RowDefinition Height="54"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="260"/>
@@ -107,27 +118,42 @@
                  Tag="Поиск по документу или проблеме"/>
         <CheckBox Grid.Column="2" Content="Показывать закрытые" IsChecked="{Binding ShowClosed}"
                   VerticalAlignment="Center"/>
-        <ComboBox Grid.Column="4" ItemsSource="{Binding PeriodOptions}"
-                  SelectedItem="{Binding SelectedPeriod}" VerticalAlignment="Center"/>
+        <Grid Grid.Column="4" VerticalAlignment="Center">
+          <ComboBox ItemsSource="{Binding PeriodOptions}"
+                    SelectedIndex="{Binding SelectedPeriodIndex, Mode=TwoWay}"/>
+          <TextBlock Text="{Binding SelectedPeriod}" Margin="11,0,30,0"
+                     VerticalAlignment="Center" Foreground="{DynamicResource BrushText}"
+                     IsHitTestVisible="False" TextTrimming="CharacterEllipsis"/>
+        </Grid>
         <TextBlock Grid.Column="6" Text="{Binding SourceOfdReportInfo}"
                    Foreground="{DynamicResource BrushText3}" FontSize="11"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-        <StackPanel Grid.Row="1" Grid.ColumnSpan="7" Orientation="Horizontal"
-                    HorizontalAlignment="Right" VerticalAlignment="Bottom">
-          <Button Content="Обновить" Style="{StaticResource BtnSecondary}" Command="{Binding SyncCommand}"/>
-          <Button Content="Выбрать строки" Style="{StaticResource BtnSecondary}" Margin="8,0,0,0"
-                  Command="{Binding SelectAllVisibleCommand}"/>
-          <Button Content="Загрузить из 1С" Style="{StaticResource BtnSecondary}" Margin="8,0,0,0"
+        <Grid Grid.Row="1" Grid.ColumnSpan="7" Margin="0,10,0,0" VerticalAlignment="Center">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="18"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <Button Grid.Column="0" Content="Обновить" Style="{StaticResource WorkflowButton}"
+                  Command="{Binding SyncCommand}"/>
+          <Button Grid.Column="1" Content="Выбрать видимые" Style="{StaticResource WorkflowButton}"
+                  Margin="8,0,0,0" Command="{Binding SelectAllVisibleCommand}"/>
+          <Button Grid.Column="3" Content="Загрузить данные 1С" Style="{StaticResource WorkflowButton}"
                   Command="{Binding FetchOneCDataCommand}"/>
-          <Button Content="Найти исходные чеки в ОФД" Style="{StaticResource BtnSecondary}" Margin="8,0,0,0"
-                  Command="{Binding LoadSourceOfdReportCommand}"/>
-          <Button Content="Передать готовые в работу" Style="{StaticResource BtnPrimary}" Margin="8,0,0,0"
-                  Command="{Binding SendToWorkCommand}"/>
-        </StackPanel>
+          <Button Grid.Column="4" Content="Найти чеки по ФП" Style="{StaticResource WorkflowButton}"
+                  Margin="8,0,0,0" Command="{Binding LoadSourceOfdReportCommand}"
+                  ToolTip="Использовать загруженный XLSX-отчёт ОФД / Такскома"/>
+          <Button Grid.Column="6" Content="Передать готовые в работу" Style="{StaticResource BtnPrimary}"
+                  MinHeight="36" Command="{Binding SendToWorkCommand}"/>
+        </Grid>
       </Grid>
     </Border>
 
-    <Grid Grid.Row="2" Margin="24,18">
+    <Grid Grid.Row="2" Margin="24,16">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="2.1*" MinWidth="620"/>
         <ColumnDefinition Width="18"/>
@@ -148,7 +174,7 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTemplateColumn Header="Состояние" Width="130">
+          <DataGridTemplateColumn Header="Состояние" Width="90">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate>
                 <TextBlock Text="{Binding StateLabel}" FontWeight="SemiBold" VerticalAlignment="Center">
@@ -169,13 +195,13 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="План" Binding="{Binding PlanStatus}" Width="120" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Период" Binding="{Binding PeriodLabel}" Width="125" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Документ" Binding="{Binding DocumentNumber}" Width="125" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Тип" Binding="{Binding DocumentType}" Width="145" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Дата" Binding="{Binding DocumentDate}" Width="145" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Подразделение" Binding="{Binding Department}" Width="125" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Пояснение ошибки" Binding="{Binding EditableProblem}" Width="*" MinWidth="220" IsReadOnly="True"/>
+          <DataGridTextColumn Header="План" Binding="{Binding PlanStatus}" Width="105" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Период" Binding="{Binding PeriodLabel}" Width="92" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Документ" Binding="{Binding DocumentNumber}" Width="118" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Тип" Binding="{Binding DocumentType}" Width="120" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Дата" Binding="{Binding DocumentDate}" Width="138" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Подразделение" Binding="{Binding Department}" Width="108" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Пояснение ошибки" Binding="{Binding EditableProblem}" Width="*" MinWidth="170" IsReadOnly="True"/>
         </DataGrid.Columns>
       </DataGrid>
 
@@ -183,9 +209,20 @@
               BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="8">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel Margin="18">
-            <TextBlock Text="Карточка ошибки" FontSize="16" FontWeight="SemiBold"/>
-            <TextBlock Text="{Binding SelectedCase.DocumentType}" Foreground="{DynamicResource BrushText3}"
-                       Margin="0,4,0,16"/>
+            <Grid Margin="0,0,0,16">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <StackPanel>
+                <TextBlock Text="{Binding SelectedCase.DocumentNumber}" FontSize="17" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding SelectedCase.DocumentType}" Foreground="{DynamicResource BrushText3}"
+                           Margin="0,3,0,0"/>
+              </StackPanel>
+              <TextBlock Grid.Column="1" Text="{Binding SelectedCase.StateLabel}"
+                         Foreground="{DynamicResource BrushAccent2}" FontWeight="SemiBold"
+                         VerticalAlignment="Top" Margin="12,2,0,0"/>
+            </Grid>
 
             <Grid Margin="0,0,0,14">
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
@@ -198,6 +235,54 @@
                 <TextBlock Text="{Binding SelectedCase.AmountText}" FontWeight="SemiBold"/>
               </StackPanel>
             </Grid>
+
+            <Border BorderBrush="{DynamicResource BrushBorder}" BorderThickness="0,1,0,1"
+                    Padding="0,14" Margin="0,0,0,16">
+              <StackPanel>
+                <Grid Margin="0,0,0,12">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="Данные 1С" FontSize="14" FontWeight="SemiBold"/>
+                  <TextBlock Grid.Column="1" Text="{Binding SelectedCase.OneCDataStatus}"
+                             Foreground="{DynamicResource BrushAccent2}" FontWeight="SemiBold"/>
+                </Grid>
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                  </Grid.RowDefinitions>
+                  <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,12">
+                    <TextBlock Text="Дата документа" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock Text="{Binding SelectedCase.OneCDocumentDateText}" FontWeight="SemiBold"/>
+                  </StackPanel>
+                  <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,12">
+                    <TextBlock Text="Дата печати чека" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock Text="{Binding SelectedCase.OneCCheckDateText}" FontWeight="SemiBold"/>
+                  </StackPanel>
+                  <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,12">
+                    <TextBlock Text="Номер чека ККМ" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock Text="{Binding SelectedCase.OneCCheckNumberText}" FontWeight="SemiBold"/>
+                  </StackPanel>
+                  <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,12">
+                    <TextBlock Text="ФП чека" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock Text="{Binding SelectedCase.OneCFiscalNumberText}" FontWeight="SemiBold"/>
+                  </StackPanel>
+                  <StackPanel Grid.Row="2" Grid.ColumnSpan="3">
+                    <TextBlock Text="Комментарий 1С" Style="{StaticResource FieldLabel}"/>
+                    <TextBlock Text="{Binding SelectedCase.OneCCommentText}" TextWrapping="Wrap"
+                               Foreground="{DynamicResource BrushText2}"/>
+                  </StackPanel>
+                </Grid>
+              </StackPanel>
+            </Border>
 
             <TextBlock Text="Пояснение ошибки" Style="{StaticResource FieldLabel}"/>
             <TextBox Text="{Binding SelectedCase.EditableProblem, UpdateSourceTrigger=PropertyChanged}"
@@ -223,9 +308,8 @@
             <TextBlock Text="{Binding SelectedCase.ScenarioSourceLabel}"
                        Foreground="{DynamicResource BrushText3}" FontSize="11" Margin="0,0,0,18"/>
 
-            <Border Background="{DynamicResource BrushSurface2}"
-                    BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
-                    CornerRadius="6" Padding="12" Margin="0,0,0,12">
+            <Border BorderBrush="{DynamicResource BrushBorder}" BorderThickness="0,0,0,1"
+                    Padding="0,0,0,14" Margin="0,0,0,14">
               <StackPanel>
                 <Grid Margin="0,0,0,7">
                   <Grid.ColumnDefinitions>
@@ -242,9 +326,8 @@
               </StackPanel>
             </Border>
 
-            <Border Background="{DynamicResource BrushSurface2}"
-                    BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
-                    CornerRadius="6" Padding="12" Margin="0,0,0,18">
+            <Border BorderBrush="{DynamicResource BrushBorder}" BorderThickness="0,0,0,1"
+                    Padding="0,0,0,14" Margin="0,0,0,18">
               <StackPanel>
                 <Grid Margin="0,0,0,7">
                   <Grid.ColumnDefinitions>

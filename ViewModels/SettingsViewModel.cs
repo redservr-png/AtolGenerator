@@ -32,6 +32,8 @@ public sealed class SettingsViewModel : BaseViewModel
     private string _validationMessage = string.Empty;
     private string _obsidianFilePath = string.Empty;
     private bool _autoValidateServiceNotes;
+    private string _updateStatus = "Обновления ещё не проверялись";
+    private string _availableUpdateUrl = string.Empty;
 
     public SettingsViewModel()
     {
@@ -91,6 +93,13 @@ public sealed class SettingsViewModel : BaseViewModel
         TestAtolCommand = new AsyncRelayCommand(TestAtolAsync);
         TestOneCCommand = new AsyncRelayCommand(TestOneCAsync);
         BrowseObsidianFileCommand = new RelayCommand(BrowseObsidianFile);
+        CheckForUpdatesCommand = new AsyncRelayCommand(CheckForUpdatesAsync);
+        OpenUpdateCommand = new RelayCommand(OpenUpdate, () => HasUpdateAvailable);
+        OpenRepositoryCommand = new RelayCommand(() =>
+            ApplicationUpdateService.OpenUrl(ApplicationUpdateService.RepositoryUrl));
+
+        if (ApplicationUpdateService.LastResult is { } lastUpdateResult)
+            ApplyUpdateResult(lastUpdateResult);
     }
 
     public event Action<bool>? RequestClose;
@@ -111,6 +120,9 @@ public sealed class SettingsViewModel : BaseViewModel
     public ICommand TestAtolCommand { get; }
     public ICommand TestOneCCommand { get; }
     public ICommand BrowseObsidianFileCommand { get; }
+    public ICommand CheckForUpdatesCommand { get; }
+    public ICommand OpenUpdateCommand { get; }
+    public ICommand OpenRepositoryCommand { get; }
 
     public string Section
     {
@@ -123,6 +135,7 @@ public sealed class SettingsViewModel : BaseViewModel
             OnPropertyChanged(nameof(ShowCashiers));
             OnPropertyChanged(nameof(ShowAgents));
             OnPropertyChanged(nameof(ShowObsidian));
+            OnPropertyChanged(nameof(ShowAbout));
         }
     }
 
@@ -131,6 +144,11 @@ public sealed class SettingsViewModel : BaseViewModel
     public bool ShowCashiers    => Section == "cashiers";
     public bool ShowAgents      => Section == "agents";
     public bool ShowObsidian    => Section == "obsidian";
+    public bool ShowAbout       => Section == "about";
+
+    public string ApplicationName => "АТОЛ Чек-генератор";
+    public string VersionText => $"Версия {ApplicationUpdateService.CurrentVersionText}";
+    public string RepositoryText => "github.com/redservr-png/AtolGenerator";
 
     public ThemeOption? SelectedTheme
     {
@@ -176,6 +194,8 @@ public sealed class SettingsViewModel : BaseViewModel
 
     public string AtolStatus { get => _atolStatus; set => Set(ref _atolStatus, value); }
     public string OneCStatus { get => _oneCStatus; set => Set(ref _oneCStatus, value); }
+    public string UpdateStatus { get => _updateStatus; private set => Set(ref _updateStatus, value); }
+    public bool HasUpdateAvailable => !string.IsNullOrWhiteSpace(_availableUpdateUrl);
     public string ValidationMessage
     {
         get => _validationMessage;
@@ -291,6 +311,8 @@ public sealed class SettingsViewModel : BaseViewModel
             ThemeKey = SelectedTheme?.Key ?? "light",
             SelectedCashierShortName = DefaultCashier!.ShortName,
             ObsidianFilePath = ObsidianFilePath.Trim(),
+            LastAtolReportPath = ApplicationSettingsStore.Current.LastAtolReportPath,
+            LastOfdReportPath = ApplicationSettingsStore.Current.LastOfdReportPath,
             AutoValidateServiceNotes = AutoValidateServiceNotes,
             Cashiers = Cashiers.Select(CloneCashier).ToList(),
             Agents = Agents.Select(CloneAgent).ToList(),
@@ -364,6 +386,45 @@ public sealed class SettingsViewModel : BaseViewModel
         if (dialog.ShowDialog() == true)
             ObsidianFilePath = dialog.FileName;
     }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        UpdateStatus = "Проверяем GitHub Releases...";
+        _availableUpdateUrl = string.Empty;
+        OnPropertyChanged(nameof(HasUpdateAvailable));
+        CommandManager.InvalidateRequerySuggested();
+
+        ApplyUpdateResult(await ApplicationUpdateService.CheckForUpdateAsync());
+    }
+
+    private void ApplyUpdateResult(ApplicationUpdateResult result)
+    {
+        _availableUpdateUrl = string.Empty;
+        if (!result.CheckSucceeded)
+        {
+            UpdateStatus = result.ErrorMessage;
+            OnPropertyChanged(nameof(HasUpdateAvailable));
+            CommandManager.InvalidateRequerySuggested();
+            return;
+        }
+
+        if (!result.IsUpdateAvailable)
+        {
+            UpdateStatus = $"Установлена актуальная версия {result.CurrentVersion}";
+            OnPropertyChanged(nameof(HasUpdateAvailable));
+            CommandManager.InvalidateRequerySuggested();
+            return;
+        }
+
+        _availableUpdateUrl = string.IsNullOrWhiteSpace(result.DownloadUrl)
+            ? result.ReleaseUrl
+            : result.DownloadUrl;
+        UpdateStatus = $"Доступна версия {result.LatestVersion}";
+        OnPropertyChanged(nameof(HasUpdateAvailable));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void OpenUpdate() => ApplicationUpdateService.OpenUrl(_availableUpdateUrl);
 
     private OneCConnectionSettings BuildOneCSettings() => new()
     {

@@ -141,6 +141,21 @@
       <Setter Property="VerticalAlignment" Value="Center"/>
       <Setter Property="Margin" Value="0,0,6,0"/>
     </Style>
+    <Style x:Key="ReportDatePicker" TargetType="DatePicker"
+           BasedOn="{StaticResource {x:Type DatePicker}}">
+      <Setter Property="Width" Value="140"/>
+      <Setter Property="Height" Value="34"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="SelectedDateFormat" Value="Short"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style x:Key="FilterSelectionText" TargetType="TextBlock">
+      <Setter Property="Margin" Value="11,0,30,0"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
+      <Setter Property="IsHitTestVisible" Value="False"/>
+      <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
   </UserControl.Resources>
 
   <Grid Margin="24,18,24,20">
@@ -277,24 +292,35 @@
               <WrapPanel VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                   <TextBlock Text="Период" Style="{StaticResource FilterLabel}"/>
-                  <DatePicker SelectedDate="{Binding AtolDateFrom, UpdateSourceTrigger=PropertyChanged}" Width="118"/>
+                  <DatePicker SelectedDate="{Binding AtolDateFrom, UpdateSourceTrigger=PropertyChanged}"
+                              Style="{StaticResource ReportDatePicker}"/>
                   <TextBlock Text="–" Foreground="{DynamicResource BrushText3}" Margin="6,0" VerticalAlignment="Center"/>
-                  <DatePicker SelectedDate="{Binding AtolDateTo, UpdateSourceTrigger=PropertyChanged}" Width="118"/>
+                  <DatePicker SelectedDate="{Binding AtolDateTo, UpdateSourceTrigger=PropertyChanged}"
+                              Style="{StaticResource ReportDatePicker}"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                   <TextBlock Text="Тип" Style="{StaticResource FilterLabel}"/>
-                  <ComboBox ItemsSource="{Binding AtolTypeOptions}" SelectedItem="{Binding AtolTypeFilter}"
-                            Width="150"/>
+                  <Grid Width="150">
+                    <ComboBox ItemsSource="{Binding AtolTypeOptions}"
+                              SelectedIndex="{Binding AtolTypeFilterIndex, Mode=TwoWay}"/>
+                    <TextBlock Text="{Binding AtolTypeFilter}" Style="{StaticResource FilterSelectionText}"/>
+                  </Grid>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                   <TextBlock Text="Источник" Style="{StaticResource FilterLabel}"/>
-                  <ComboBox ItemsSource="{Binding AtolSourceOptions}" SelectedItem="{Binding AtolSourceFilter}"
-                            Width="115"/>
+                  <Grid Width="115">
+                    <ComboBox ItemsSource="{Binding AtolSourceOptions}"
+                              SelectedIndex="{Binding AtolSourceFilterIndex, Mode=TwoWay}"/>
+                    <TextBlock Text="{Binding AtolSourceFilter}" Style="{StaticResource FilterSelectionText}"/>
+                  </Grid>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                   <TextBlock Text="Статус" Style="{StaticResource FilterLabel}"/>
-                  <ComboBox ItemsSource="{Binding AtolStatusOptions}" SelectedItem="{Binding AtolStatusFilter}"
-                            Width="130"/>
+                  <Grid Width="130">
+                    <ComboBox ItemsSource="{Binding AtolStatusOptions}"
+                              SelectedIndex="{Binding AtolStatusFilterIndex, Mode=TwoWay}"/>
+                    <TextBlock Text="{Binding AtolStatusFilter}" Style="{StaticResource FilterSelectionText}"/>
+                  </Grid>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                   <TextBlock Text="Поиск" Style="{StaticResource FilterLabel}"/>
@@ -376,24 +402,35 @@
               <WrapPanel VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                   <TextBlock Text="Период" Style="{StaticResource FilterLabel}"/>
-                  <DatePicker SelectedDate="{Binding OfdDateFrom, UpdateSourceTrigger=PropertyChanged}" Width="118"/>
+                  <DatePicker SelectedDate="{Binding OfdDateFrom, UpdateSourceTrigger=PropertyChanged}"
+                              Style="{StaticResource ReportDatePicker}"/>
                   <TextBlock Text="–" Foreground="{DynamicResource BrushText3}" Margin="6,0" VerticalAlignment="Center"/>
-                  <DatePicker SelectedDate="{Binding OfdDateTo, UpdateSourceTrigger=PropertyChanged}" Width="118"/>
+                  <DatePicker SelectedDate="{Binding OfdDateTo, UpdateSourceTrigger=PropertyChanged}"
+                              Style="{StaticResource ReportDatePicker}"/>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                   <TextBlock Text="Операция" Style="{StaticResource FilterLabel}"/>
-                  <ComboBox ItemsSource="{Binding OfdOperationOptions}" SelectedItem="{Binding OfdOperationFilter}"
-                            Width="135"/>
+                  <Grid Width="135">
+                    <ComboBox ItemsSource="{Binding OfdOperationOptions}"
+                              SelectedIndex="{Binding OfdOperationFilterIndex, Mode=TwoWay}"/>
+                    <TextBlock Text="{Binding OfdOperationFilter}" Style="{StaticResource FilterSelectionText}"/>
+                  </Grid>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                   <TextBlock Text="Торговая точка" Style="{StaticResource FilterLabel}"/>
-                  <ComboBox ItemsSource="{Binding OfdTradingPointOptions}" SelectedItem="{Binding OfdTradingPointFilter}"
-                            Width="155"/>
+                  <Grid Width="155">
+                    <ComboBox ItemsSource="{Binding OfdTradingPointOptions}"
+                              SelectedIndex="{Binding OfdTradingPointFilterIndex, Mode=TwoWay}"/>
+                    <TextBlock Text="{Binding OfdTradingPointFilter}" Style="{StaticResource FilterSelectionText}"/>
+                  </Grid>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
                   <TextBlock Text="ККТ" Style="{StaticResource FilterLabel}"/>
-                  <ComboBox ItemsSource="{Binding OfdKktOptions}" SelectedItem="{Binding OfdKktFilter}"
-                            Width="145"/>
+                  <Grid Width="145">
+                    <ComboBox ItemsSource="{Binding OfdKktOptions}"
+                              SelectedIndex="{Binding OfdKktFilterIndex, Mode=TwoWay}"/>
+                    <TextBlock Text="{Binding OfdKktFilter}" Style="{StaticResource FilterSelectionText}"/>
+                  </Grid>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal">
                   <TextBlock Text="Поиск" Style="{StaticResource FilterLabel}"/>

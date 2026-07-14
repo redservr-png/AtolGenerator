@@ -13,6 +13,7 @@ namespace AtolGenerator.ViewModels;
 public class MainViewModel : BaseViewModel
 {
     private string _activeWorkspace = "main";
+    private bool _startupInitialized;
 
     public ReportsViewModel Reports { get; } = new();
     public ObsidianCasesViewModel ObsidianCases { get; }
@@ -385,6 +386,8 @@ public class MainViewModel : BaseViewModel
     public MainViewModel()
     {
         ObsidianCases = new ObsidianCasesViewModel();
+        ObsidianCases.OfdReportProvider = () =>
+            (Reports.OfdReportPath, Reports.OfdChecks.ToList());
         ObsidianCases.SendToWorkRequested += AddObsidianCasesToWork;
 
         // Любое изменение списка заказов автоматически обновляет
@@ -445,6 +448,61 @@ public class MainViewModel : BaseViewModel
         }
 
         ReloadApplicationSettings();
+    }
+
+    public async Task InitializeAsync()
+    {
+        if (_startupInitialized) return;
+        _startupInitialized = true;
+
+        var reportsTask = Reports.RestoreLatestReportsAsync();
+        var updateTask = ApplicationUpdateService.CheckForUpdateAsync();
+
+        try
+        {
+            await reportsTask;
+        }
+        catch
+        {
+            // Автозагрузка отчётов не должна блокировать остальные рабочие сценарии.
+        }
+
+        ApplicationUpdateResult update;
+        try
+        {
+            update = await updateTask;
+        }
+        catch
+        {
+            return;
+        }
+
+        if (!update.CheckSucceeded || !update.IsUpdateAvailable) return;
+
+        var answer = MessageBox.Show(
+            Application.Current?.MainWindow,
+            $"Установлена версия {update.CurrentVersion}. Доступна версия {update.LatestVersion}.\n\n" +
+            "Скачать новую версию сейчас?",
+            "Доступно обновление",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Information);
+        if (answer != MessageBoxResult.Yes) return;
+
+        try
+        {
+            ApplicationUpdateService.OpenUrl(string.IsNullOrWhiteSpace(update.DownloadUrl)
+                ? update.ReleaseUrl
+                : update.DownloadUrl);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                Application.Current?.MainWindow,
+                $"Не удалось открыть страницу обновления: {ex.Message}",
+                "Обновление",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
     }
 
     // ── Logic ─────────────────────────────────────────────────────────────────
@@ -1128,6 +1186,9 @@ public class MainViewModel : BaseViewModel
         PlannedVatType = s.PlannedVatType,
         OriginalCheckDate = s.OriginalCheckDate,
         OriginalCheckOperation = s.OriginalCheckOperation,
+        OneCComment = s.OneCComment,
+        OneCCheckNumber = s.OneCCheckNumber,
+        OneCCheckDate = s.OneCCheckDate,
     };
 
     /// <summary>Копирует поля из источника в цель (используется после редактирования).</summary>
@@ -1165,6 +1226,9 @@ public class MainViewModel : BaseViewModel
         to.PlannedVatType = from.PlannedVatType;
         to.OriginalCheckDate = from.OriginalCheckDate;
         to.OriginalCheckOperation = from.OriginalCheckOperation;
+        to.OneCComment = from.OneCComment;
+        to.OneCCheckNumber = from.OneCCheckNumber;
+        to.OneCCheckDate = from.OneCCheckDate;
     }
 
     private void SaveAtolSettings()

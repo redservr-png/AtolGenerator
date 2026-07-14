@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace AtolGenerator.Models;
 
 public class OrderEntry
@@ -5,6 +7,8 @@ public class OrderEntry
     public string          ObsidianCaseId    { get; set; } = string.Empty;
     public string          OrderNum         { get; set; } = string.Empty;
     public string          OrderDate        { get; set; } = string.Empty;  // "DD.MM.YYYY HH:MM:SS"
+    [JsonIgnore]
+    public string          SourceDocumentDate { get; set; } = string.Empty;
     public double          Amount           { get; set; }
     public string          CustomerName     { get; set; } = string.Empty;
     public List<OrderItem> Items            { get; set; } = new();
@@ -58,6 +62,11 @@ public class OrderEntry
 
     /// <summary>Операция исходного ошибочного чека из отчёта ОФД.</summary>
     public string               OriginalCheckOperation { get; set; } = string.Empty;
+
+    // Реквизиты документа и исходного чека, полученные непосредственно из 1С.
+    public string               OneCComment { get; set; } = string.Empty;
+    public string               OneCCheckNumber { get; set; } = string.Empty;
+    public DateTime?            OneCCheckDate { get; set; }
 
     /// <summary>Удобное свойство для UI: true = строка является исправительной.</summary>
     public bool IsCorrection => Kind != OrderKind.Regular;

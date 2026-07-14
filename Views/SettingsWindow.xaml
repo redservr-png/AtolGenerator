@@ -143,6 +143,13 @@
                       IsChecked="{Binding Section, Mode=OneWay, Converter={StaticResource StrEq}, ConverterParameter=obsidian}"
                       Command="{Binding SelectSectionCommand}" CommandParameter="obsidian"
                       Content="▧  Obsidian"/>
+        <Border Height="1" Background="{DynamicResource BrushBorder}" Margin="4,10,4,14"/>
+        <ToggleButton Style="{StaticResource SettingsNav}"
+                      IsChecked="{Binding Section, Mode=OneWay, Converter={StaticResource StrEq}, ConverterParameter=about}"
+                      Command="{Binding SelectSectionCommand}" CommandParameter="about"
+                      Content="ⓘ  О программе"/>
+        <TextBlock Text="{Binding VersionText}" Margin="13,8,0,0"
+                   Foreground="{DynamicResource BrushText3}" FontSize="11"/>
       </StackPanel>
     </Border>
 
@@ -366,6 +373,72 @@
                          Style="{StaticResource HintText}" Margin="24,5,0,0" TextWrapping="Wrap"/>
             </StackPanel>
           </Border>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- О программе -->
+      <ScrollViewer Visibility="{Binding ShowAbout, Converter={StaticResource BoolVis}}"
+                    VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,22" MaxWidth="790" HorizontalAlignment="Left">
+          <TextBlock Text="О программе" FontSize="19" FontWeight="SemiBold"/>
+          <TextBlock Text="Версия, назначение и обновления приложения."
+                     Foreground="{DynamicResource BrushText3}" FontSize="12" Margin="0,5,0,20"/>
+
+          <Border Style="{StaticResource Card}" Padding="20">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="72"/>
+                <ColumnDefinition Width="*"/>
+              </Grid.ColumnDefinitions>
+              <Border Width="58" Height="58" CornerRadius="8"
+                      Background="{DynamicResource BrushSurface3}"
+                      BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                      VerticalAlignment="Top">
+                <Image Source="/Resources/app.ico" Width="38" Height="38"/>
+              </Border>
+              <StackPanel Grid.Column="1">
+                <TextBlock Text="{Binding ApplicationName}" FontSize="20" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding VersionText}" Foreground="{DynamicResource BrushAccent}"
+                           FontSize="13" FontWeight="SemiBold" Margin="0,4,0,0"/>
+                <TextBlock Text="Рабочее приложение для формирования возвратов через АТОЛ API, подготовки XML чеков коррекции по данным 1С и сверки фискальных отчётов."
+                           Foreground="{DynamicResource BrushText2}" FontSize="13"
+                           TextWrapping="Wrap" LineHeight="20" Margin="0,14,0,0"/>
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <Border Margin="0,16,0,0" Padding="20"
+                  Background="{DynamicResource BrushSurface2}"
+                  BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                  CornerRadius="7">
+            <StackPanel>
+              <TextBlock Text="Обновления" FontSize="15" FontWeight="SemiBold"/>
+              <TextBlock Text="При запуске программа проверяет последний опубликованный выпуск на GitHub. Проверку можно повторить вручную."
+                         Style="{StaticResource HintText}" Margin="0,5,0,14" TextWrapping="Wrap"/>
+              <TextBlock Text="{Binding UpdateStatus}" Foreground="{DynamicResource BrushText2}"
+                         FontSize="12" Margin="0,0,0,14" TextWrapping="Wrap"/>
+              <StackPanel Orientation="Horizontal">
+                <Button Content="Проверить обновления" Style="{StaticResource BtnSecondary}"
+                        Command="{Binding CheckForUpdatesCommand}"/>
+                <Button Content="Скачать обновление" Style="{StaticResource BtnPrimary}"
+                        Command="{Binding OpenUpdateCommand}" Margin="8,0,0,0"
+                        Visibility="{Binding HasUpdateAvailable, Converter={StaticResource BoolVis}}"/>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Grid Margin="0,18,0,0">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+              <TextBlock Text="Исходный код и выпуски" FontSize="14" FontWeight="SemiBold"/>
+              <TextBlock Text="{Binding RepositoryText}" Style="{StaticResource HintText}" Margin="0,4,0,0"/>
+            </StackPanel>
+            <Button Grid.Column="1" Content="Открыть GitHub" Style="{StaticResource BtnSecondary}"
+                    Command="{Binding OpenRepositoryCommand}" VerticalAlignment="Center"/>
+          </Grid>
         </StackPanel>
       </ScrollViewer>
     </Grid>

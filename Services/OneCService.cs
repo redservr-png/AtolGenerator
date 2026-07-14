@@ -838,56 +838,72 @@ public static class OneCService
 
                 try
                 {
-                    // Граница даты — из строки в OrderDate (формат «dd.MM.yyyy HH:mm:ss»),
-                    // либо сегодня
-                    DateTime dateHint = DateTime.Now;
-                    if (!string.IsNullOrEmpty(o.OrderDate))
+                    // Номер документа в УТ 10.3 может повторяться между периодами. Сначала
+                    // ограничиваем поиск датой из исходной строки Obsidian, а не сохранённым
+                    // снимком 1С, чтобы старый результат не закреплялся при повторной загрузке.
+                    DateTime? dateHint = null;
+                    var lookupDate = string.IsNullOrWhiteSpace(o.SourceDocumentDate)
+                        ? o.OrderDate
+                        : o.SourceDocumentDate;
+                    if (!string.IsNullOrEmpty(lookupDate))
                     {
-                        var datePart = o.OrderDate.Split(' ').FirstOrDefault() ?? string.Empty;
+                        var datePart = lookupDate.Split(' ').FirstOrDefault() ?? string.Empty;
                         if (DateTime.TryParseExact(datePart, "dd.MM.yyyy",
                                 System.Globalization.CultureInfo.InvariantCulture,
                                 System.Globalization.DateTimeStyles.None, out var d))
-                        {
-                            // Берём конец того дня — чтобы документ этого дня попал в выборку
-                            dateHint = d.Date.AddDays(1).AddSeconds(-1);
-                        }
+                            dateHint = d.Date;
                     }
 
                     // У большинства документов с фискалкой есть поле ЧекНомерФП.
                     // У Заказа покупателя его нет — для него выбираем только сумму.
                     bool hasFpField = HasFiscalNumberField(o.DocumentType);
                     var fpSelectPart = hasFpField ? ", Док.ЧекНомерФП КАК ЧекНомерФП" : "";
+                    var checkSelectPart = hasFpField
+                        ? ", Док.НомерЧекаККМ КАК НомерЧекаККМ, Док.ДатаПечатиЧека КАК ДатаПечатиЧека"
+                        : "";
                     var detailsSelectPart = FetchDetailsSelectPart(o.DocumentType);
+                    var dateFilter = dateHint.HasValue
+                        ? "И Док.Дата >= &НачалоДня И Док.Дата < &КонецДня"
+                        : string.Empty;
 
                     var query = conn.NewObject("Запрос");
                     query.Текст = $"""
                         ВЫБРАТЬ ПЕРВЫЕ 1
                             Док.СуммаДокумента  КАК Сумма,
-                            Док.Дата             КАК ДатаДок
+                            Док.Дата             КАК ДатаДок,
+                            Док.Комментарий      КАК Комментарий
                             {fpSelectPart}
+                            {checkSelectPart}
                             {detailsSelectPart}
                         ИЗ
                             Документ.{metaName} КАК Док
                         ГДЕ
                             Док.Номер = &Номер
                             И Док.ПометкаУдаления = ЛОЖЬ
-                            И Док.Дата <= &ДатаЧека
+                            {dateFilter}
                         УПОРЯДОЧИТЬ ПО
                             Док.Дата УБЫВ
                         """;
-                    query.УстановитьПараметр("Номер",    o.OrderNum);
-                    query.УстановитьПараметр("ДатаЧека", dateHint);
+                    query.УстановитьПараметр("Номер", o.OrderNum);
+                    if (dateHint.HasValue)
+                    {
+                        query.УстановитьПараметр("НачалоДня", dateHint.Value);
+                        query.УстановитьПараметр("КонецДня", dateHint.Value.AddDays(1));
+                    }
                     var sel = query.Выполнить().Выбрать();
 
                     if (!(bool)sel.Следующий())
                     {
                         res.NotFound++;
-                        Log($"  {o.OrderNum} ({metaName}): не найден до {dateHint:dd.MM.yyyy}");
+                        Log(dateHint.HasValue
+                            ? $"  {o.OrderNum} ({metaName}): не найден за {dateHint:dd.MM.yyyy}"
+                            : $"  {o.OrderNum} ({metaName}): не найден");
                         continue;
                     }
 
                     var sum = ToDouble(sel.Сумма);
                     var documentDate = ToDateTime(sel.ДатаДок);
+                    o.OneCComment = Str(sel.Комментарий).Trim();
                     o.CorrectAmount = sum;
                     if (documentDate > DateTime.MinValue)
                     {
@@ -898,10 +914,9 @@ public static class OneCService
                     // подставляем правильную сумму как основную.
                     if (o.Amount <= 0) o.Amount = sum;
 
-                    // ФП исходного чека (тег 1192) — если у документа есть поле и оно не пустое.
-                    // Не перезаписываем уже заполненный OriginalFiscalNumber (пользователь
-                    // мог ввести его вручную для FP-only кейсов из Obsidian).
-                    if (hasFpField && string.IsNullOrEmpty(o.OriginalFiscalNumber))
+                    // Явная загрузка из 1С считается авторитетной: обновляем сохранённые
+                    // реквизиты чека, если они заполнены в найденном документе.
+                    if (hasFpField)
                     {
                         try
                         {
@@ -911,6 +926,9 @@ public static class OneCService
                                 o.OriginalFiscalNumber = fp;
                                 res.FilledFp++;
                             }
+                            o.OneCCheckNumber = Str(sel.НомерЧекаККМ).Trim();
+                            var checkDate = ToDateTime(sel.ДатаПечатиЧека);
+                            o.OneCCheckDate = checkDate > DateTime.MinValue ? checkDate : null;
                         }
                         catch { /* нет поля — пропускаем */ }
                     }

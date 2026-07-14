@@ -9,7 +9,8 @@
         Height="900" Width="1440"
         MinHeight="720" MinWidth="1180"
         Background="{DynamicResource BrushBg}"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        Loaded="OnLoaded">
 
   <Window.DataContext>
     <vm:MainViewModel/>

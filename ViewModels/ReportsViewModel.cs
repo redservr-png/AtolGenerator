@@ -37,6 +37,7 @@ public sealed class ReportsViewModel : BaseViewModel
     private string _ofdTradingPointFilter = "Все";
     private string _ofdKktFilter = "Все";
     private string _ofdSearchText = string.Empty;
+    private bool _startupReportsRestored;
 
     private List<XmlReportCheck> _xmlChecks = new();
 
@@ -133,19 +134,34 @@ public sealed class ReportsViewModel : BaseViewModel
     public string AtolTypeFilter
     {
         get => _atolTypeFilter;
-        set { if (Set(ref _atolTypeFilter, value ?? "Все")) RefreshAtolFilter(); }
+        set
+        {
+            if (!Set(ref _atolTypeFilter, value ?? "Все")) return;
+            OnPropertyChanged(nameof(AtolTypeFilterIndex));
+            RefreshAtolFilter();
+        }
     }
 
     public string AtolSourceFilter
     {
         get => _atolSourceFilter;
-        set { if (Set(ref _atolSourceFilter, value ?? "Все")) RefreshAtolFilter(); }
+        set
+        {
+            if (!Set(ref _atolSourceFilter, value ?? "Все")) return;
+            OnPropertyChanged(nameof(AtolSourceFilterIndex));
+            RefreshAtolFilter();
+        }
     }
 
     public string AtolStatusFilter
     {
         get => _atolStatusFilter;
-        set { if (Set(ref _atolStatusFilter, value ?? "Все")) RefreshAtolFilter(); }
+        set
+        {
+            if (!Set(ref _atolStatusFilter, value ?? "Все")) return;
+            OnPropertyChanged(nameof(AtolStatusFilterIndex));
+            RefreshAtolFilter();
+        }
     }
 
     public string AtolSearchText
@@ -169,25 +185,76 @@ public sealed class ReportsViewModel : BaseViewModel
     public string OfdOperationFilter
     {
         get => _ofdOperationFilter;
-        set { if (Set(ref _ofdOperationFilter, value ?? "Все")) RefreshOfdFilter(); }
+        set
+        {
+            if (!Set(ref _ofdOperationFilter, value ?? "Все")) return;
+            OnPropertyChanged(nameof(OfdOperationFilterIndex));
+            RefreshOfdFilter();
+        }
     }
 
     public string OfdTradingPointFilter
     {
         get => _ofdTradingPointFilter;
-        set { if (Set(ref _ofdTradingPointFilter, value ?? "Все")) RefreshOfdFilter(); }
+        set
+        {
+            if (!Set(ref _ofdTradingPointFilter, value ?? "Все")) return;
+            OnPropertyChanged(nameof(OfdTradingPointFilterIndex));
+            RefreshOfdFilter();
+        }
     }
 
     public string OfdKktFilter
     {
         get => _ofdKktFilter;
-        set { if (Set(ref _ofdKktFilter, value ?? "Все")) RefreshOfdFilter(); }
+        set
+        {
+            if (!Set(ref _ofdKktFilter, value ?? "Все")) return;
+            OnPropertyChanged(nameof(OfdKktFilterIndex));
+            RefreshOfdFilter();
+        }
     }
 
     public string OfdSearchText
     {
         get => _ofdSearchText;
         set { if (Set(ref _ofdSearchText, value ?? string.Empty)) RefreshOfdFilter(); }
+    }
+
+    public int AtolTypeFilterIndex
+    {
+        get => OptionIndex(AtolTypeOptions, AtolTypeFilter);
+        set => SelectOption(AtolTypeOptions, value, selected => AtolTypeFilter = selected);
+    }
+
+    public int AtolSourceFilterIndex
+    {
+        get => OptionIndex(AtolSourceOptions, AtolSourceFilter);
+        set => SelectOption(AtolSourceOptions, value, selected => AtolSourceFilter = selected);
+    }
+
+    public int AtolStatusFilterIndex
+    {
+        get => OptionIndex(AtolStatusOptions, AtolStatusFilter);
+        set => SelectOption(AtolStatusOptions, value, selected => AtolStatusFilter = selected);
+    }
+
+    public int OfdOperationFilterIndex
+    {
+        get => OptionIndex(OfdOperationOptions, OfdOperationFilter);
+        set => SelectOption(OfdOperationOptions, value, selected => OfdOperationFilter = selected);
+    }
+
+    public int OfdTradingPointFilterIndex
+    {
+        get => OptionIndex(OfdTradingPointOptions, OfdTradingPointFilter);
+        set => SelectOption(OfdTradingPointOptions, value, selected => OfdTradingPointFilter = selected);
+    }
+
+    public int OfdKktFilterIndex
+    {
+        get => OptionIndex(OfdKktOptions, OfdKktFilter);
+        set => SelectOption(OfdKktOptions, value, selected => OfdKktFilter = selected);
     }
 
     public ICommand RefreshLocalHistoryCommand { get; }
@@ -261,35 +328,94 @@ public sealed class ReportsViewModel : BaseViewModel
 
     public void LoadAtolReport(string path)
     {
-        var rows = ReportImportService.ReadAtolJournal(path);
+        ApplyAtolReport(path, ReportImportService.ReadAtolJournal(path), selectTab: true);
+    }
+
+    public void LoadOfdReport(string path)
+    {
+        ApplyOfdReport(path, ReportImportService.ReadOfdReport(path), selectTab: true);
+    }
+
+    public async Task RestoreLatestReportsAsync()
+    {
+        if (_startupReportsRestored) return;
+        _startupReportsRestored = true;
+
+        AtolStatus = "Ищем последний отчёт...";
+        OfdStatus = "Ищем последний отчёт...";
+
+        var settings = ApplicationSettingsStore.Current;
+        var atolTask = Task.Run(() => TryReadLatestReport(
+            FileHelper.AtolReportDir,
+            "*.csv",
+            name => name.Contains("report_checkjournal", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("атол", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("журнал", StringComparison.OrdinalIgnoreCase),
+            settings.LastAtolReportPath,
+            ReportImportService.ReadAtolJournal));
+        var ofdTask = Task.Run(() => TryReadLatestReport(
+            FileHelper.TaxcomReportDir,
+            "*.xlsx",
+            name => name.Contains("такском", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("фискальн", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("сводн", StringComparison.OrdinalIgnoreCase),
+            settings.LastOfdReportPath,
+            ReportImportService.ReadOfdReport));
+
+        await Task.WhenAll(atolTask, ofdTask);
+
+        var atolReport = await atolTask;
+        if (atolReport is not null)
+            ApplyAtolReport(atolReport.Value.Path, atolReport.Value.Rows, selectTab: false, automatic: true);
+        else
+            AtolStatus = "Последний отчёт не найден";
+
+        var ofdReport = await ofdTask;
+        if (ofdReport is not null)
+            ApplyOfdReport(ofdReport.Value.Path, ofdReport.Value.Rows, selectTab: false, automatic: true);
+        else
+            OfdStatus = "Последний отчёт не найден";
+    }
+
+    private void ApplyAtolReport(
+        string path,
+        IReadOnlyCollection<AtolJournalReportRow> rows,
+        bool selectTab,
+        bool automatic = false)
+    {
         AtolChecks.Clear();
         foreach (var row in rows) AtolChecks.Add(row);
 
         AtolReportPath = path;
-        AtolStatus = $"{AtolChecks.Count} чеков · XML: {AtolXmlCount} · коррекции: {AtolCorrectionCount}";
+        AtolStatus = $"{(automatic ? "Автозагрузка · " : string.Empty)}{AtolChecks.Count} чеков · XML: {AtolXmlCount} · коррекции: {AtolCorrectionCount}";
         OnPropertyChanged(nameof(AtolFileName));
         OnPropertyChanged(nameof(AtolCorrectionCount));
         OnPropertyChanged(nameof(AtolXmlCount));
         OnPropertyChanged(nameof(CanBuildMatches));
         RefreshAtolOptions();
         ClearAtolFilters();
-        SelectedTabIndex = 1;
+        if (selectTab) SelectedTabIndex = 1;
+        RememberReportPath(atolPath: path);
         BuildMatches(false);
         CommandManager.InvalidateRequerySuggested();
     }
 
-    public void LoadOfdReport(string path)
+    private void ApplyOfdReport(
+        string path,
+        IReadOnlyCollection<OfdReportRow> rows,
+        bool selectTab,
+        bool automatic = false)
     {
-        var rows = ReportImportService.ReadOfdReport(path);
         OfdChecks.Clear();
         foreach (var row in rows) OfdChecks.Add(row);
 
         OfdReportPath = path;
-        OfdStatus = $"Загружено документов: {OfdChecks.Count}";
+        OfdStatus = $"{(automatic ? "Автозагрузка · " : string.Empty)}загружено документов: {OfdChecks.Count}";
         OnPropertyChanged(nameof(OfdFileName));
         RefreshOfdOptions();
         ClearOfdFilters();
-        SelectedTabIndex = 2;
+        if (selectTab) SelectedTabIndex = 2;
+        RememberReportPath(ofdPath: path);
         BuildMatches(false);
     }
 
@@ -325,6 +451,9 @@ public sealed class ReportsViewModel : BaseViewModel
         ResetOptions(AtolTypeOptions, AtolChecks.Select(row => row.CheckType));
         ResetOptions(AtolSourceOptions, AtolChecks.Select(row => row.Source));
         ResetOptions(AtolStatusOptions, AtolChecks.Select(row => row.Status));
+        OnPropertyChanged(nameof(AtolTypeFilterIndex));
+        OnPropertyChanged(nameof(AtolSourceFilterIndex));
+        OnPropertyChanged(nameof(AtolStatusFilterIndex));
     }
 
     private void RefreshOfdOptions()
@@ -332,40 +461,41 @@ public sealed class ReportsViewModel : BaseViewModel
         ResetOptions(OfdOperationOptions, OfdChecks.Select(row => row.Operation));
         ResetOptions(OfdTradingPointOptions, OfdChecks.Select(row => row.TradingPoint));
         ResetOptions(OfdKktOptions, OfdChecks.Select(row => row.KktName));
+        OnPropertyChanged(nameof(OfdOperationFilterIndex));
+        OnPropertyChanged(nameof(OfdTradingPointFilterIndex));
+        OnPropertyChanged(nameof(OfdKktFilterIndex));
     }
 
     private void ClearAtolFilters()
     {
         _atolDateFrom = null;
         _atolDateTo = null;
-        _atolTypeFilter = "Все";
-        _atolSourceFilter = "Все";
-        _atolStatusFilter = "Все";
+        _atolTypeFilter = string.Empty;
+        _atolSourceFilter = string.Empty;
+        _atolStatusFilter = string.Empty;
         _atolSearchText = string.Empty;
         OnPropertyChanged(nameof(AtolDateFrom));
         OnPropertyChanged(nameof(AtolDateTo));
-        OnPropertyChanged(nameof(AtolTypeFilter));
-        OnPropertyChanged(nameof(AtolSourceFilter));
-        OnPropertyChanged(nameof(AtolStatusFilter));
         OnPropertyChanged(nameof(AtolSearchText));
-        RefreshAtolFilter();
+        AtolTypeFilter = "Все";
+        AtolSourceFilter = "Все";
+        AtolStatusFilter = "Все";
     }
 
     private void ClearOfdFilters()
     {
         _ofdDateFrom = null;
         _ofdDateTo = null;
-        _ofdOperationFilter = "Все";
-        _ofdTradingPointFilter = "Все";
-        _ofdKktFilter = "Все";
+        _ofdOperationFilter = string.Empty;
+        _ofdTradingPointFilter = string.Empty;
+        _ofdKktFilter = string.Empty;
         _ofdSearchText = string.Empty;
         OnPropertyChanged(nameof(OfdDateFrom));
         OnPropertyChanged(nameof(OfdDateTo));
-        OnPropertyChanged(nameof(OfdOperationFilter));
-        OnPropertyChanged(nameof(OfdTradingPointFilter));
-        OnPropertyChanged(nameof(OfdKktFilter));
         OnPropertyChanged(nameof(OfdSearchText));
-        RefreshOfdFilter();
+        OfdOperationFilter = "Все";
+        OfdTradingPointFilter = "Все";
+        OfdKktFilter = "Все";
     }
 
     private void RefreshAtolFilter()
@@ -411,6 +541,21 @@ public sealed class ReportsViewModel : BaseViewModel
                      .Distinct(StringComparer.OrdinalIgnoreCase)
                      .OrderBy(value => value, StringComparer.CurrentCultureIgnoreCase))
             options.Add(value);
+    }
+
+    private static int OptionIndex(ObservableCollection<string> options, string selected)
+    {
+        var index = options.IndexOf(selected);
+        return index >= 0 ? index : 0;
+    }
+
+    private static void SelectOption(
+        ObservableCollection<string> options,
+        int index,
+        Action<string> select)
+    {
+        if (index >= 0 && index < options.Count)
+            select(options[index]);
     }
 
     public void LoadXml(string path)
@@ -570,7 +715,7 @@ public sealed class ReportsViewModel : BaseViewModel
         TryLoad(() => LoadOfdReport(reportPath), "Не удалось загрузить последний отчёт Такскома");
     }
 
-    private static string? FindLatestValidTaxcomReport()
+    internal static string? FindLatestValidTaxcomReport()
     {
         return FindLatestValidReport(
             FileHelper.TaxcomReportDir,
@@ -598,16 +743,8 @@ public sealed class ReportsViewModel : BaseViewModel
         Func<string, bool> isLikelyReport,
         Action<string> validate)
     {
-        var candidates = new List<string>();
-        AddCandidates(candidates, managedDirectory, searchPattern, includeEveryFile: true, isLikelyReport);
-
-        var downloads = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-        AddCandidates(candidates, downloads, searchPattern, includeEveryFile: false, isLikelyReport);
-
-        foreach (var path in candidates
-                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                     .OrderByDescending(File.GetLastWriteTimeUtc))
+        foreach (var path in GetReportCandidates(
+                     managedDirectory, searchPattern, isLikelyReport, string.Empty))
         {
             try
             {
@@ -623,6 +760,58 @@ public sealed class ReportsViewModel : BaseViewModel
         return null;
     }
 
+    private static (string Path, List<T> Rows)? TryReadLatestReport<T>(
+        string managedDirectory,
+        string searchPattern,
+        Func<string, bool> isLikelyReport,
+        string rememberedPath,
+        Func<string, List<T>> read)
+    {
+        try
+        {
+            foreach (var path in GetReportCandidates(
+                         managedDirectory, searchPattern, isLikelyReport, rememberedPath))
+            {
+                try
+                {
+                    return (path, read(path));
+                }
+                catch
+                {
+                    // Следующий файл может быть более старым, но иметь корректный формат отчёта.
+                }
+            }
+        }
+        catch
+        {
+            // Ошибка доступа к папке не должна мешать запуску программы.
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> GetReportCandidates(
+        string managedDirectory,
+        string searchPattern,
+        Func<string, bool> isLikelyReport,
+        string rememberedPath)
+    {
+        var candidates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(rememberedPath) && File.Exists(rememberedPath))
+            candidates.Add(rememberedPath);
+
+        AddCandidates(candidates, managedDirectory, searchPattern, includeEveryFile: true, isLikelyReport);
+
+        var downloads = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+        AddCandidates(candidates, downloads, searchPattern, includeEveryFile: false, isLikelyReport);
+
+        return candidates
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .ToList();
+    }
+
     private static void AddCandidates(
         List<string> target,
         string directory,
@@ -636,6 +825,21 @@ public sealed class ReportsViewModel : BaseViewModel
         {
             var name = Path.GetFileNameWithoutExtension(path);
             if (includeEveryFile || isLikelyReport(name)) target.Add(path);
+        }
+    }
+
+    private static void RememberReportPath(string? atolPath = null, string? ofdPath = null)
+    {
+        try
+        {
+            var settings = ApplicationSettingsStore.Current;
+            if (!string.IsNullOrWhiteSpace(atolPath)) settings.LastAtolReportPath = atolPath;
+            if (!string.IsNullOrWhiteSpace(ofdPath)) settings.LastOfdReportPath = ofdPath;
+            ApplicationSettingsStore.Save(settings);
+        }
+        catch
+        {
+            // Сам отчёт уже загружен; сбой записи пути не должен отменять результат.
         }
     }
 

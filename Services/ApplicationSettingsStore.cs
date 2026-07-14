@@ -56,6 +56,8 @@ public static class ApplicationSettingsStore
     {
         settings.ThemeKey = settings.ThemeKey is "dark" or "warm" ? settings.ThemeKey : "light";
         settings.ObsidianFilePath = settings.ObsidianFilePath?.Trim() ?? string.Empty;
+        settings.LastAtolReportPath = settings.LastAtolReportPath?.Trim() ?? string.Empty;
+        settings.LastOfdReportPath = settings.LastOfdReportPath?.Trim() ?? string.Empty;
         settings.Cashiers ??= new List<CashierInfo>();
         settings.Agents ??= new List<ServiceProvider>();
 
