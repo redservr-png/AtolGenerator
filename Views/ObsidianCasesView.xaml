@@ -248,6 +248,8 @@
               <DataTemplate>
                 <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                           HorizontalAlignment="Center"
+                          Command="{Binding DataContext.SelectCaseCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                          CommandParameter="{Binding}"
                           IsEnabled="{Binding CanEdit}"/>
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
@@ -281,6 +283,7 @@
           <DataGridTextColumn Header="Подразделение" Binding="{Binding Department}" Width="135" IsReadOnly="True"/>
           <DataGridTextColumn Header="Номер чека" Binding="{Binding OneCCheckNumberText}" Width="110" IsReadOnly="True"/>
           <DataGridTextColumn Header="ФП чека" Binding="{Binding OneCFiscalNumberText}" Width="120" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Исходный чек ОФД" Binding="{Binding OriginalReceiptLookupText}" Width="145" IsReadOnly="True"/>
           <DataGridTextColumn Header="Комментарий 1С" Binding="{Binding OneCCommentText}" Width="220" IsReadOnly="True"/>
           <DataGridTextColumn Header="Пояснение ошибки" Binding="{Binding EditableProblem}" Width="260" IsReadOnly="True"/>
         </DataGrid.Columns>

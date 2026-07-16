@@ -23,6 +23,7 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
         Record = record;
         State = state;
         _editableProblem = record.PrimaryDocument.Notes;
+        NormalizeOriginalReceiptLookupState();
         _plan = CorrectionPlanService.Build(record.PrimaryDocument, state.OriginalReceipt, DateTime.Today);
     }
 
@@ -122,13 +123,35 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
         ? "Чеки пока не рассчитаны"
         : string.Join("\n", Plan.Checks.Select(x =>
             $"{x.Sequence}. {x.Title} · {x.Operation} · {x.Amount:N2} ₽ · {VatLabel(x.VatType)}"));
-    public string OriginalReceiptStatus => State.OriginalReceipt is null
-        ? "Не найден"
-        : $"ФП {State.OriginalReceipt.FiscalSign} · ФД {State.OriginalReceipt.FiscalDocument}";
-    public string OriginalReceiptDetails => State.OriginalReceipt is null
-        ? "Загрузите отчёт ОФД и найдите чек по ФП из 1С."
-        : $"{State.OriginalReceipt.RegisteredAt:dd.MM.yyyy HH:mm} · " +
-          $"{State.OriginalReceipt.Operation} · {Math.Abs(State.OriginalReceipt.Amount):N2} ₽";
+    public string OriginalReceiptLookupText => State.OriginalReceiptLookupState switch
+    {
+        OriginalReceiptLookupState.Found => "Найден",
+        OriginalReceiptLookupState.NotFound => "Не найден",
+        OriginalReceiptLookupState.MissingFiscalSign => "Нет ФП",
+        OriginalReceiptLookupState.Ambiguous => "Несколько совпадений",
+        _ => "Не проверен",
+    };
+    public string OriginalReceiptStatus => State.OriginalReceiptLookupState switch
+    {
+        OriginalReceiptLookupState.Found when State.OriginalReceipt is not null =>
+            $"ФП {State.OriginalReceipt.FiscalSign} · ФД {State.OriginalReceipt.FiscalDocument}",
+        OriginalReceiptLookupState.NotFound => "Не найден",
+        OriginalReceiptLookupState.MissingFiscalSign => "Нет ФП",
+        OriginalReceiptLookupState.Ambiguous => "Несколько совпадений",
+        _ => "Не проверен",
+    };
+    public string OriginalReceiptDetails => State.OriginalReceiptLookupState switch
+    {
+        OriginalReceiptLookupState.Found when State.OriginalReceipt is not null =>
+            $"{State.OriginalReceipt.RegisteredAt:dd.MM.yyyy HH:mm} · " +
+            $"{State.OriginalReceipt.Operation} · {Math.Abs(State.OriginalReceipt.Amount):N2} ₽",
+        OriginalReceiptLookupState.NotFound =>
+            $"ФП {Record.PrimaryDocument.OriginalFiscalNumber} не найден в загруженном отчёте ОФД.",
+        OriginalReceiptLookupState.MissingFiscalSign => "В данных 1С не заполнен ФП исходного чека.",
+        OriginalReceiptLookupState.Ambiguous =>
+            $"ФП {Record.PrimaryDocument.OriginalFiscalNumber} встречается в отчёте больше одного раза.",
+        _ => "Загрузите отчёт ОФД и найдите чек по ФП из 1С.",
+    };
 
     public void Refresh()
     {
@@ -152,9 +175,28 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
         OnPropertyChanged(nameof(PlanStatus));
         OnPropertyChanged(nameof(PlanMessage));
         OnPropertyChanged(nameof(PlanChecksText));
+        OnPropertyChanged(nameof(OriginalReceiptLookupText));
         OnPropertyChanged(nameof(OriginalReceiptStatus));
         OnPropertyChanged(nameof(OriginalReceiptDetails));
         OnPropertyChanged(nameof(ScenarioSourceLabel));
+    }
+
+    private void NormalizeOriginalReceiptLookupState()
+    {
+        if (State.OriginalReceiptLookupState != OriginalReceiptLookupState.NotChecked) return;
+
+        if (State.OriginalReceipt is not null)
+        {
+            State.OriginalReceiptLookupState = OriginalReceiptLookupState.Found;
+            return;
+        }
+
+        if (State.LastMessage?.Contains("не найден в отчёте ОФД", StringComparison.OrdinalIgnoreCase) == true)
+            State.OriginalReceiptLookupState = OriginalReceiptLookupState.NotFound;
+        else if (State.LastMessage?.Contains("не заполнен ФП исходного чека", StringComparison.OrdinalIgnoreCase) == true)
+            State.OriginalReceiptLookupState = OriginalReceiptLookupState.MissingFiscalSign;
+        else if (State.LastMessage?.Contains("больше одного раза", StringComparison.OrdinalIgnoreCase) == true)
+            State.OriginalReceiptLookupState = OriginalReceiptLookupState.Ambiguous;
     }
 
     public OrderEntry CreateWorkEntry()
@@ -276,6 +318,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         OpenServiceNoteCommand = new RelayCommand(OpenServiceNote, () =>
             SelectedCase is not null && File.Exists(SelectedCase.State.ServiceNotePath));
         SelectAllVisibleCommand = new RelayCommand(SelectAllVisible);
+        SelectCaseCommand = new RelayCommand(SelectCase);
         ReloadSettings();
     }
 
@@ -297,6 +340,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
     public ICommand SaveProblemCommand { get; }
     public ICommand OpenServiceNoteCommand { get; }
     public ICommand SelectAllVisibleCommand { get; }
+    public ICommand SelectCaseCommand { get; }
 
     public string FilePath { get => _filePath; private set => Set(ref _filePath, value); }
     public string SearchText
@@ -646,13 +690,19 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
             }
 
             var found = 0;
+            var notFound = 0;
+            var requiresAttention = 0;
             foreach (var item in selected)
             {
                 var fpText = item.Record.PrimaryDocument.OriginalFiscalNumber;
                 if (!long.TryParse(fpText, out var fiscalSign))
                 {
+                    item.State.OriginalReceipt = null;
+                    item.State.OriginalReceiptLookupState = OriginalReceiptLookupState.MissingFiscalSign;
                     item.State.LastMessage = "В 1С не заполнен ФП исходного чека";
+                    item.State.UpdatedAt = DateTime.Now;
                     item.Refresh();
+                    requiresAttention++;
                     continue;
                 }
 
@@ -660,10 +710,16 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
                 if (candidates.Count != 1)
                 {
                     item.State.OriginalReceipt = null;
+                    item.State.OriginalReceiptLookupState = candidates.Count == 0
+                        ? OriginalReceiptLookupState.NotFound
+                        : OriginalReceiptLookupState.Ambiguous;
                     item.State.LastMessage = candidates.Count == 0
                         ? $"ФП {fiscalSign} не найден в отчёте ОФД"
                         : $"ФП {fiscalSign} встречается в отчёте больше одного раза";
+                    item.State.UpdatedAt = DateTime.Now;
                     item.Refresh();
+                    if (candidates.Count == 0) notFound++;
+                    else requiresAttention++;
                     continue;
                 }
 
@@ -679,6 +735,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
                     FiscalDocument = row.FiscalDocument,
                     ReceiptUrl = row.ReceiptUrl,
                 };
+                item.State.OriginalReceiptLookupState = OriginalReceiptLookupState.Found;
                 item.Record.PrimaryDocument.OriginalCheckAmount = Math.Abs(row.Amount);
                 item.Record.PrimaryDocument.OriginalCheckDate = row.RegisteredAt;
                 item.Record.PrimaryDocument.OriginalCheckOperation = row.Operation;
@@ -690,7 +747,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
                 found++;
             }
             SaveStates();
-            Status = $"Исходные чеки найдены по ФП: {found} из {selected.Count}";
+            Status = $"Исходные чеки: найдено {found}; не найдено {notFound}; требуют проверки {requiresAttention}";
             RefreshCounters();
         }
         catch (Exception ex)
@@ -878,6 +935,12 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         var select = visible.Any(x => !x.IsSelected);
         foreach (var item in visible) item.IsSelected = select;
         RefreshCounters();
+    }
+
+    private void SelectCase(object? parameter)
+    {
+        if (parameter is ObsidianCaseItemViewModel item)
+            SelectedCase = item;
     }
 
     private bool ValidateMemo(ObsidianCaseState state, string documentNumber, double amount)

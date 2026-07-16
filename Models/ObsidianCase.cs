@@ -34,6 +34,15 @@ public sealed class ObsidianOriginalReceipt
     public string ReceiptUrl { get; set; } = string.Empty;
 }
 
+public enum OriginalReceiptLookupState
+{
+    NotChecked = 0,
+    Found,
+    NotFound,
+    MissingFiscalSign,
+    Ambiguous,
+}
+
 public enum CorrectionPlanStatus
 {
     NeedsOneC = 0,
@@ -81,5 +90,6 @@ public sealed class ObsidianCaseState
     public List<ObsidianExpectedCheck> ExpectedChecks { get; set; } = new();
     public OrderEntry? OneCSnapshot { get; set; }
     public ObsidianOriginalReceipt? OriginalReceipt { get; set; }
+    public OriginalReceiptLookupState OriginalReceiptLookupState { get; set; }
     public CorrectionScenario? ScenarioOverride { get; set; }
 }
