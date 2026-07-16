@@ -80,7 +80,7 @@ public partial class TaxcomReceiptSearchWindow : Window
         }
 
         var url = Browser.Source?.AbsoluteUri ?? string.Empty;
-        if (!url.Contains("#receipts", StringComparison.OrdinalIgnoreCase))
+        if (!IsReceiptSearchAddress(url))
         {
             Browser.CoreWebView2.Navigate(SearchUrl);
             return;
@@ -111,7 +111,7 @@ public partial class TaxcomReceiptSearchWindow : Window
             return;
         }
 
-        if (!(Browser.Source?.AbsoluteUri ?? string.Empty).Contains("#receipts", StringComparison.OrdinalIgnoreCase))
+        if (!IsReceiptSearchAddress(Browser.Source?.AbsoluteUri))
         {
             Browser.CoreWebView2.Navigate(SearchUrl);
             return;
@@ -364,7 +364,22 @@ public partial class TaxcomReceiptSearchWindow : Window
     private static string GetDisplayAddress(string? address)
     {
         if (!Uri.TryCreate(address, UriKind.Absolute, out var uri)) return "lk-ofd.taxcom.ru";
-        return uri.Host + uri.Fragment;
+        return uri.Host + uri.AbsolutePath + uri.Fragment;
+    }
+
+    private static bool IsReceiptSearchAddress(string? address)
+    {
+        if (!IsTrustedAddress(address) ||
+            !Uri.TryCreate(address, UriKind.Absolute, out var uri))
+            return false;
+
+        var fragment = Uri.UnescapeDataString(uri.Fragment);
+        var route = fragment
+            .TrimStart('#', '/', '!')
+            .TrimEnd('/');
+        return string.Equals(route, "receipts", StringComparison.OrdinalIgnoreCase) ||
+               route.EndsWith("/receipts", StringComparison.OrdinalIgnoreCase) ||
+               fragment.Contains("returnUrl=receipts", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsTrustedAddress(string? address)
