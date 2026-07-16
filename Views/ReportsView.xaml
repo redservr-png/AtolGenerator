@@ -373,10 +373,10 @@
             <Button Grid.Column="0" Content="Получить из Такском"
                     Style="{StaticResource BtnPrimary}" Padding="14,7"
                     Command="{Binding OpenTaxcomBrowserCommand}"/>
-            <Button Grid.Column="1" Content="Последний отчёт"
+            <Button Grid.Column="1" Content="Обновить архив"
                     Style="{StaticResource BtnSecondary}" Padding="12,7" Margin="8,0,0,0"
                     Command="{Binding ImportLatestOfdReportCommand}"/>
-            <Button Grid.Column="2" Content="Выбрать файл..."
+            <Button Grid.Column="2" Content="Добавить отчёты..."
                     Style="{StaticResource BtnSecondary}" Padding="12,7" Margin="8,0,0,0"
                     Command="{Binding ImportOfdReportCommand}"/>
             <Button Grid.Column="3" Content="⌂" ToolTip="Открыть папку отчётов Такскома"
@@ -386,9 +386,10 @@
                        ToolTip="{Binding OfdReportPath}"
                        Style="{StaticResource PathLabel}"/>
             <TextBlock Grid.Column="6" Text="{Binding OfdStatus}"
+                       ToolTip="{Binding OfdStatus}"
                        Foreground="{DynamicResource BrushText2}" FontSize="12"
                        VerticalAlignment="Center" Margin="12,0,0,0"
-                       MaxWidth="280" TextTrimming="CharacterEllipsis"/>
+                       MaxWidth="380" TextTrimming="CharacterEllipsis"/>
           </Grid>
           <Border Grid.Row="2" Background="{DynamicResource BrushSurface2}"
                   BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
@@ -414,6 +415,14 @@
                     <ComboBox ItemsSource="{Binding OfdOperationOptions}"
                               SelectedIndex="{Binding OfdOperationFilterIndex, Mode=TwoWay}"/>
                     <TextBlock Text="{Binding OfdOperationFilter}" Style="{StaticResource FilterSelectionText}"/>
+                  </Grid>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                  <TextBlock Text="Расчёт" Style="{StaticResource FilterLabel}"/>
+                  <Grid Width="155">
+                    <ComboBox ItemsSource="{Binding OfdCalculationMethodOptions}"
+                              SelectedIndex="{Binding OfdCalculationMethodFilterIndex, Mode=TwoWay}"/>
+                    <TextBlock Text="{Binding OfdCalculationMethodFilter}" Style="{StaticResource FilterSelectionText}"/>
                   </Grid>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
@@ -448,12 +457,16 @@
               <DataGridTextColumn Header="Дата чека" Binding="{Binding RegisteredAt, StringFormat={}{0:dd.MM.yyyy HH:mm:ss}}" Width="160"/>
               <DataGridTextColumn Header="Документ" Binding="{Binding Document}" Width="200"/>
               <DataGridTextColumn Header="Операция" Binding="{Binding Operation}" Width="140"/>
+              <DataGridTextColumn Header="Способ расчёта" Binding="{Binding CalculationMethod}" Width="165"/>
               <DataGridTextColumn Header="Торговая точка" Binding="{Binding TradingPoint}" Width="170"/>
               <DataGridTextColumn Header="Название ККТ" Binding="{Binding KktName}" Width="170"/>
+              <DataGridTextColumn Header="Рег. № ККТ" Binding="{Binding KktRegistrationNumber}" Width="155"/>
+              <DataGridTextColumn Header="ФН" Binding="{Binding FiscalDriveNumber}" Width="175"/>
               <DataGridTextColumn Header="Сумма" Binding="{Binding Amount, StringFormat={}{0:N2}}" Width="110"/>
               <DataGridTextColumn Header="ФД" Binding="{Binding FiscalDocument}" Width="100"/>
               <DataGridTextColumn Header="ФПД" Binding="{Binding FiscalSign}" Width="130"/>
-              <DataGridTextColumn Header="Ссылка на чек" Binding="{Binding ReceiptUrl}" Width="*" MinWidth="340"/>
+              <DataGridTextColumn Header="Файл-источник" Binding="{Binding SourceFile}" Width="240"/>
+              <DataGridTextColumn Header="Ссылка на чек" Binding="{Binding ReceiptUrl}" Width="340"/>
             </DataGrid.Columns>
           </DataGrid>
         </Grid>
@@ -492,7 +505,7 @@
                     Command="{Binding ImportAtolReportCommand}"/>
             <TextBlock Grid.Column="4" Text="{Binding AtolFileName}" ToolTip="{Binding AtolReportPath}"
                        Style="{StaticResource PathLabel}" Margin="8,0,0,0"/>
-            <Button Grid.Column="6" Content="Отчёт ОФД..."
+            <Button Grid.Column="6" Content="Архив ОФД..."
                     Style="{StaticResource BtnSecondary}" Padding="12,7"
                     Command="{Binding ImportOfdReportCommand}"/>
             <TextBlock Grid.Column="7" Text="{Binding OfdFileName}" ToolTip="{Binding OfdReportPath}"

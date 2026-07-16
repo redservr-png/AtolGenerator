@@ -34,9 +34,11 @@ public sealed class ReportsViewModel : BaseViewModel
     private DateTime? _ofdDateFrom;
     private DateTime? _ofdDateTo;
     private string _ofdOperationFilter = "Все";
+    private string _ofdCalculationMethodFilter = "Все";
     private string _ofdTradingPointFilter = "Все";
     private string _ofdKktFilter = "Все";
     private string _ofdSearchText = string.Empty;
+    private int _ofdArchiveFileCount;
     private bool _startupReportsRestored;
 
     private List<XmlReportCheck> _xmlChecks = new();
@@ -49,6 +51,7 @@ public sealed class ReportsViewModel : BaseViewModel
     public ObservableCollection<string> AtolSourceOptions { get; } = new() { "Все" };
     public ObservableCollection<string> AtolStatusOptions { get; } = new() { "Все" };
     public ObservableCollection<string> OfdOperationOptions { get; } = new() { "Все" };
+    public ObservableCollection<string> OfdCalculationMethodOptions { get; } = new() { "Все" };
     public ObservableCollection<string> OfdTradingPointOptions { get; } = new() { "Все" };
     public ObservableCollection<string> OfdKktOptions { get; } = new() { "Все" };
 
@@ -97,7 +100,9 @@ public sealed class ReportsViewModel : BaseViewModel
     public string MatchingStatus { get => _matchingStatus; private set => Set(ref _matchingStatus, value); }
 
     public string AtolFileName => FileNameOrPlaceholder(AtolReportPath, "CSV АТОЛ не выбран");
-    public string OfdFileName => FileNameOrPlaceholder(OfdReportPath, "Отчёт Такскома не выбран");
+    public string OfdFileName => OfdArchiveFileCount > 1
+        ? $"Архив ОФД · {OfdArchiveFileCount} файлов"
+        : FileNameOrPlaceholder(OfdReportPath, "Отчёт Такскома не выбран");
     public string XmlFileName => FileNameOrPlaceholder(XmlPath, "XML не выбран");
     public string LocalFileName => FileNameOrPlaceholder(LocalHistoryPath, "Локальный журнал не выбран");
 
@@ -110,6 +115,15 @@ public sealed class ReportsViewModel : BaseViewModel
     public int OfdVerifiedCount => ExportRows.Count(x => x.IsReady && x.OfdStatus == "Проверено ОФД");
     public int AtolVisibleCount => AtolChecksView.Cast<object>().Count();
     public int OfdVisibleCount => OfdChecksView.Cast<object>().Count();
+    public int OfdArchiveFileCount
+    {
+        get => _ofdArchiveFileCount;
+        private set
+        {
+            if (!Set(ref _ofdArchiveFileCount, value)) return;
+            OnPropertyChanged(nameof(OfdFileName));
+        }
+    }
     public bool CanBuildMatches => _xmlChecks.Count > 0 && AtolChecks.Count > 0;
     public bool CanExport => ReadyCount > 0;
 
@@ -204,6 +218,17 @@ public sealed class ReportsViewModel : BaseViewModel
         }
     }
 
+    public string OfdCalculationMethodFilter
+    {
+        get => _ofdCalculationMethodFilter;
+        set
+        {
+            if (!Set(ref _ofdCalculationMethodFilter, value ?? "Все")) return;
+            OnPropertyChanged(nameof(OfdCalculationMethodFilterIndex));
+            RefreshOfdFilter();
+        }
+    }
+
     public string OfdKktFilter
     {
         get => _ofdKktFilter;
@@ -249,6 +274,12 @@ public sealed class ReportsViewModel : BaseViewModel
     {
         get => OptionIndex(OfdTradingPointOptions, OfdTradingPointFilter);
         set => SelectOption(OfdTradingPointOptions, value, selected => OfdTradingPointFilter = selected);
+    }
+
+    public int OfdCalculationMethodFilterIndex
+    {
+        get => OptionIndex(OfdCalculationMethodOptions, OfdCalculationMethodFilter);
+        set => SelectOption(OfdCalculationMethodOptions, value, selected => OfdCalculationMethodFilter = selected);
     }
 
     public int OfdKktFilterIndex
@@ -333,7 +364,8 @@ public sealed class ReportsViewModel : BaseViewModel
 
     public void LoadOfdReport(string path)
     {
-        ApplyOfdReport(path, ReportImportService.ReadOfdReport(path), selectTab: true);
+        StoreOfdReports(new[] { path });
+        LoadOfdArchive(selectTab: true);
     }
 
     public async Task RestoreLatestReportsAsync()
@@ -342,7 +374,7 @@ public sealed class ReportsViewModel : BaseViewModel
         _startupReportsRestored = true;
 
         AtolStatus = "Ищем последний отчёт...";
-        OfdStatus = "Ищем последний отчёт...";
+        OfdStatus = "Собираем архив отчётов...";
 
         var settings = ApplicationSettingsStore.Current;
         var atolTask = Task.Run(() => TryReadLatestReport(
@@ -353,14 +385,7 @@ public sealed class ReportsViewModel : BaseViewModel
                     name.Contains("журнал", StringComparison.OrdinalIgnoreCase),
             settings.LastAtolReportPath,
             ReportImportService.ReadAtolJournal));
-        var ofdTask = Task.Run(() => TryReadLatestReport(
-            FileHelper.TaxcomReportDir,
-            "*.xlsx",
-            name => name.Contains("такском", StringComparison.OrdinalIgnoreCase) ||
-                    name.Contains("фискальн", StringComparison.OrdinalIgnoreCase) ||
-                    name.Contains("сводн", StringComparison.OrdinalIgnoreCase),
-            settings.LastOfdReportPath,
-            ReportImportService.ReadOfdReport));
+        var ofdTask = Task.Run(() => TryReadOfdArchive(settings.LastOfdReportPath));
 
         await Task.WhenAll(atolTask, ofdTask);
 
@@ -372,9 +397,9 @@ public sealed class ReportsViewModel : BaseViewModel
 
         var ofdReport = await ofdTask;
         if (ofdReport is not null)
-            ApplyOfdReport(ofdReport.Value.Path, ofdReport.Value.Rows, selectTab: false, automatic: true);
+            ApplyOfdArchive(ofdReport, selectTab: false, automatic: true);
         else
-            OfdStatus = "Последний отчёт не найден";
+            OfdStatus = "Отчёты Такскома не найдены";
     }
 
     private void ApplyAtolReport(
@@ -400,23 +425,38 @@ public sealed class ReportsViewModel : BaseViewModel
         CommandManager.InvalidateRequerySuggested();
     }
 
-    private void ApplyOfdReport(
-        string path,
-        IReadOnlyCollection<OfdReportRow> rows,
+    private void ApplyOfdArchive(
+        OfdArchiveResult archive,
         bool selectTab,
         bool automatic = false)
     {
         OfdChecks.Clear();
-        foreach (var row in rows) OfdChecks.Add(row);
+        foreach (var row in archive.Rows) OfdChecks.Add(row);
 
-        OfdReportPath = path;
-        OfdStatus = $"{(automatic ? "Автозагрузка · " : string.Empty)}загружено документов: {OfdChecks.Count}";
+        OfdReportPath = archive.ImportedFiles.FirstOrDefault() ?? string.Empty;
+        OfdArchiveFileCount = archive.ImportedFiles.Count;
+        var warning = archive.TruncatedFiles.Count > 0
+            ? $" · неполных отчётов: {archive.TruncatedFiles.Count}"
+            : string.Empty;
+        var failures = archive.FailedFiles.Count > 0
+            ? $" · пропущено файлов: {archive.FailedFiles.Count}"
+            : string.Empty;
+        OfdStatus = $"{(automatic ? "Автозагрузка · " : string.Empty)}архив: {OfdChecks.Count} чеков из {OfdArchiveFileCount} файлов{warning}{failures}";
         OnPropertyChanged(nameof(OfdFileName));
         RefreshOfdOptions();
         ClearOfdFilters();
         if (selectTab) SelectedTabIndex = 2;
-        RememberReportPath(ofdPath: path);
+        RememberReportPath(ofdPath: OfdReportPath);
         BuildMatches(false);
+    }
+
+    private void LoadOfdArchive(bool selectTab, bool automatic = false)
+    {
+        var archive = TryReadOfdArchive(ApplicationSettingsStore.Current.LastOfdReportPath);
+        if (archive is null)
+            throw new InvalidDataException("В архиве не найдено ни одного корректного отчёта Такскома.");
+
+        ApplyOfdArchive(archive, selectTab, automatic);
     }
 
     private bool FilterAtolCheck(object item)
@@ -438,11 +478,13 @@ public sealed class ReportsViewModel : BaseViewModel
         if (item is not OfdReportRow row) return false;
         if (!MatchesDate(row.RegisteredAt, OfdDateFrom, OfdDateTo)) return false;
         if (!MatchesOption(row.Operation, OfdOperationFilter)) return false;
+        if (!MatchesOption(row.CalculationMethod, OfdCalculationMethodFilter)) return false;
         if (!MatchesOption(row.TradingPoint, OfdTradingPointFilter)) return false;
         if (!MatchesOption(row.KktName, OfdKktFilter)) return false;
 
         return MatchesSearch(OfdSearchText,
-            row.Document, row.Operation, row.TradingPoint, row.KktName,
+            row.Document, row.Operation, row.CalculationMethod, row.TradingPoint, row.KktName,
+            row.KktRegistrationNumber, row.FiscalDriveNumber, row.SourceFile,
             row.FiscalDocument?.ToString(), row.FiscalSign?.ToString(), row.ReceiptUrl);
     }
 
@@ -459,9 +501,11 @@ public sealed class ReportsViewModel : BaseViewModel
     private void RefreshOfdOptions()
     {
         ResetOptions(OfdOperationOptions, OfdChecks.Select(row => row.Operation));
+        ResetOptions(OfdCalculationMethodOptions, OfdChecks.Select(row => row.CalculationMethod));
         ResetOptions(OfdTradingPointOptions, OfdChecks.Select(row => row.TradingPoint));
         ResetOptions(OfdKktOptions, OfdChecks.Select(row => row.KktName));
         OnPropertyChanged(nameof(OfdOperationFilterIndex));
+        OnPropertyChanged(nameof(OfdCalculationMethodFilterIndex));
         OnPropertyChanged(nameof(OfdTradingPointFilterIndex));
         OnPropertyChanged(nameof(OfdKktFilterIndex));
     }
@@ -487,6 +531,7 @@ public sealed class ReportsViewModel : BaseViewModel
         _ofdDateFrom = null;
         _ofdDateTo = null;
         _ofdOperationFilter = string.Empty;
+        _ofdCalculationMethodFilter = string.Empty;
         _ofdTradingPointFilter = string.Empty;
         _ofdKktFilter = string.Empty;
         _ofdSearchText = string.Empty;
@@ -494,6 +539,7 @@ public sealed class ReportsViewModel : BaseViewModel
         OnPropertyChanged(nameof(OfdDateTo));
         OnPropertyChanged(nameof(OfdSearchText));
         OfdOperationFilter = "Все";
+        OfdCalculationMethodFilter = "Все";
         OfdTradingPointFilter = "Все";
         OfdKktFilter = "Все";
     }
@@ -626,11 +672,16 @@ public sealed class ReportsViewModel : BaseViewModel
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Выберите сводный отчёт ОФД / Такскома",
+            Title = "Добавьте отчёты ОФД / Такскома в архив",
             Filter = "Отчёт Excel|*.xlsx|Все файлы|*.*",
+            Multiselect = true,
         };
         if (dialog.ShowDialog() != true) return;
-        TryLoad(() => LoadOfdReport(dialog.FileName), "Не удалось загрузить отчёт ОФД");
+        TryLoad(() =>
+        {
+            StoreOfdReports(dialog.FileNames);
+            LoadOfdArchive(selectTab: true);
+        }, "Не удалось обновить архив ОФД");
     }
 
     private void OpenTaxcomBrowser()
@@ -703,8 +754,8 @@ public sealed class ReportsViewModel : BaseViewModel
 
     private void ImportLatestOfdReport()
     {
-        var reportPath = FindLatestValidTaxcomReport();
-        if (reportPath is null)
+        var archive = TryReadOfdArchive(ApplicationSettingsStore.Current.LastOfdReportPath);
+        if (archive is null)
         {
             MessageBox.Show(
                 "В папке отчётов программы и в папке «Загрузки» не найден подходящий отчёт Такскома XLSX.",
@@ -712,18 +763,46 @@ public sealed class ReportsViewModel : BaseViewModel
             return;
         }
 
-        TryLoad(() => LoadOfdReport(reportPath), "Не удалось загрузить последний отчёт Такскома");
+        TryLoad(() => ApplyOfdArchive(archive, selectTab: true), "Не удалось обновить архив Такскома");
     }
 
-    internal static string? FindLatestValidTaxcomReport()
+    internal static OfdArchiveResult? TryReadOfdArchive(string rememberedPath = "")
     {
-        return FindLatestValidReport(
-            FileHelper.TaxcomReportDir,
-            "*.xlsx",
-            name => name.Contains("такском", StringComparison.OrdinalIgnoreCase) ||
-                    name.Contains("фискальн", StringComparison.OrdinalIgnoreCase) ||
-                    name.Contains("сводн", StringComparison.OrdinalIgnoreCase),
-            path => ReportImportService.ReadOfdReport(path));
+        try
+        {
+            var paths = GetReportCandidates(
+                FileHelper.TaxcomReportDir,
+                "*.xlsx",
+                name => name.Contains("такском", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("фискальн", StringComparison.OrdinalIgnoreCase) ||
+                        name.Contains("сводн", StringComparison.OrdinalIgnoreCase),
+                rememberedPath);
+            var archive = ReportImportService.ReadOfdArchive(paths);
+            return archive.ImportedFiles.Count > 0 ? archive : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static void StoreOfdReports(IEnumerable<string> paths)
+    {
+        Directory.CreateDirectory(FileHelper.TaxcomReportDir);
+        var archiveDirectory = Path.GetFullPath(FileHelper.TaxcomReportDir)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        foreach (var path in paths.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var sourcePath = Path.GetFullPath(path);
+            var sourceDirectory = Path.GetDirectoryName(sourcePath)?.TrimEnd(
+                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.Equals(sourceDirectory, archiveDirectory, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var destination = Path.Combine(FileHelper.TaxcomReportDir, Path.GetFileName(sourcePath));
+            File.Copy(sourcePath, destination, overwrite: true);
+        }
     }
 
     private static string? FindLatestValidAtolReport()

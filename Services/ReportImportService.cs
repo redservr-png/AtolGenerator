@@ -124,6 +124,49 @@ public static partial class ReportImportService
 
     public static List<OfdReportRow> ReadOfdReport(string path)
     {
+        return ReadOfdReportDetails(path).Rows;
+    }
+
+    public static OfdArchiveResult ReadOfdArchive(IEnumerable<string> paths)
+    {
+        var importedFiles = new List<string>();
+        var truncatedFiles = new List<string>();
+        var failedFiles = new List<string>();
+        var rowsByKey = new Dictionary<string, OfdReportRow>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var path in paths
+                     .Where(File.Exists)
+                     .Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var report = ReadOfdReportDetails(path);
+                importedFiles.Add(path);
+                if (report.IsTruncated) truncatedFiles.Add(path);
+
+                foreach (var row in report.Rows)
+                {
+                    var key = GetOfdReceiptKey(row);
+                    if (!rowsByKey.ContainsKey(key)) rowsByKey.Add(key, row);
+                }
+            }
+            catch
+            {
+                failedFiles.Add(path);
+            }
+        }
+
+        return new OfdArchiveResult
+        {
+            Rows = rowsByKey.Values.OrderByDescending(row => row.RegisteredAt).ToList(),
+            ImportedFiles = importedFiles,
+            TruncatedFiles = truncatedFiles,
+            FailedFiles = failedFiles,
+        };
+    }
+
+    public static OfdReportReadResult ReadOfdReportDetails(string path)
+    {
         using var workbook = new XLWorkbook(path);
         var sheet = workbook.Worksheets.First();
         var headerRow = FindHeaderRow(sheet, "Дата и время");
@@ -154,9 +197,12 @@ public static partial class ReportImportService
                 Operation = columns.TryGetValue("Тип операции", out var operationColumn)
                     ? ReadText(sheet.Cell(row, operationColumn))
                     : string.Empty,
+                CalculationMethod = ReadCalculationMethod(sheet, row, columns),
                 Amount = ReadDouble(sheet.Cell(row, columns["Сумма"])),
                 FiscalDocument = fiscalDocument,
                 FiscalSign = fiscalSign,
+                FiscalDriveNumber = ReadOptionalText(sheet, row, columns, "Зав. № ФН"),
+                KktRegistrationNumber = ReadOptionalText(sheet, row, columns, "Рег. № ККТ"),
                 TradingPoint = columns.TryGetValue("Торговая точка", out var tradingPointColumn)
                     ? ReadText(sheet.Cell(row, tradingPointColumn))
                     : string.Empty,
@@ -166,10 +212,15 @@ public static partial class ReportImportService
                 ReceiptUrl = columns.TryGetValue("Ссылка на просмотр чека", out var urlColumn)
                     ? ReadText(sheet.Cell(row, urlColumn))
                     : string.Empty,
+                SourceFile = Path.GetFileName(path),
             });
         }
 
-        return result.OrderByDescending(r => r.RegisteredAt).ToList();
+        return new OfdReportReadResult
+        {
+            Rows = result.OrderByDescending(r => r.RegisteredAt).ToList(),
+            IsTruncated = IsTruncatedOfdReport(sheet, headerRow, result.Count),
+        };
     }
 
     public static List<XmlReportCheck> ReadXmlChecks(string path)
@@ -336,6 +387,81 @@ public static partial class ReportImportService
         }
         return 0;
     }
+
+    private static bool IsTruncatedOfdReport(IXLWorksheet sheet, int headerRow, int receiptCount)
+    {
+        if (receiptCount >= 30000) return true;
+
+        for (var row = 1; row < headerRow; row++)
+        {
+            var lastColumn = sheet.Row(row).LastCellUsed()?.Address.ColumnNumber ?? 0;
+            for (var column = 1; column <= lastColumn; column++)
+            {
+                var text = sheet.Cell(row, column).GetString();
+                if (text.Contains("30000", StringComparison.OrdinalIgnoreCase) &&
+                    (text.Contains("последн", StringComparison.OrdinalIgnoreCase) ||
+                     text.Contains("слишком много", StringComparison.OrdinalIgnoreCase)))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string ReadCalculationMethod(
+        IXLWorksheet sheet,
+        int row,
+        IReadOnlyDictionary<string, int> columns)
+    {
+        string[] methods =
+        {
+            "Предоплата 100%",
+            "Частичная предоплата",
+            "Аванс расчет",
+            "Полный расчет",
+            "Частичный расчет и кредит",
+            "Передача в кредит",
+            "Оплата кредита",
+        };
+
+        foreach (var method in methods)
+        {
+            if (columns.TryGetValue(method, out var column) &&
+                Math.Abs(ReadDouble(sheet.Cell(row, column))) > 0.005)
+                return method;
+        }
+
+        return string.Empty;
+    }
+
+    private static string ReadOptionalText(
+        IXLWorksheet sheet,
+        int row,
+        IReadOnlyDictionary<string, int> columns,
+        string columnName)
+    {
+        return columns.TryGetValue(columnName, out var column)
+            ? ReadText(sheet.Cell(row, column))
+            : string.Empty;
+    }
+
+    private static string GetOfdReceiptKey(OfdReportRow row)
+    {
+        var fiscalDrive = NormalizeIdentifier(row.FiscalDriveNumber);
+        if (fiscalDrive.Length > 0 && row.FiscalDocument.HasValue)
+            return $"fn:{fiscalDrive}|fd:{row.FiscalDocument.Value}";
+
+        var kkt = NormalizeIdentifier(row.KktRegistrationNumber);
+        if (kkt.Length > 0 && row.FiscalDocument.HasValue && row.FiscalSign.HasValue)
+            return $"kkt:{kkt}|fd:{row.FiscalDocument.Value}|fp:{row.FiscalSign.Value}";
+
+        return $"fp:{row.FiscalSign?.ToString(CultureInfo.InvariantCulture) ?? "-"}" +
+               $"|fd:{row.FiscalDocument?.ToString(CultureInfo.InvariantCulture) ?? "-"}" +
+               $"|dt:{row.RegisteredAt:O}|sum:{row.Amount.ToString("0.00", CultureInfo.InvariantCulture)}";
+    }
+
+    private static string NormalizeIdentifier(string value) =>
+        value.Replace(" ", string.Empty).Trim();
 
     private static DateTime? ReadDate(IXLCell cell)
     {

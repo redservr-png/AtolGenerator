@@ -40,12 +40,30 @@ public sealed class OfdReportRow
     public DateTime? RegisteredAt { get; init; }
     public string Document { get; init; } = string.Empty;
     public string Operation { get; init; } = string.Empty;
+    public string CalculationMethod { get; init; } = string.Empty;
     public double Amount { get; init; }
     public long? FiscalDocument { get; init; }
     public long? FiscalSign { get; init; }
+    public string FiscalDriveNumber { get; init; } = string.Empty;
+    public string KktRegistrationNumber { get; init; } = string.Empty;
     public string TradingPoint { get; init; } = string.Empty;
     public string KktName { get; init; } = string.Empty;
     public string ReceiptUrl { get; init; } = string.Empty;
+    public string SourceFile { get; init; } = string.Empty;
+}
+
+public sealed class OfdReportReadResult
+{
+    public List<OfdReportRow> Rows { get; init; } = new();
+    public bool IsTruncated { get; init; }
+}
+
+public sealed class OfdArchiveResult
+{
+    public List<OfdReportRow> Rows { get; init; } = new();
+    public List<string> ImportedFiles { get; init; } = new();
+    public List<string> TruncatedFiles { get; init; } = new();
+    public List<string> FailedFiles { get; init; } = new();
 }
 
 public sealed class XmlReportCheck

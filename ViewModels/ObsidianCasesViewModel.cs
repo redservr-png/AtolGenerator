@@ -392,9 +392,21 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
     public int ActiveCount => Cases.Count(x => !x.IsCompleted);
     public int ClosedCount => Cases.Count(x => x.IsCompleted);
     public int SelectedCount => Cases.Count(x => x.IsSelected && !x.IsCompleted);
-    public string SourceOfdReportInfo => string.IsNullOrWhiteSpace(_sourceOfdReportPath)
-        ? "Отчёт исходных чеков не загружен"
-        : $"ОФД: {Path.GetFileName(_sourceOfdReportPath)} · строк {_sourceOfdRows.Count}";
+    public string SourceOfdReportInfo
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_sourceOfdReportPath))
+                return "Архив исходных чеков не загружен";
+
+            var fileCount = Math.Max(1, _sourceOfdRows
+                .Select(row => row.SourceFile)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count());
+            return $"ОФД: архив · файлов {fileCount} · чеков {_sourceOfdRows.Count}";
+        }
+    }
 
     public void Activate()
     {
@@ -668,24 +680,29 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         {
             if (!TryUseWorkspaceOfdReport() && _sourceOfdRows.Count == 0)
             {
-                var latestPath = ReportsViewModel.FindLatestValidTaxcomReport();
-                if (!string.IsNullOrWhiteSpace(latestPath))
+                var archive = ReportsViewModel.TryReadOfdArchive(
+                    ApplicationSettingsStore.Current.LastOfdReportPath);
+                if (archive is not null)
                 {
-                    SetSourceOfdReport(latestPath, ReportImportService.ReadOfdReport(latestPath));
+                    SetSourceOfdReport(archive.ImportedFiles[0], archive.Rows);
                 }
                 else
                 {
                     var dialog = new OpenFileDialog
                     {
-                        Title = "Выберите сводный отчёт ОФД / Такскома с исходными чеками",
+                        Title = "Выберите отчёты ОФД / Такскома с исходными чеками",
                         Filter = "Excel ОФД (*.xlsx)|*.xlsx|Все файлы|*.*",
+                        Multiselect = true,
                     };
                     if (dialog.ShowDialog() != true)
                     {
                         Status = "Для поиска нужен XLSX-отчёт ОФД / Такскома; CSV АТОЛ для этого не подходит";
                         return;
                     }
-                    SetSourceOfdReport(dialog.FileName, ReportImportService.ReadOfdReport(dialog.FileName));
+                    archive = ReportImportService.ReadOfdArchive(dialog.FileNames);
+                    if (archive.ImportedFiles.Count == 0)
+                        throw new InvalidDataException("Выбранные файлы не содержат корректных отчётов ОФД.");
+                    SetSourceOfdReport(archive.ImportedFiles[0], archive.Rows);
                 }
             }
 
@@ -714,8 +731,8 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
                         ? OriginalReceiptLookupState.NotFound
                         : OriginalReceiptLookupState.Ambiguous;
                     item.State.LastMessage = candidates.Count == 0
-                        ? $"ФП {fiscalSign} не найден в отчёте ОФД"
-                        : $"ФП {fiscalSign} встречается в отчёте больше одного раза";
+                        ? $"ФП {fiscalSign} не найден в загруженном архиве ОФД"
+                        : $"ФП {fiscalSign} встречается в архиве ОФД больше одного раза";
                     item.State.UpdatedAt = DateTime.Now;
                     item.Refresh();
                     if (candidates.Count == 0) notFound++;
