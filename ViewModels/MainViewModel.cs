@@ -388,6 +388,7 @@ public class MainViewModel : BaseViewModel
         ObsidianCases = new ObsidianCasesViewModel();
         ObsidianCases.OfdReportProvider = () =>
             (Reports.OfdReportPath, Reports.OfdChecks.ToList());
+        ObsidianCases.OnlineOfdRowsImported = Reports.AddOnlineOfdReceipts;
         ObsidianCases.SendToWorkRequested += AddObsidianCasesToWork;
 
         // Любое изменение списка заказов автоматически обновляет

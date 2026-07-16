@@ -368,6 +368,14 @@ public sealed class ReportsViewModel : BaseViewModel
         LoadOfdArchive(selectTab: true);
     }
 
+    public void AddOnlineOfdReceipts(IReadOnlyList<OfdReportRow> rows)
+    {
+        if (rows.Count == 0) return;
+        TaxcomReceiptCacheService.Upsert(rows);
+        var archive = TryReadOfdArchive(ApplicationSettingsStore.Current.LastOfdReportPath);
+        if (archive is not null) ApplyOfdArchive(archive, selectTab: false);
+    }
+
     public async Task RestoreLatestReportsAsync()
     {
         if (_startupReportsRestored) return;
@@ -770,15 +778,32 @@ public sealed class ReportsViewModel : BaseViewModel
     {
         try
         {
+            var rememberedXlsxPath = string.Equals(
+                Path.GetExtension(rememberedPath), ".xlsx", StringComparison.OrdinalIgnoreCase)
+                ? rememberedPath
+                : string.Empty;
             var paths = GetReportCandidates(
                 FileHelper.TaxcomReportDir,
                 "*.xlsx",
                 name => name.Contains("такском", StringComparison.OrdinalIgnoreCase) ||
                         name.Contains("фискальн", StringComparison.OrdinalIgnoreCase) ||
                         name.Contains("сводн", StringComparison.OrdinalIgnoreCase),
-                rememberedPath);
+                rememberedXlsxPath);
             var archive = ReportImportService.ReadOfdArchive(paths);
-            return archive.ImportedFiles.Count > 0 ? archive : null;
+            var cachedRows = TaxcomReceiptCacheService.Load();
+            var mergedRows = ReportImportService.MergeOfdRows(archive.Rows.Concat(cachedRows));
+            if (mergedRows.Count == 0) return null;
+
+            var importedFiles = archive.ImportedFiles.ToList();
+            if (importedFiles.Count == 0 && cachedRows.Count > 0)
+                importedFiles.Add(FileHelper.TaxcomReceiptCachePath);
+            return new OfdArchiveResult
+            {
+                Rows = mergedRows,
+                ImportedFiles = importedFiles,
+                TruncatedFiles = archive.TruncatedFiles,
+                FailedFiles = archive.FailedFiles,
+            };
         }
         catch
         {

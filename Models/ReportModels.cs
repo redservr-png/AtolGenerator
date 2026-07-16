@@ -66,6 +66,21 @@ public sealed class OfdArchiveResult
     public List<string> FailedFiles { get; init; } = new();
 }
 
+public sealed class TaxcomReceiptSearchRequest
+{
+    public long FiscalSign { get; init; }
+    public DateTime PeriodFrom { get; init; }
+    public DateTime PeriodTo { get; init; }
+    public string DocumentLabel { get; init; } = string.Empty;
+}
+
+public sealed class TaxcomReceiptSearchFailure
+{
+    public long FiscalSign { get; init; }
+    public string DocumentLabel { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+}
+
 public sealed class XmlReportCheck
 {
     public int Index { get; init; }

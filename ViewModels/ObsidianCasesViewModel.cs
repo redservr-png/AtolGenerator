@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Data;
@@ -8,6 +9,7 @@ using System.Windows.Input;
 using AtolGenerator.Helpers;
 using AtolGenerator.Models;
 using AtolGenerator.Services;
+using AtolGenerator.Views;
 using Microsoft.Win32;
 
 namespace AtolGenerator.ViewModels;
@@ -146,7 +148,9 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
             $"{State.OriginalReceipt.RegisteredAt:dd.MM.yyyy HH:mm} · " +
             $"{State.OriginalReceipt.Operation} · {Math.Abs(State.OriginalReceipt.Amount):N2} ₽",
         OriginalReceiptLookupState.NotFound =>
-            $"ФП {Record.PrimaryDocument.OriginalFiscalNumber} не найден в загруженном отчёте ОФД.",
+            string.IsNullOrWhiteSpace(State.LastMessage)
+                ? $"ФП {Record.PrimaryDocument.OriginalFiscalNumber} не найден в ОФД."
+                : State.LastMessage,
         OriginalReceiptLookupState.MissingFiscalSign => "В данных 1С не заполнен ФП исходного чека.",
         OriginalReceiptLookupState.Ambiguous =>
             $"ФП {Record.PrimaryDocument.OriginalFiscalNumber} встречается в отчёте больше одного раза.",
@@ -324,6 +328,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
 
     public event Action<IReadOnlyList<OrderEntry>>? SendToWorkRequested;
     public Func<(string Path, IReadOnlyList<OfdReportRow> Rows)>? OfdReportProvider { get; set; }
+    public Action<IReadOnlyList<OfdReportRow>>? OnlineOfdRowsImported { get; set; }
 
     public ObservableCollection<ObsidianCaseItemViewModel> Cases { get; } = new();
     public ObservableCollection<string> PeriodOptions { get; } = new() { "Все периоды" };
@@ -683,95 +688,176 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
                 var archive = ReportsViewModel.TryReadOfdArchive(
                     ApplicationSettingsStore.Current.LastOfdReportPath);
                 if (archive is not null)
-                {
                     SetSourceOfdReport(archive.ImportedFiles[0], archive.Rows);
-                }
-                else
-                {
-                    var dialog = new OpenFileDialog
-                    {
-                        Title = "Выберите отчёты ОФД / Такскома с исходными чеками",
-                        Filter = "Excel ОФД (*.xlsx)|*.xlsx|Все файлы|*.*",
-                        Multiselect = true,
-                    };
-                    if (dialog.ShowDialog() != true)
-                    {
-                        Status = "Для поиска нужен XLSX-отчёт ОФД / Такскома; CSV АТОЛ для этого не подходит";
-                        return;
-                    }
-                    archive = ReportImportService.ReadOfdArchive(dialog.FileNames);
-                    if (archive.ImportedFiles.Count == 0)
-                        throw new InvalidDataException("Выбранные файлы не содержат корректных отчётов ОФД.");
-                    SetSourceOfdReport(archive.ImportedFiles[0], archive.Rows);
-                }
             }
 
-            var found = 0;
-            var notFound = 0;
-            var requiresAttention = 0;
-            foreach (var item in selected)
+            var summary = MatchOriginalReceipts(selected);
+            var onlineTargets = selected
+                .Where(item => item.State.OriginalReceiptLookupState == OriginalReceiptLookupState.NotFound)
+                .Select(item => (Item: item, FiscalSign: ParseFiscalSign(item.Record.PrimaryDocument.OriginalFiscalNumber)))
+                .Where(x => x.FiscalSign.HasValue)
+                .GroupBy(x => x.FiscalSign!.Value)
+                .Select(group => CreateTaxcomRequest(group.First().Item, group.Key))
+                .ToList();
+
+            var onlineFound = 0;
+            var onlineFailed = 0;
+            if (onlineTargets.Count > 0)
             {
-                var fpText = item.Record.PrimaryDocument.OriginalFiscalNumber;
-                if (!long.TryParse(fpText, out var fiscalSign))
+                Status = $"В локальном архиве нет {onlineTargets.Count} чеков. Открываем поиск Такскома...";
+                var searchWindow = new TaxcomReceiptSearchWindow(onlineTargets)
                 {
-                    item.State.OriginalReceipt = null;
-                    item.State.OriginalReceiptLookupState = OriginalReceiptLookupState.MissingFiscalSign;
-                    item.State.LastMessage = "В 1С не заполнен ФП исходного чека";
-                    item.State.UpdatedAt = DateTime.Now;
-                    item.Refresh();
-                    requiresAttention++;
-                    continue;
-                }
-
-                var candidates = _sourceOfdRows.Where(x => x.FiscalSign == fiscalSign).Take(2).ToList();
-                if (candidates.Count != 1)
-                {
-                    item.State.OriginalReceipt = null;
-                    item.State.OriginalReceiptLookupState = candidates.Count == 0
-                        ? OriginalReceiptLookupState.NotFound
-                        : OriginalReceiptLookupState.Ambiguous;
-                    item.State.LastMessage = candidates.Count == 0
-                        ? $"ФП {fiscalSign} не найден в загруженном архиве ОФД"
-                        : $"ФП {fiscalSign} встречается в архиве ОФД больше одного раза";
-                    item.State.UpdatedAt = DateTime.Now;
-                    item.Refresh();
-                    if (candidates.Count == 0) notFound++;
-                    else requiresAttention++;
-                    continue;
-                }
-
-                var row = candidates[0];
-                item.State.OriginalReceipt = new ObsidianOriginalReceipt
-                {
-                    Source = "ОФД / Такском",
-                    RegisteredAt = row.RegisteredAt,
-                    Document = row.Document,
-                    Operation = row.Operation,
-                    Amount = row.Amount,
-                    FiscalSign = row.FiscalSign,
-                    FiscalDocument = row.FiscalDocument,
-                    ReceiptUrl = row.ReceiptUrl,
+                    Owner = Application.Current?.MainWindow,
                 };
-                item.State.OriginalReceiptLookupState = OriginalReceiptLookupState.Found;
-                item.Record.PrimaryDocument.OriginalCheckAmount = Math.Abs(row.Amount);
-                item.Record.PrimaryDocument.OriginalCheckDate = row.RegisteredAt;
-                item.Record.PrimaryDocument.OriginalCheckOperation = row.Operation;
-                item.State.LastMessage = CorrectionPlanService.IsCorrectionReceipt(item.State.OriginalReceipt)
-                    ? "Найден исходный чек коррекции: обработка отложена до этапа 3"
-                    : "Исходный чек найден в ОФД строго по ФП";
-                item.State.UpdatedAt = DateTime.Now;
-                item.Refresh();
-                found++;
+                searchWindow.ShowDialog();
+                onlineFound = searchWindow.FoundRows.Count;
+                onlineFailed = searchWindow.Failures.Count;
+
+                if (onlineFound > 0)
+                {
+                    if (OnlineOfdRowsImported is not null)
+                        OnlineOfdRowsImported(searchWindow.FoundRows);
+                    else
+                        TaxcomReceiptCacheService.Upsert(searchWindow.FoundRows);
+
+                    var mergedRows = ReportImportService.MergeOfdRows(
+                        searchWindow.FoundRows.Concat(_sourceOfdRows));
+                    SetSourceOfdReport(
+                        string.IsNullOrWhiteSpace(_sourceOfdReportPath)
+                            ? FileHelper.TaxcomReceiptCachePath
+                            : _sourceOfdReportPath,
+                        mergedRows);
+                    summary = MatchOriginalReceipts(selected);
+                }
+
+                foreach (var failure in searchWindow.Failures)
+                {
+                    foreach (var item in selected.Where(item =>
+                                 ParseFiscalSign(item.Record.PrimaryDocument.OriginalFiscalNumber) == failure.FiscalSign &&
+                                 item.State.OriginalReceiptLookupState == OriginalReceiptLookupState.NotFound))
+                    {
+                        item.State.LastMessage = $"ФП {failure.FiscalSign} не найден онлайн в Такскоме: {failure.Message}";
+                        item.State.UpdatedAt = DateTime.Now;
+                        item.Refresh();
+                    }
+                }
             }
+
             SaveStates();
-            Status = $"Исходные чеки: найдено {found}; не найдено {notFound}; требуют проверки {requiresAttention}";
+            Status = $"Исходные чеки: найдено {summary.Found}; не найдено {summary.NotFound}; " +
+                     $"требуют проверки {summary.RequiresAttention}" +
+                     (onlineTargets.Count > 0
+                         ? $" · Такском: найдено {onlineFound}, не найдено {onlineFailed}"
+                         : string.Empty);
             RefreshCounters();
         }
         catch (Exception ex)
         {
-            Status = $"Не удалось загрузить отчёт ОФД: {ex.Message}";
+            Status = $"Не удалось найти исходные чеки: {ex.Message}";
         }
     }
+
+    private ReceiptMatchSummary MatchOriginalReceipts(IReadOnlyList<ObsidianCaseItemViewModel> selected)
+    {
+        var found = 0;
+        var notFound = 0;
+        var requiresAttention = 0;
+        foreach (var item in selected)
+        {
+            var fiscalSign = ParseFiscalSign(item.Record.PrimaryDocument.OriginalFiscalNumber);
+            if (!fiscalSign.HasValue)
+            {
+                item.State.OriginalReceipt = null;
+                item.State.OriginalReceiptLookupState = OriginalReceiptLookupState.MissingFiscalSign;
+                item.State.LastMessage = "В 1С не заполнен ФП исходного чека";
+                item.State.UpdatedAt = DateTime.Now;
+                item.Refresh();
+                requiresAttention++;
+                continue;
+            }
+
+            var candidates = _sourceOfdRows.Where(x => x.FiscalSign == fiscalSign.Value).Take(2).ToList();
+            if (candidates.Count != 1)
+            {
+                item.State.OriginalReceipt = null;
+                item.State.OriginalReceiptLookupState = candidates.Count == 0
+                    ? OriginalReceiptLookupState.NotFound
+                    : OriginalReceiptLookupState.Ambiguous;
+                item.State.LastMessage = candidates.Count == 0
+                    ? $"ФП {fiscalSign.Value} не найден в загруженном архиве ОФД"
+                    : $"ФП {fiscalSign.Value} встречается в архиве ОФД больше одного раза";
+                item.State.UpdatedAt = DateTime.Now;
+                item.Refresh();
+                if (candidates.Count == 0) notFound++;
+                else requiresAttention++;
+                continue;
+            }
+
+            var row = candidates[0];
+            item.State.OriginalReceipt = new ObsidianOriginalReceipt
+            {
+                Source = "ОФД / Такском",
+                RegisteredAt = row.RegisteredAt,
+                Document = row.Document,
+                Operation = row.Operation,
+                Amount = row.Amount,
+                FiscalSign = row.FiscalSign,
+                FiscalDocument = row.FiscalDocument,
+                ReceiptUrl = row.ReceiptUrl,
+            };
+            item.State.OriginalReceiptLookupState = OriginalReceiptLookupState.Found;
+            item.Record.PrimaryDocument.OriginalCheckAmount = Math.Abs(row.Amount);
+            item.Record.PrimaryDocument.OriginalCheckDate = row.RegisteredAt;
+            item.Record.PrimaryDocument.OriginalCheckOperation = row.Operation;
+            item.State.LastMessage = CorrectionPlanService.IsCorrectionReceipt(item.State.OriginalReceipt)
+                ? "Найден исходный чек коррекции: обработка отложена до этапа 3"
+                : row.SourceFile.Equals("Онлайн-поиск Такском", StringComparison.OrdinalIgnoreCase)
+                    ? "Исходный чек найден онлайн в Такскоме строго по ФП"
+                    : "Исходный чек найден в архиве ОФД строго по ФП";
+            item.State.UpdatedAt = DateTime.Now;
+            item.Refresh();
+            found++;
+        }
+
+        return new ReceiptMatchSummary(found, notFound, requiresAttention);
+    }
+
+    private static TaxcomReceiptSearchRequest CreateTaxcomRequest(
+        ObsidianCaseItemViewModel item,
+        long fiscalSign)
+    {
+        var source = item.Record.PrimaryDocument;
+        var anchorDate = source.OneCCheckDate ?? ParseDocumentDate(source.OrderDate) ?? DateTime.Today;
+        var fromMonth = anchorDate.AddMonths(-1);
+        var toMonth = anchorDate.AddMonths(1);
+        return new TaxcomReceiptSearchRequest
+        {
+            FiscalSign = fiscalSign,
+            PeriodFrom = new DateTime(fromMonth.Year, fromMonth.Month, 1),
+            PeriodTo = new DateTime(toMonth.Year, toMonth.Month, 1).AddMonths(1).AddDays(-1),
+            DocumentLabel = $"{item.DocumentType} {item.DocumentNumber}".Trim(),
+        };
+    }
+
+    private static long? ParseFiscalSign(string value)
+    {
+        var normalized = value?.Replace(" ", string.Empty).Trim();
+        return long.TryParse(normalized, out var result) ? result : null;
+    }
+
+    private static DateTime? ParseDocumentDate(string value)
+    {
+        string[] formats =
+        {
+            "dd.MM.yyyy HH:mm:ss", "dd.MM.yyyy H:mm:ss", "dd.MM.yyyy",
+        };
+        return DateTime.TryParseExact(value?.Trim(), formats, CultureInfo.InvariantCulture,
+            DateTimeStyles.AllowWhiteSpaces, out var result)
+            ? result
+            : null;
+    }
+
+    private sealed record ReceiptMatchSummary(int Found, int NotFound, int RequiresAttention);
 
     private bool TryUseWorkspaceOfdReport()
     {

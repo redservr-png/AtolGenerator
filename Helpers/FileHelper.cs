@@ -26,6 +26,9 @@ public static class FileHelper
     public static string TaxcomReportDir =>
         Path.Combine(OutputDir, "reports", "taxcom");
 
+    public static string TaxcomReceiptCachePath =>
+        Path.Combine(TaxcomReportDir, "online_receipts.json");
+
     public static string AtolReportDir =>
         Path.Combine(OutputDir, "reports", "atol");
 }

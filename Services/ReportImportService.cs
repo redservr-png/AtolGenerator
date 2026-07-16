@@ -158,11 +158,23 @@ public static partial class ReportImportService
 
         return new OfdArchiveResult
         {
-            Rows = rowsByKey.Values.OrderByDescending(row => row.RegisteredAt).ToList(),
+            Rows = MergeOfdRows(rowsByKey.Values),
             ImportedFiles = importedFiles,
             TruncatedFiles = truncatedFiles,
             FailedFiles = failedFiles,
         };
+    }
+
+    public static List<OfdReportRow> MergeOfdRows(IEnumerable<OfdReportRow> rows)
+    {
+        var rowsByKey = new Dictionary<string, OfdReportRow>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var key = GetOfdReceiptKey(row);
+            if (!rowsByKey.ContainsKey(key)) rowsByKey.Add(key, row);
+        }
+
+        return rowsByKey.Values.OrderByDescending(row => row.RegisteredAt).ToList();
     }
 
     public static OfdReportReadResult ReadOfdReportDetails(string path)
