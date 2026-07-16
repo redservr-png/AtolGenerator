@@ -223,13 +223,14 @@ public partial class TaxcomReceiptSearchWindow : Window
         {
             return new DomActionResult
             {
-                Message = periodResult?.Message ?? "На странице не найдено поле периода",
+                Message = periodResult?.Message ?? "На странице не найдено поле периода. Выберите период вручную и продолжите поиск.",
+                RequiresManualPeriod = true,
             };
         }
 
         await Task.Delay(350);
         var periodApplied = await IsPeriodAppliedAsync(request);
-        if (!periodApplied)
+        if (!periodApplied && periodResult?.CanType == true)
         {
             StatusText.Text = "Календарь не принял период напрямую. Вводим даты с клавиатуры...";
             await TypePeriodWithDevToolsAsync(period);
@@ -413,6 +414,64 @@ public partial class TaxcomReceiptSearchWindow : Window
           const period = __PERIOD__;
           const dateFrom = __DATE_FROM__;
           const dateTo = __DATE_TO__;
+          const parseDate = (value, endOfDay) => {
+            const parts = value.split('.').map(Number);
+            if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+            return new Date(
+              parts[2], parts[1] - 1, parts[0],
+              endOfDay ? 23 : 0,
+              endOfDay ? 59 : 0,
+              endOfDay ? 59 : 0,
+              endOfDay ? 999 : 0).getTime();
+          };
+          const findReceiptSearch = element => {
+            if (!element) return null;
+            const key = Object.getOwnPropertyNames(element).find(name =>
+              name.startsWith('__reactFiber$') ||
+              name.startsWith('__reactInternalInstance$'));
+            let fiber = key ? element[key] : null;
+            while (fiber) {
+              const instance = fiber.stateNode;
+              if (instance &&
+                  typeof instance._handlerChangeDatePickerArea === 'function' &&
+                  typeof instance._submitRequest === 'function' &&
+                  instance.state &&
+                  Object.prototype.hasOwnProperty.call(instance.state, 'fiscalSign')) {
+                return instance;
+              }
+              fiber = fiber.return;
+            }
+            return null;
+          };
+          const periodControl = document.querySelector('.receiptsSearch__filter .date-picker-area') ||
+            document.querySelector('.date-picker-area');
+          if (periodControl) {
+            periodControl.dataset.atolPeriodControl = 'true';
+            const instance = findReceiptSearch(periodControl);
+            const fromMs = parseDate(dateFrom, false);
+            const toMs = parseDate(dateTo, true);
+            if (instance && fromMs !== null && toMs !== null) {
+              window.__atolGeneratorReceiptSearch = instance;
+              instance._handlerChangeDatePickerArea(fromMs, toMs);
+              const caption = periodControl.querySelector('.date-picker-area__caption');
+              const value = (caption && caption.textContent || periodControl.textContent || '').trim();
+              return {
+                found: true,
+                applied: value.includes(dateFrom) && value.includes(dateTo),
+                canType: false,
+                value,
+                message: ''
+              };
+            }
+            return {
+              found: true,
+              applied: false,
+              canType: false,
+              value: '',
+              message: 'Не удалось подключиться к календарю Такскома'
+            };
+          }
+
           const inputs = Array.from(document.querySelectorAll('input'));
           const periodPattern = /\d{2}\.\d{2}\.\d{4}\s*[-–—]\s*\d{2}\.\d{2}\.\d{4}/;
           const fieldText = input => [
@@ -424,7 +483,7 @@ public partial class TaxcomReceiptSearchWindow : Window
           ].filter(Boolean).join(' ').toUpperCase();
           const periodInput = inputs.find(x => periodPattern.test(x.value || '')) ||
             inputs.find(x => fieldText(x).includes('ПЕРИОД'));
-          if (!periodInput) return { found: false, applied: false, value: '', message: 'На странице не найдено поле периода' };
+          if (!periodInput) return { found: false, applied: false, canType: false, value: '', message: 'На странице не найдено поле периода. Выберите период вручную и продолжите поиск.' };
 
           periodInput.dataset.atolPeriodInput = 'true';
           periodInput.readOnly = false;
@@ -468,7 +527,7 @@ public partial class TaxcomReceiptSearchWindow : Window
           periodInput.focus();
           periodInput.select();
           const value = periodInput.value || '';
-          return { found: true, applied: value.includes(dateFrom) && value.includes(dateTo), value, message: '' };
+          return { found: true, applied: value.includes(dateFrom) && value.includes(dateTo), canType: true, value, message: '' };
         })()
         """;
 
@@ -514,10 +573,24 @@ public partial class TaxcomReceiptSearchWindow : Window
         (() => {
           const dateFrom = __DATE_FROM__;
           const dateTo = __DATE_TO__;
+          const periodControl = document.querySelector('[data-atol-period-control="true"]') ||
+            document.querySelector('.receiptsSearch__filter .date-picker-area') ||
+            document.querySelector('.date-picker-area');
+          if (periodControl) {
+            const caption = periodControl.querySelector('.date-picker-area__caption');
+            const value = (caption && caption.textContent || periodControl.textContent || '').trim();
+            return {
+              found: true,
+              applied: value.includes(dateFrom) && value.includes(dateTo),
+              canType: false,
+              value,
+              message: ''
+            };
+          }
           const input = document.querySelector('input[data-atol-period-input="true"]');
-          if (!input) return { found: false, applied: false, value: '', message: 'Поле периода потеряно' };
+          if (!input) return { found: false, applied: false, canType: false, value: '', message: 'Поле периода потеряно' };
           const value = input.value || '';
-          return { found: true, applied: value.includes(dateFrom) && value.includes(dateTo), value, message: '' };
+          return { found: true, applied: value.includes(dateFrom) && value.includes(dateTo), canType: true, value, message: '' };
         })()
         """;
 
@@ -527,10 +600,23 @@ public partial class TaxcomReceiptSearchWindow : Window
           const dateFrom = __DATE_FROM__;
           const dateTo = __DATE_TO__;
           const inputs = Array.from(document.querySelectorAll('input'));
+          const periodControl = document.querySelector('[data-atol-period-control="true"]') ||
+            document.querySelector('.receiptsSearch__filter .date-picker-area') ||
+            document.querySelector('.date-picker-area');
           const periodInput = document.querySelector('input[data-atol-period-input="true"]');
-          const periodValue = periodInput && periodInput.value || '';
-          if (!periodInput || !periodValue.includes(dateFrom) || !periodValue.includes(dateTo)) {
+          const caption = periodControl && periodControl.querySelector('.date-picker-area__caption');
+          const periodValue = periodControl
+            ? (caption && caption.textContent || periodControl.textContent || '')
+            : (periodInput && periodInput.value || '');
+          if (!periodValue.includes(dateFrom) || !periodValue.includes(dateTo)) {
             return { ok: false, message: 'Период поиска не подтверждён на странице Такскома' };
+          }
+          const receiptSearch = window.__atolGeneratorReceiptSearch;
+          if (receiptSearch &&
+              typeof receiptSearch.setState === 'function' &&
+              typeof receiptSearch._submitRequest === 'function') {
+            receiptSearch.setState({ fiscalSign }, () => receiptSearch._submitRequest());
+            return { ok: true, message: '' };
           }
           const setValue = (input, value) => {
             const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
@@ -586,6 +672,7 @@ public partial class TaxcomReceiptSearchWindow : Window
     {
         public bool Found { get; init; }
         public bool Applied { get; init; }
+        public bool CanType { get; init; }
         public string Value { get; init; } = string.Empty;
         public string Message { get; init; } = string.Empty;
     }
