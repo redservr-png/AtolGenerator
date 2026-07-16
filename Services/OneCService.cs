@@ -838,9 +838,9 @@ public static class OneCService
 
                 try
                 {
-                    // Номер документа в УТ 10.3 может повторяться между периодами. Сначала
-                    // ограничиваем поиск датой из исходной строки Obsidian, а не сохранённым
-                    // снимком 1С, чтобы старый результат не закреплялся при повторной загрузке.
+                    // Номер документа в УТ 10.3 может повторяться между годами. Дата в
+                    // Obsidian иногда отличается от реальной даты документа, поэтому она
+                    // ограничивает поиск годом, а точную дату берём уже из найденной записи 1С.
                     DateTime? dateHint = null;
                     var lookupDate = string.IsNullOrWhiteSpace(o.SourceDocumentDate)
                         ? o.OrderDate
@@ -863,7 +863,7 @@ public static class OneCService
                         : "";
                     var detailsSelectPart = FetchDetailsSelectPart(o.DocumentType);
                     var dateFilter = dateHint.HasValue
-                        ? "И Док.Дата >= &НачалоДня И Док.Дата < &КонецДня"
+                        ? "И Док.Дата >= &НачалоГода И Док.Дата < &КонецГода"
                         : string.Empty;
 
                     var query = conn.NewObject("Запрос");
@@ -879,16 +879,17 @@ public static class OneCService
                             Документ.{metaName} КАК Док
                         ГДЕ
                             Док.Номер = &Номер
-                            И Док.ПометкаУдаления = ЛОЖЬ
                             {dateFilter}
                         УПОРЯДОЧИТЬ ПО
+                            Док.ПометкаУдаления,
                             Док.Дата УБЫВ
                         """;
                     query.УстановитьПараметр("Номер", o.OrderNum);
                     if (dateHint.HasValue)
                     {
-                        query.УстановитьПараметр("НачалоДня", dateHint.Value);
-                        query.УстановитьПараметр("КонецДня", dateHint.Value.AddDays(1));
+                        var yearStart = new DateTime(dateHint.Value.Year, 1, 1);
+                        query.УстановитьПараметр("НачалоГода", yearStart);
+                        query.УстановитьПараметр("КонецГода", yearStart.AddYears(1));
                     }
                     var sel = query.Выполнить().Выбрать();
 
@@ -896,7 +897,7 @@ public static class OneCService
                     {
                         res.NotFound++;
                         Log(dateHint.HasValue
-                            ? $"  {o.OrderNum} ({metaName}): не найден за {dateHint:dd.MM.yyyy}"
+                            ? $"  {o.OrderNum} ({metaName}): не найден за {dateHint:yyyy} год"
                             : $"  {o.OrderNum} ({metaName}): не найден");
                         continue;
                     }
