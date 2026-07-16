@@ -11,6 +11,74 @@
       <Setter Property="Padding" Value="14,7"/>
       <Setter Property="FontSize" Value="13"/>
     </Style>
+    <Style x:Key="SelectableText" TargetType="TextBox">
+      <Setter Property="IsReadOnly" Value="True"/>
+      <Setter Property="IsReadOnlyCaretVisible" Value="True"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="MinHeight" Value="0"/>
+      <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="VerticalContentAlignment" Value="Top"/>
+      <Setter Property="Cursor" Value="IBeam"/>
+      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    </Style>
+    <Style x:Key="SelectableValue" TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
+      <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style x:Key="PeriodComboBox" TargetType="ComboBox"
+           BasedOn="{StaticResource {x:Type ComboBox}}">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ComboBox">
+            <Grid>
+              <Border x:Name="PeriodBorder"
+                      Background="{TemplateBinding Background}"
+                      BorderBrush="{TemplateBinding BorderBrush}"
+                      BorderThickness="{TemplateBinding BorderThickness}"
+                      CornerRadius="6">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="30"/>
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{Binding DataContext.SelectedPeriod, RelativeSource={RelativeSource TemplatedParent}}"
+                             Margin="{TemplateBinding Padding}"
+                             VerticalAlignment="Center"
+                             Foreground="{TemplateBinding Foreground}"
+                             TextTrimming="CharacterEllipsis"/>
+                  <TextBlock Grid.Column="1" Text="▾" VerticalAlignment="Center"
+                             HorizontalAlignment="Center"
+                             Foreground="{DynamicResource BrushText2}" FontSize="12"/>
+                  <ToggleButton Grid.ColumnSpan="2" Opacity="0" Focusable="False"
+                                IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"/>
+                </Grid>
+              </Border>
+              <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}"
+                     Placement="Bottom" AllowsTransparency="True" Focusable="False"
+                     PopupAnimation="Slide">
+                <Border Background="{DynamicResource BrushSurface2}"
+                        BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                        CornerRadius="6" MinWidth="{TemplateBinding ActualWidth}"
+                        MaxHeight="220">
+                  <ScrollViewer>
+                    <ItemsPresenter/>
+                  </ScrollViewer>
+                </Border>
+              </Popup>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsFocused" Value="True">
+                <Setter TargetName="PeriodBorder" Property="BorderBrush"
+                        Value="{DynamicResource BrushAccent}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="CaseGrid" TargetType="DataGrid">
       <Setter Property="AutoGenerateColumns" Value="False"/>
       <Setter Property="CanUserAddRows" Value="False"/>
@@ -27,12 +95,13 @@
       <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
       <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="SelectionMode" Value="Single"/>
-      <Setter Property="SelectionUnit" Value="FullRow"/>
+      <Setter Property="SelectionMode" Value="Extended"/>
+      <Setter Property="SelectionUnit" Value="CellOrRowHeader"/>
+      <Setter Property="ClipboardCopyMode" Value="IncludeHeader"/>
       <Setter Property="RowHeight" Value="42"/>
       <Setter Property="ColumnHeaderHeight" Value="38"/>
       <Setter Property="FontSize" Value="12"/>
-      <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
+      <Setter Property="HorizontalScrollBarVisibility" Value="Visible"/>
       <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
     </Style>
     <Style TargetType="DataGridColumnHeader">
@@ -118,14 +187,10 @@
                  Tag="Поиск по документу или проблеме"/>
         <CheckBox Grid.Column="2" Content="Показывать закрытые" IsChecked="{Binding ShowClosed}"
                   VerticalAlignment="Center"/>
-        <Grid Grid.Column="4" VerticalAlignment="Center">
-          <ComboBox ItemsSource="{Binding PeriodOptions}"
-                    SelectedItem="{Binding SelectedPeriod, Mode=TwoWay}"
-                    Foreground="Transparent"/>
-          <TextBlock Text="{Binding SelectedPeriod}" Margin="11,0,30,0"
-                     VerticalAlignment="Center" Foreground="{DynamicResource BrushText}"
-                     IsHitTestVisible="False" TextTrimming="CharacterEllipsis"/>
-        </Grid>
+        <ComboBox Grid.Column="4" VerticalAlignment="Center"
+                  Style="{StaticResource PeriodComboBox}"
+                  ItemsSource="{Binding PeriodOptions}"
+                  SelectedItem="{Binding SelectedPeriod, Mode=TwoWay}"/>
         <TextBlock Grid.Column="6" Text="{Binding SourceOfdReportInfo}"
                    Foreground="{DynamicResource BrushText3}" FontSize="11"
                    VerticalAlignment="Center" TextAlignment="Right"
@@ -157,14 +222,23 @@
 
     <Grid Grid.Row="2" Margin="24,16">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="2.1*" MinWidth="520"/>
-        <ColumnDefinition Width="18"/>
-        <ColumnDefinition Width="*" MinWidth="290"/>
+        <ColumnDefinition Width="3*" MinWidth="420"/>
+        <ColumnDefinition Width="8"/>
+        <ColumnDefinition Width="1.05*" MinWidth="260"/>
       </Grid.ColumnDefinitions>
 
       <DataGrid Grid.Column="0" Style="{StaticResource CaseGrid}"
-                ItemsSource="{Binding CasesView}" SelectedItem="{Binding SelectedCase}"
+                ItemsSource="{Binding CasesView}"
+                SelectedItem="{Binding SelectedCase}"
+                CurrentItem="{Binding SelectedCase, Mode=TwoWay}"
                 FrozenColumnCount="2">
+        <DataGrid.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="Копировать"
+                      Command="{x:Static ApplicationCommands.Copy}"
+                      CommandTarget="{Binding PlacementTarget, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+          </ContextMenu>
+        </DataGrid.ContextMenu>
         <DataGrid.Columns>
           <DataGridTemplateColumn Width="42" CanUserSort="False">
             <DataGridTemplateColumn.Header>
@@ -172,7 +246,8 @@
             </DataGridTemplateColumn.Header>
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate>
-                <CheckBox IsChecked="{Binding IsSelected}" HorizontalAlignment="Center"
+                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          HorizontalAlignment="Center"
                           IsEnabled="{Binding CanEdit}"/>
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
@@ -198,18 +273,22 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="План" Binding="{Binding PlanStatus}" Width="105" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Период" Binding="{Binding PeriodLabel}" Width="92" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Документ" Binding="{Binding DocumentNumber}" Width="118" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Тип" Binding="{Binding DocumentType}" Width="120" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Дата" Binding="{Binding DocumentDate}" Width="138" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Подразделение" Binding="{Binding Department}" Width="108" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Номер чека" Binding="{Binding OneCCheckNumberText}" Width="105" IsReadOnly="True"/>
-          <DataGridTextColumn Header="ФП чека" Binding="{Binding OneCFiscalNumberText}" Width="115" IsReadOnly="True"/>
+          <DataGridTextColumn Header="План" Binding="{Binding PlanStatus}" Width="125" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Период" Binding="{Binding PeriodLabel}" Width="100" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Документ" Binding="{Binding DocumentNumber}" Width="125" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Тип" Binding="{Binding DocumentType}" Width="130" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Дата" Binding="{Binding DocumentDate}" Width="145" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Подразделение" Binding="{Binding Department}" Width="135" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Номер чека" Binding="{Binding OneCCheckNumberText}" Width="110" IsReadOnly="True"/>
+          <DataGridTextColumn Header="ФП чека" Binding="{Binding OneCFiscalNumberText}" Width="120" IsReadOnly="True"/>
           <DataGridTextColumn Header="Комментарий 1С" Binding="{Binding OneCCommentText}" Width="220" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Пояснение ошибки" Binding="{Binding EditableProblem}" Width="*" MinWidth="170" IsReadOnly="True"/>
+          <DataGridTextColumn Header="Пояснение ошибки" Binding="{Binding EditableProblem}" Width="260" IsReadOnly="True"/>
         </DataGrid.Columns>
       </DataGrid>
+
+      <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch"
+                    ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                    Background="{DynamicResource BrushBorder}"/>
 
       <Border Grid.Column="2" Background="{DynamicResource BrushSurface1}"
               BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1" CornerRadius="8">
@@ -221,9 +300,10 @@
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
               <StackPanel>
-                <TextBlock Text="{Binding SelectedCase.DocumentNumber}" FontSize="17" FontWeight="SemiBold"/>
-                <TextBlock Text="{Binding SelectedCase.DocumentType}" Foreground="{DynamicResource BrushText3}"
-                           Margin="0,3,0,0"/>
+                <TextBox Text="{Binding SelectedCase.DocumentNumber, Mode=OneWay}" Style="{StaticResource SelectableValue}"
+                         FontSize="17"/>
+                <TextBox Text="{Binding SelectedCase.DocumentType, Mode=OneWay}" Style="{StaticResource SelectableText}"
+                         Foreground="{DynamicResource BrushText3}" Margin="0,3,0,0"/>
               </StackPanel>
               <TextBlock Grid.Column="1" Text="{Binding SelectedCase.StateLabel}"
                          Foreground="{DynamicResource BrushAccent2}" FontWeight="SemiBold"
@@ -234,11 +314,11 @@
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
               <StackPanel Grid.Column="0">
                 <TextBlock Text="Документ" Style="{StaticResource FieldLabel}"/>
-                <TextBlock Text="{Binding SelectedCase.DocumentNumber}" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding SelectedCase.DocumentNumber, Mode=OneWay}" Style="{StaticResource SelectableValue}"/>
               </StackPanel>
               <StackPanel Grid.Column="1">
                 <TextBlock Text="Исправленная сумма" Style="{StaticResource FieldLabel}"/>
-                <TextBlock Text="{Binding SelectedCase.AmountText}" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding SelectedCase.AmountText, Mode=OneWay}" Style="{StaticResource SelectableValue}"/>
               </StackPanel>
             </Grid>
 
@@ -267,24 +347,23 @@
                   </Grid.RowDefinitions>
                   <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,0,12">
                     <TextBlock Text="Дата документа" Style="{StaticResource FieldLabel}"/>
-                    <TextBlock Text="{Binding SelectedCase.OneCDocumentDateText}" FontWeight="SemiBold"/>
+                    <TextBox Text="{Binding SelectedCase.OneCDocumentDateText, Mode=OneWay}" Style="{StaticResource SelectableValue}"/>
                   </StackPanel>
                   <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,0,12">
                     <TextBlock Text="Дата печати чека" Style="{StaticResource FieldLabel}"/>
-                    <TextBlock Text="{Binding SelectedCase.OneCCheckDateText}" FontWeight="SemiBold"/>
+                    <TextBox Text="{Binding SelectedCase.OneCCheckDateText, Mode=OneWay}" Style="{StaticResource SelectableValue}"/>
                   </StackPanel>
                   <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,12">
                     <TextBlock Text="Номер чека ККМ" Style="{StaticResource FieldLabel}"/>
-                    <TextBlock Text="{Binding SelectedCase.OneCCheckNumberText}" FontWeight="SemiBold"/>
+                    <TextBox Text="{Binding SelectedCase.OneCCheckNumberText, Mode=OneWay}" Style="{StaticResource SelectableValue}"/>
                   </StackPanel>
                   <StackPanel Grid.Row="1" Grid.Column="2" Margin="0,0,0,12">
                     <TextBlock Text="ФП чека" Style="{StaticResource FieldLabel}"/>
-                    <TextBlock Text="{Binding SelectedCase.OneCFiscalNumberText}" FontWeight="SemiBold"/>
+                    <TextBox Text="{Binding SelectedCase.OneCFiscalNumberText, Mode=OneWay}" Style="{StaticResource SelectableValue}"/>
                   </StackPanel>
                   <StackPanel Grid.Row="2" Grid.ColumnSpan="3">
                     <TextBlock Text="Комментарий 1С" Style="{StaticResource FieldLabel}"/>
-                    <TextBlock Text="{Binding SelectedCase.OneCCommentText}" TextWrapping="Wrap"
-                               Foreground="{DynamicResource BrushText2}"/>
+                    <TextBox Text="{Binding SelectedCase.OneCCommentText, Mode=OneWay}" Style="{StaticResource SelectableText}"/>
                   </StackPanel>
                 </Grid>
               </StackPanel>
@@ -298,8 +377,8 @@
                     HorizontalAlignment="Left" Margin="0,8,0,18" Command="{Binding SaveProblemCommand}"/>
 
             <TextBlock Text="Связанные документы" Style="{StaticResource FieldLabel}"/>
-            <TextBlock Text="{Binding SelectedCase.RelatedDocumentsText}" TextWrapping="Wrap"
-                       Foreground="{DynamicResource BrushText2}" Margin="0,0,0,18"/>
+            <TextBox Text="{Binding SelectedCase.RelatedDocumentsText, Mode=OneWay}" Style="{StaticResource SelectableText}"
+                     Margin="0,0,0,18"/>
 
             <TextBlock Text="Сценарий исправления" Style="{StaticResource FieldLabel}"/>
             <ComboBox ItemsSource="{Binding ScenarioOptions}"
@@ -327,8 +406,8 @@
                              Margin="12,0,0,0" FontWeight="SemiBold"
                              Foreground="{DynamicResource BrushAccent2}"/>
                 </Grid>
-                <TextBlock Text="{Binding SelectedCase.OriginalReceiptDetails}"
-                           TextWrapping="Wrap" Foreground="{DynamicResource BrushText2}"/>
+                <TextBox Text="{Binding SelectedCase.OriginalReceiptDetails, Mode=OneWay}"
+                         Style="{StaticResource SelectableText}"/>
               </StackPanel>
             </Border>
 
@@ -345,11 +424,10 @@
                              Margin="12,0,0,0" FontWeight="SemiBold"
                              Foreground="{DynamicResource BrushAccent2}"/>
                 </Grid>
-                <TextBlock Text="{Binding SelectedCase.PlanMessage}"
-                           TextWrapping="Wrap" Foreground="{DynamicResource BrushText2}"
-                           Margin="0,0,0,9"/>
-                <TextBlock Text="{Binding SelectedCase.PlanChecksText}"
-                           TextWrapping="Wrap" FontWeight="SemiBold"/>
+                <TextBox Text="{Binding SelectedCase.PlanMessage, Mode=OneWay}"
+                         Style="{StaticResource SelectableText}" Margin="0,0,0,9"/>
+                <TextBox Text="{Binding SelectedCase.PlanChecksText, Mode=OneWay}"
+                         Style="{StaticResource SelectableValue}"/>
               </StackPanel>
             </Border>
 
@@ -381,8 +459,8 @@
             <Button Content="Открыть служебку" Style="{StaticResource BtnGhost}"
                     Margin="0,7,0,0" Command="{Binding OpenServiceNoteCommand}"/>
 
-            <TextBlock Text="{Binding SelectedCase.LastMessage}" Foreground="{DynamicResource BrushText3}"
-                       FontSize="11" TextWrapping="Wrap" Margin="0,14,0,0"/>
+            <TextBox Text="{Binding SelectedCase.LastMessage, Mode=OneWay}" Style="{StaticResource SelectableText}"
+                     Foreground="{DynamicResource BrushText3}" FontSize="11" Margin="0,14,0,0"/>
           </StackPanel>
         </ScrollViewer>
       </Border>

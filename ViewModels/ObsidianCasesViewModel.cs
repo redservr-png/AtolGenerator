@@ -422,6 +422,10 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         {
             _ignoreWatcherUntil = DateTime.Now.AddSeconds(1);
             var selectedId = SelectedCase?.CaseId;
+            var markedCaseIds = Cases
+                .Where(x => x.IsSelected && !string.IsNullOrWhiteSpace(x.CaseId))
+                .Select(x => x.CaseId)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var records = ObsidianSyncService.LoadAndEnsureIds(FilePath);
             Cases.Clear();
             foreach (var record in records)
@@ -461,6 +465,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
                     state.OneCRecorded = true;
                 }
                 var item = new ObsidianCaseItemViewModel(record, state);
+                item.IsSelected = !record.IsCompleted && markedCaseIds.Contains(record.CaseId);
                 item.PropertyChanged += (_, args) =>
                 {
                     if (args.PropertyName == nameof(ObsidianCaseItemViewModel.IsSelected))
