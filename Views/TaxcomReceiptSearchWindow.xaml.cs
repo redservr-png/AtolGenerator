@@ -142,11 +142,20 @@ public partial class TaxcomReceiptSearchWindow : Window
                 ProgressText.Text = $"Запрос {index + 1} из {_requests.Count} · найдено {FoundRows.Count}";
                 CurrentDocumentText.Text = request.DocumentLabel;
                 CurrentFiscalSignText.Text = $"ФПД {request.FiscalSign}";
+                CurrentPeriodText.Text = $"Период {request.PeriodFrom:dd.MM.yyyy} - {request.PeriodTo:dd.MM.yyyy}";
                 StatusText.Text = "Заполняем параметры поиска...";
 
                 var action = await FillAndSubmitAsync(request);
                 if (!action.Ok)
                 {
+                    if (action.RequiresManualPeriod)
+                    {
+                        StatusText.Text = action.Message;
+                        SearchButton.Content = "Продолжить после ввода периода";
+                        SearchButton.IsEnabled = true;
+                        return;
+                    }
+
                     AddFailure(request, action.Message);
                     _nextRequestIndex = index + 1;
                     continue;
@@ -204,14 +213,87 @@ public partial class TaxcomReceiptSearchWindow : Window
 
     private async Task<DomActionResult> FillAndSubmitAsync(TaxcomReceiptSearchRequest request)
     {
+        var period = $"{request.PeriodFrom:dd.MM.yyyy} - {request.PeriodTo:dd.MM.yyyy}";
+        var periodScript = ApplyPeriodScript
+            .Replace("__DATE_FROM__", JsonSerializer.Serialize($"{request.PeriodFrom:dd.MM.yyyy}"))
+            .Replace("__DATE_TO__", JsonSerializer.Serialize($"{request.PeriodTo:dd.MM.yyyy}"))
+            .Replace("__PERIOD__", JsonSerializer.Serialize(period));
+        var periodResult = await ExecuteAsync<DomPeriodResult>(periodScript);
+        if (periodResult?.Found != true)
+        {
+            return new DomActionResult
+            {
+                Message = periodResult?.Message ?? "На странице не найдено поле периода",
+            };
+        }
+
+        await Task.Delay(350);
+        var periodApplied = await IsPeriodAppliedAsync(request);
+        if (!periodApplied)
+        {
+            StatusText.Text = "Календарь не принял период напрямую. Вводим даты с клавиатуры...";
+            await TypePeriodWithDevToolsAsync(period);
+            await Task.Delay(350);
+            await ExecuteAsync<DomPeriodResult>(FinalizePeriodScript);
+            periodApplied = await IsPeriodAppliedAsync(request);
+        }
+
+        if (!periodApplied)
+        {
+            return new DomActionResult
+            {
+                Message = $"Такском не принял период {period}. Введите этот диапазон в поле слева и нажмите «Продолжить после ввода периода».",
+                RequiresManualPeriod = true,
+            };
+        }
+
+        StatusText.Text = $"Период установлен: {period}. Вводим ФПД...";
         var script = FillAndSubmitScript
             .Replace("__FISCAL_SIGN__", JsonSerializer.Serialize(request.FiscalSign.ToString()))
-            .Replace("__PERIOD__", JsonSerializer.Serialize(
-                $"{request.PeriodFrom:dd.MM.yyyy} - {request.PeriodTo:dd.MM.yyyy}"));
+            .Replace("__DATE_FROM__", JsonSerializer.Serialize($"{request.PeriodFrom:dd.MM.yyyy}"))
+            .Replace("__DATE_TO__", JsonSerializer.Serialize($"{request.PeriodTo:dd.MM.yyyy}"));
         return await ExecuteAsync<DomActionResult>(script) ?? new DomActionResult
         {
             Message = "Страница поиска не вернула результат заполнения",
         };
+    }
+
+    private async Task<bool> IsPeriodAppliedAsync(TaxcomReceiptSearchRequest request)
+    {
+        var script = VerifyPeriodScript
+            .Replace("__DATE_FROM__", JsonSerializer.Serialize($"{request.PeriodFrom:dd.MM.yyyy}"))
+            .Replace("__DATE_TO__", JsonSerializer.Serialize($"{request.PeriodTo:dd.MM.yyyy}"));
+        var result = await ExecuteAsync<DomPeriodResult>(script);
+        return result?.Applied == true;
+    }
+
+    private async Task TypePeriodWithDevToolsAsync(string period)
+    {
+        if (Browser.CoreWebView2 is null) return;
+        await ExecuteAsync<DomPeriodResult>(FocusPeriodScript);
+        await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+            "Input.insertText", JsonSerializer.Serialize(new { text = period }));
+        const int tabKeyCode = 9;
+        await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+            "Input.dispatchKeyEvent",
+            JsonSerializer.Serialize(new
+            {
+                type = "keyDown",
+                key = "Tab",
+                code = "Tab",
+                windowsVirtualKeyCode = tabKeyCode,
+                nativeVirtualKeyCode = tabKeyCode,
+            }));
+        await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+            "Input.dispatchKeyEvent",
+            JsonSerializer.Serialize(new
+            {
+                type = "keyUp",
+                key = "Tab",
+                code = "Tab",
+                windowsVirtualKeyCode = tabKeyCode,
+                nativeVirtualKeyCode = tabKeyCode,
+            }));
     }
 
     private async Task<DomReceiptResult> WaitForReceiptAsync(long fiscalSign)
@@ -311,30 +393,149 @@ public partial class TaxcomReceiptSearchWindow : Window
         })()
         """;
 
+    private const string ApplyPeriodScript = """
+        (() => {
+          const period = __PERIOD__;
+          const dateFrom = __DATE_FROM__;
+          const dateTo = __DATE_TO__;
+          const inputs = Array.from(document.querySelectorAll('input'));
+          const periodPattern = /\d{2}\.\d{2}\.\d{4}\s*[-–—]\s*\d{2}\.\d{2}\.\d{4}/;
+          const fieldText = input => [
+            input.id, input.name, input.placeholder, input.title,
+            input.getAttribute('aria-label'),
+            input.parentElement && input.parentElement.innerText,
+            input.closest('.form-group, .control-group, .field, .row') &&
+              input.closest('.form-group, .control-group, .field, .row').innerText
+          ].filter(Boolean).join(' ').toUpperCase();
+          const periodInput = inputs.find(x => periodPattern.test(x.value || '')) ||
+            inputs.find(x => fieldText(x).includes('ПЕРИОД'));
+          if (!periodInput) return { found: false, applied: false, value: '', message: 'На странице не найдено поле периода' };
+
+          periodInput.dataset.atolPeriodInput = 'true';
+          periodInput.readOnly = false;
+          periodInput.disabled = false;
+          const setValue = (input, value) => {
+            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+            input.focus();
+            input.select();
+            setter.call(input, value);
+            for (const name of ['input', 'keyup', 'change', 'blur']) {
+              input.dispatchEvent(new Event(name, { bubbles: true, cancelable: true }));
+            }
+          };
+
+          setValue(periodInput, period);
+          try {
+            if (window.jQuery) {
+              const field = window.jQuery(periodInput);
+              const picker = field.data('daterangepicker') || field.data('dateRangePicker');
+              if (picker) {
+                if (typeof picker.setStartDate === 'function') picker.setStartDate(dateFrom);
+                if (typeof picker.setEndDate === 'function') picker.setEndDate(dateTo);
+                field.trigger('apply.daterangepicker', picker);
+              }
+              field.val(period).trigger('input').trigger('keyup').trigger('change').trigger('blur');
+            }
+          } catch (_) {}
+          try {
+            if (window.angular) {
+              const element = window.angular.element(periodInput);
+              const model = element.controller('ngModel');
+              if (model) {
+                model.$setViewValue(period);
+                model.$render();
+                const scope = element.scope();
+                if (scope && !scope.$root.$$phase) scope.$apply();
+              }
+            }
+          } catch (_) {}
+
+          periodInput.focus();
+          periodInput.select();
+          const value = periodInput.value || '';
+          return { found: true, applied: value.includes(dateFrom) && value.includes(dateTo), value, message: '' };
+        })()
+        """;
+
+    private const string FocusPeriodScript = """
+        (() => {
+          const input = document.querySelector('input[data-atol-period-input="true"]');
+          if (!input) return { found: false, applied: false, value: '', message: 'Поле периода потеряно' };
+          input.readOnly = false;
+          input.disabled = false;
+          input.focus();
+          input.select();
+          return { found: true, applied: false, value: input.value || '', message: '' };
+        })()
+        """;
+
+    private const string FinalizePeriodScript = """
+        (() => {
+          const input = document.querySelector('input[data-atol-period-input="true"]');
+          if (!input) return { found: false, applied: false, value: '', message: 'Поле периода потеряно' };
+          for (const name of ['input', 'keyup', 'change', 'blur']) {
+            input.dispatchEvent(new Event(name, { bubbles: true, cancelable: true }));
+          }
+          try {
+            if (window.jQuery) window.jQuery(input).trigger('input').trigger('keyup').trigger('change').trigger('blur');
+          } catch (_) {}
+          try {
+            if (window.angular) {
+              const element = window.angular.element(input);
+              const model = element.controller('ngModel');
+              if (model) {
+                model.$setViewValue(input.value);
+                model.$render();
+                const scope = element.scope();
+                if (scope && !scope.$root.$$phase) scope.$apply();
+              }
+            }
+          } catch (_) {}
+          return { found: true, applied: false, value: input.value || '', message: '' };
+        })()
+        """;
+
+    private const string VerifyPeriodScript = """
+        (() => {
+          const dateFrom = __DATE_FROM__;
+          const dateTo = __DATE_TO__;
+          const input = document.querySelector('input[data-atol-period-input="true"]');
+          if (!input) return { found: false, applied: false, value: '', message: 'Поле периода потеряно' };
+          const value = input.value || '';
+          return { found: true, applied: value.includes(dateFrom) && value.includes(dateTo), value, message: '' };
+        })()
+        """;
+
     private const string FillAndSubmitScript = """
         (() => {
           const fiscalSign = __FISCAL_SIGN__;
-          const period = __PERIOD__;
+          const dateFrom = __DATE_FROM__;
+          const dateTo = __DATE_TO__;
           const inputs = Array.from(document.querySelectorAll('input'));
+          const periodInput = document.querySelector('input[data-atol-period-input="true"]');
+          const periodValue = periodInput && periodInput.value || '';
+          if (!periodInput || !periodValue.includes(dateFrom) || !periodValue.includes(dateTo)) {
+            return { ok: false, message: 'Период поиска не подтверждён на странице Такскома' };
+          }
           const setValue = (input, value) => {
             const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
             setter.call(input, value);
-            for (const name of ['input', 'change', 'keyup', 'blur']) {
-              input.dispatchEvent(new Event(name, { bubbles: true }));
+            for (const name of ['input', 'keyup', 'change', 'blur']) {
+              input.dispatchEvent(new Event(name, { bubbles: true, cancelable: true }));
             }
+            try {
+              if (window.jQuery) window.jQuery(input).val(value).trigger('input').trigger('keyup').trigger('change').trigger('blur');
+            } catch (_) {}
           };
           const fpInput = inputs.find(x => (x.placeholder || '').toUpperCase().includes('ФПД'));
           if (!fpInput) return { ok: false, message: 'На странице не найдено поле ФПД' };
-          const periodInput = inputs.find(x => /^\s*\d{2}\.\d{2}\.\d{4}\s*-\s*\d{2}\.\d{2}\.\d{4}\s*$/.test(x.value || '')) ||
-            inputs.find(x => ((x.parentElement && x.parentElement.innerText) || '').toUpperCase().includes('ПЕРИОД'));
-          if (periodInput) setValue(periodInput, period);
           setValue(fpInput, fiscalSign);
           const controls = Array.from(document.querySelectorAll('button, input[type="submit"], a'));
           const searchButton = controls.find(x => ((x.textContent || x.value || '').trim().toUpperCase() === 'ПОИСК ЧЕКА'));
           if (!searchButton) return { ok: false, message: 'На странице не найдена кнопка поиска' };
           if (searchButton.disabled) return { ok: false, message: 'Кнопка поиска недоступна: проверьте период' };
           searchButton.click();
-          return { ok: true, message: periodInput ? '' : 'Использован период, уже выбранный в Такскоме' };
+          return { ok: true, message: '' };
         })()
         """;
 
@@ -362,6 +563,15 @@ public partial class TaxcomReceiptSearchWindow : Window
     private sealed class DomActionResult
     {
         public bool Ok { get; init; }
+        public bool RequiresManualPeriod { get; init; }
+        public string Message { get; init; } = string.Empty;
+    }
+
+    private sealed class DomPeriodResult
+    {
+        public bool Found { get; init; }
+        public bool Applied { get; init; }
+        public string Value { get; init; } = string.Empty;
         public string Message { get; init; } = string.Empty;
     }
 

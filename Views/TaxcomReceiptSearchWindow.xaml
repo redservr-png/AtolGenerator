@@ -66,6 +66,8 @@
                        TextWrapping="Wrap"/>
             <TextBlock x:Name="CurrentFiscalSignText" Margin="0,4,0,0"
                        Foreground="{DynamicResource BrushAccent}" FontSize="15" FontWeight="SemiBold"/>
+            <TextBlock x:Name="CurrentPeriodText" Margin="0,4,0,0"
+                       Foreground="{DynamicResource BrushText3}" FontSize="11"/>
           </StackPanel>
         </Border>
 
