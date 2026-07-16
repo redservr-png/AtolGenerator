@@ -20,6 +20,7 @@ public partial class TaxcomReceiptSearchWindow : Window
     private bool _isComplete;
     private int _nextRequestIndex;
     private int? _manualPeriodRequestIndex;
+    private bool _useManualPeriodForBatch;
 
     public TaxcomReceiptSearchWindow(IReadOnlyList<TaxcomReceiptSearchRequest> requests)
     {
@@ -137,17 +138,41 @@ public partial class TaxcomReceiptSearchWindow : Window
                 return;
             }
 
+            if (_nextRequestIndex == 0 &&
+                !_useManualPeriodForBatch &&
+                _manualPeriodRequestIndex is null &&
+                _requests.Count > 0)
+            {
+                var periodFrom = _requests.Min(x => x.PeriodFrom);
+                var periodTo = _requests.Max(x => x.PeriodTo);
+                _manualPeriodRequestIndex = 0;
+                CurrentDocumentText.Text = "Подготовка общего периода";
+                CurrentFiscalSignText.Text = $"Чеков в пачке: {_requests.Count}";
+                CurrentPeriodText.Text = $"Период {periodFrom:dd.MM.yyyy} - {periodTo:dd.MM.yyyy}";
+                StatusText.Text = $"Установите в Такскоме общий период {periodFrom:dd.MM.yyyy} - {periodTo:dd.MM.yyyy} и нажмите «Продолжить после ввода периода». Затем все чеки будут искаться автоматически.";
+                SearchButton.Content = "Продолжить после ввода периода";
+                SearchButton.IsEnabled = true;
+                return;
+            }
+
             for (var index = _nextRequestIndex; index < _requests.Count; index++)
             {
                 var request = _requests[index];
+                if (_manualPeriodRequestIndex == index)
+                {
+                    _useManualPeriodForBatch = true;
+                    _manualPeriodRequestIndex = null;
+                }
+
                 ProgressText.Text = $"Запрос {index + 1} из {_requests.Count} · найдено {FoundRows.Count}";
                 CurrentDocumentText.Text = request.DocumentLabel;
                 CurrentFiscalSignText.Text = $"ФПД {request.FiscalSign}";
-                CurrentPeriodText.Text = $"Период {request.PeriodFrom:dd.MM.yyyy} - {request.PeriodTo:dd.MM.yyyy}";
+                CurrentPeriodText.Text = _useManualPeriodForBatch
+                    ? "Период задан вручную для всей пачки"
+                    : $"Период {request.PeriodFrom:dd.MM.yyyy} - {request.PeriodTo:dd.MM.yyyy}";
                 StatusText.Text = "Заполняем параметры поиска...";
 
-                var manualPeriodConfirmed = _manualPeriodRequestIndex == index;
-                var action = await FillAndSubmitAsync(request, manualPeriodConfirmed);
+                var action = await FillAndSubmitAsync(request, _useManualPeriodForBatch);
                 if (!action.Ok)
                 {
                     if (action.RequiresManualPeriod)
@@ -223,7 +248,7 @@ public partial class TaxcomReceiptSearchWindow : Window
         var period = $"{request.PeriodFrom:dd.MM.yyyy} - {request.PeriodTo:dd.MM.yyyy}";
         if (manualPeriodConfirmed)
         {
-            StatusText.Text = $"Используем выбранный вручную период. Вводим ФПД {request.FiscalSign}...";
+            StatusText.Text = $"Используем общий период. Вводим ФПД {request.FiscalSign} и запускаем поиск...";
             return await SubmitSearchAsync(request, skipPeriodValidation: true);
         }
 
@@ -236,7 +261,7 @@ public partial class TaxcomReceiptSearchWindow : Window
         {
             return new DomActionResult
             {
-                Message = periodResult?.Message ?? "На странице не найдено поле периода. Выберите период вручную и продолжите поиск.",
+                Message = $"Не удалось настроить календарь Такскома. Выберите один общий период для всей пачки (ориентир: {period}) и нажмите «Продолжить после ввода периода». Дальше чеки будут искаться автоматически.",
                 RequiresManualPeriod = true,
             };
         }
@@ -256,7 +281,7 @@ public partial class TaxcomReceiptSearchWindow : Window
         {
             return new DomActionResult
             {
-                Message = $"Такском не принял период {period}. Введите этот диапазон в поле слева и нажмите «Продолжить после ввода периода».",
+                Message = $"Такском не принял период автоматически. Выберите один общий период для всей пачки (ориентир: {period}) и нажмите «Продолжить после ввода периода». Дальше чеки будут искаться автоматически.",
                 RequiresManualPeriod = true,
             };
         }
@@ -634,13 +659,6 @@ public partial class TaxcomReceiptSearchWindow : Window
               (!periodValue.includes(dateFrom) || !periodValue.includes(dateTo))) {
             return { ok: false, message: 'Период поиска не подтверждён на странице Такскома' };
           }
-          const receiptSearch = window.__atolGeneratorReceiptSearch;
-          if (receiptSearch &&
-              typeof receiptSearch.setState === 'function' &&
-              typeof receiptSearch._submitRequest === 'function') {
-            receiptSearch.setState({ fiscalSign }, () => receiptSearch._submitRequest());
-            return { ok: true, message: '' };
-          }
           const setValue = (input, value) => {
             const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
             setter.call(input, value);
@@ -658,7 +676,14 @@ public partial class TaxcomReceiptSearchWindow : Window
           const searchButton = controls.find(x => ((x.textContent || x.value || '').trim().toUpperCase() === 'ПОИСК ЧЕКА'));
           if (!searchButton) return { ok: false, message: 'На странице не найдена кнопка поиска' };
           if (searchButton.disabled) return { ok: false, message: 'Кнопка поиска недоступна: проверьте период' };
-          searchButton.click();
+          const receiptSearch = window.__atolGeneratorReceiptSearch;
+          if (receiptSearch && typeof receiptSearch.setState === 'function') {
+            receiptSearch.setState({ fiscalSign });
+          }
+          window.setTimeout(() => {
+            setValue(fpInput, fiscalSign);
+            searchButton.click();
+          }, 100);
           return { ok: true, message: '' };
         })()
         """;
