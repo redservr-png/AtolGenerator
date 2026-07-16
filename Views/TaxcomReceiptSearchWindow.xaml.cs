@@ -19,6 +19,7 @@ public partial class TaxcomReceiptSearchWindow : Window
     private bool _isRunning;
     private bool _isComplete;
     private int _nextRequestIndex;
+    private int? _manualPeriodRequestIndex;
 
     public TaxcomReceiptSearchWindow(IReadOnlyList<TaxcomReceiptSearchRequest> requests)
     {
@@ -145,22 +146,26 @@ public partial class TaxcomReceiptSearchWindow : Window
                 CurrentPeriodText.Text = $"Период {request.PeriodFrom:dd.MM.yyyy} - {request.PeriodTo:dd.MM.yyyy}";
                 StatusText.Text = "Заполняем параметры поиска...";
 
-                var action = await FillAndSubmitAsync(request);
+                var manualPeriodConfirmed = _manualPeriodRequestIndex == index;
+                var action = await FillAndSubmitAsync(request, manualPeriodConfirmed);
                 if (!action.Ok)
                 {
                     if (action.RequiresManualPeriod)
                     {
+                        _manualPeriodRequestIndex = index;
                         StatusText.Text = action.Message;
                         SearchButton.Content = "Продолжить после ввода периода";
                         SearchButton.IsEnabled = true;
                         return;
                     }
 
+                    _manualPeriodRequestIndex = null;
                     AddFailure(request, action.Message);
                     _nextRequestIndex = index + 1;
                     continue;
                 }
 
+                _manualPeriodRequestIndex = null;
                 StatusText.Text = "Ждём карточку чека...";
                 var extraction = await WaitForReceiptAsync(request.FiscalSign);
                 if (!string.Equals(extraction.State, "found", StringComparison.OrdinalIgnoreCase))
@@ -211,9 +216,17 @@ public partial class TaxcomReceiptSearchWindow : Window
         }
     }
 
-    private async Task<DomActionResult> FillAndSubmitAsync(TaxcomReceiptSearchRequest request)
+    private async Task<DomActionResult> FillAndSubmitAsync(
+        TaxcomReceiptSearchRequest request,
+        bool manualPeriodConfirmed)
     {
         var period = $"{request.PeriodFrom:dd.MM.yyyy} - {request.PeriodTo:dd.MM.yyyy}";
+        if (manualPeriodConfirmed)
+        {
+            StatusText.Text = $"Используем выбранный вручную период. Вводим ФПД {request.FiscalSign}...";
+            return await SubmitSearchAsync(request, skipPeriodValidation: true);
+        }
+
         var periodScript = ApplyPeriodScript
             .Replace("__DATE_FROM__", JsonSerializer.Serialize($"{request.PeriodFrom:dd.MM.yyyy}"))
             .Replace("__DATE_TO__", JsonSerializer.Serialize($"{request.PeriodTo:dd.MM.yyyy}"))
@@ -249,10 +262,18 @@ public partial class TaxcomReceiptSearchWindow : Window
         }
 
         StatusText.Text = $"Период установлен: {period}. Вводим ФПД...";
+        return await SubmitSearchAsync(request, skipPeriodValidation: false);
+    }
+
+    private async Task<DomActionResult> SubmitSearchAsync(
+        TaxcomReceiptSearchRequest request,
+        bool skipPeriodValidation)
+    {
         var script = FillAndSubmitScript
             .Replace("__FISCAL_SIGN__", JsonSerializer.Serialize(request.FiscalSign.ToString()))
             .Replace("__DATE_FROM__", JsonSerializer.Serialize($"{request.PeriodFrom:dd.MM.yyyy}"))
-            .Replace("__DATE_TO__", JsonSerializer.Serialize($"{request.PeriodTo:dd.MM.yyyy}"));
+            .Replace("__DATE_TO__", JsonSerializer.Serialize($"{request.PeriodTo:dd.MM.yyyy}"))
+            .Replace("__SKIP_PERIOD_VALIDATION__", skipPeriodValidation ? "true" : "false");
         return await ExecuteAsync<DomActionResult>(script) ?? new DomActionResult
         {
             Message = "Страница поиска не вернула результат заполнения",
@@ -599,6 +620,7 @@ public partial class TaxcomReceiptSearchWindow : Window
           const fiscalSign = __FISCAL_SIGN__;
           const dateFrom = __DATE_FROM__;
           const dateTo = __DATE_TO__;
+          const skipPeriodValidation = __SKIP_PERIOD_VALIDATION__;
           const inputs = Array.from(document.querySelectorAll('input'));
           const periodControl = document.querySelector('[data-atol-period-control="true"]') ||
             document.querySelector('.receiptsSearch__filter .date-picker-area') ||
@@ -608,7 +630,8 @@ public partial class TaxcomReceiptSearchWindow : Window
           const periodValue = periodControl
             ? (caption && caption.textContent || periodControl.textContent || '')
             : (periodInput && periodInput.value || '');
-          if (!periodValue.includes(dateFrom) || !periodValue.includes(dateTo)) {
+          if (!skipPeriodValidation &&
+              (!periodValue.includes(dateFrom) || !periodValue.includes(dateTo))) {
             return { ok: false, message: 'Период поиска не подтверждён на странице Такскома' };
           }
           const receiptSearch = window.__atolGeneratorReceiptSearch;
