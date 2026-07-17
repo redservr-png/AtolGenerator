@@ -203,7 +203,8 @@ public static class CorrectionGeneratorService
         var paymentType = ResolvePaymentType(o, p, paymentIsCashOverride);
         bool isService = ResolveIsService(o);
         string tab = ResolveTab(o);
-        var items = BuildItems(o, amount, isService, tab, useOriginalItems);
+        var vatType = ResolveReceiptVatType(o, tab, isService, useOriginalItems);
+        var items = BuildItems(o, amount, isService, tab, useOriginalItems, vatType);
 
         return new CheckData
         {
@@ -212,7 +213,7 @@ public static class CorrectionGeneratorService
             Tab                  = tab,
             Amount               = amount,
             PaymentType          = paymentType,
-            CheckVatType         = ResolveCheckVatType(o, tab, isService),
+            CheckVatType         = vatType,
             Items                = items,
             Agent                = o.AgentInfo,
             IsService            = isService,
@@ -235,6 +236,7 @@ public static class CorrectionGeneratorService
         var paymentType = ResolvePaymentType(o, p, paymentIsCashOverride);
         bool isService  = ResolveIsService(o);
         string tab      = ResolveTab(o);
+        string vatType  = ResolveCorrectVatType(o, tab, isService);
 
         var baseNumber = !string.IsNullOrEmpty(o.CorrectionNumber)
             ? o.CorrectionNumber
@@ -255,7 +257,7 @@ public static class CorrectionGeneratorService
             Tab                  = tab,
             Amount               = amount,
             PaymentType          = paymentType,
-            CheckVatType         = ResolveCheckVatType(o, tab, isService),
+            CheckVatType         = vatType,
             Items                = new List<CheckItem>(),   // коррекция без табличной части
             Agent                = o.AgentInfo,
             IsService            = isService,
@@ -273,15 +275,16 @@ public static class CorrectionGeneratorService
         double amount,
         bool isService,
         string tab,
-        bool useOriginalItems)
+        bool useOriginalItems,
+        string fallbackVatType)
     {
         var sourceItems = useOriginalItems && o.OriginalItems.Count > 0
             ? o.OriginalItems
             : o.Items;
         if (sourceItems.Count > 0)
-            return BuildSourceItems(o, sourceItems, amount, isService, tab);
+            return BuildSourceItems(o, sourceItems, amount, isService, tab, fallbackVatType);
 
-        return BuildOneItem(o, amount, isService, tab);
+        return BuildOneItem(o, amount, isService, tab, fallbackVatType);
     }
 
     private static List<CheckItem> BuildSourceItems(
@@ -289,10 +292,10 @@ public static class CorrectionGeneratorService
         IReadOnlyList<OrderItem> sourceItems,
         double amount,
         bool isService,
-        string tab)
+        string tab,
+        string fallbackVatType)
     {
         var result = new List<CheckItem>();
-        var vatType = ResolveCheckVatType(o, tab, isService);
         var paymentMethod = tab == "payment"
             ? isService ? "full_prepayment" : "advance"
             : "full_payment";
@@ -304,6 +307,7 @@ public static class CorrectionGeneratorService
         {
             var qty = raw.Quantity > 0 ? raw.Quantity : 1;
             var sum = raw.Sum;
+            var vatType = VatRateCatalog.Normalize(raw.VatType, fallbackVatType);
             result.Add(new CheckItem
             {
                 Name          = raw.Name.Trim(),
@@ -320,10 +324,15 @@ public static class CorrectionGeneratorService
 
         return result.Count > 0
             ? result
-            : BuildOneItem(o, amount, isService, tab);
+            : BuildOneItem(o, amount, isService, tab, fallbackVatType);
     }
 
-    private static List<CheckItem> BuildOneItem(OrderEntry o, double amount, bool isService, string tab)
+    private static List<CheckItem> BuildOneItem(
+        OrderEntry o,
+        double amount,
+        bool isService,
+        string tab,
+        string fallbackVatType)
     {
         // Для оплаты — «Аванс от покупателя по заказу № X», для реализации — «Услуга/Товар по заказу X»
         string name = tab == "payment"
@@ -338,16 +347,8 @@ public static class CorrectionGeneratorService
             ? "payment"
             : (isService ? "service" : "commodity");
 
-        string vatType = ResolveCheckVatType(o, tab, isService);
-
-        double vatSum = vatType switch
-        {
-            "vat5"   => Math.Round(amount * 5.0  / 100.0, 2),
-            "vat105" => Math.Round(amount * 5.0  / 105.0, 2),
-            "vat22"  => Math.Round(amount * 22.0 / 122.0, 2),
-            "vat122" => Math.Round(amount * 22.0 / 122.0, 2),
-            _        => amount,
-        };
+        string vatType = VatRateCatalog.Normalize(fallbackVatType, "none");
+        double vatSum = VatRateCatalog.CalculateFiscalSum(amount, vatType);
 
         return new List<CheckItem>
         {
@@ -366,14 +367,8 @@ public static class CorrectionGeneratorService
         };
     }
 
-    private static double CalcVat(double amount, string vatType) => vatType switch
-    {
-        "vat5"   => Math.Round(amount * 5.0  / 100.0, 2),
-        "vat105" => Math.Round(amount * 5.0  / 105.0, 2),
-        "vat22"  => Math.Round(amount * 22.0 / 122.0, 2),
-        "vat122" => Math.Round(amount * 22.0 / 122.0, 2),
-        _        => amount,
-    };
+    private static double CalcVat(double amount, string vatType) =>
+        VatRateCatalog.CalculateFiscalSum(amount, vatType);
 
     private static string ResolvePaymentType(OrderEntry o, GenerationParams p, bool? cashOverride)
     {
@@ -414,9 +409,21 @@ public static class CorrectionGeneratorService
         _ => "sell_refund",
     };
 
-    private static string ResolveCheckVatType(OrderEntry o, string tab, bool isService)
+    private static string ResolveReceiptVatType(
+        OrderEntry o,
+        string tab,
+        bool isService,
+        bool useOriginalItems) => useOriginalItems
+        ? ResolveOriginalVatType(o, tab, isService)
+        : ResolveCorrectVatType(o, tab, isService);
+
+    private static string ResolveOriginalVatType(OrderEntry o, string tab, bool isService) =>
+        VatRateCatalog.Normalize(o.OriginalVatType, ResolveCorrectVatType(o, tab, isService));
+
+    private static string ResolveCorrectVatType(OrderEntry o, string tab, bool isService)
     {
-        if (!string.IsNullOrWhiteSpace(o.PlannedVatType)) return o.PlannedVatType;
+        if (VatRateCatalog.IsKnown(o.CorrectVatType)) return VatRateCatalog.Normalize(o.CorrectVatType);
+        if (VatRateCatalog.IsKnown(o.PlannedVatType)) return VatRateCatalog.Normalize(o.PlannedVatType);
         if (isService)
             return ServiceClassificationService.ResolveVatType(o.IsOwnService, o.AgentInfo, tab);
         return tab == "payment" ? "vat122" : "vat22";

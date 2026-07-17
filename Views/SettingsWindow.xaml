@@ -4,14 +4,15 @@
         xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
         Title="Настройки"
         Icon="/Resources/app.ico"
-        Width="1180" Height="760"
-        MinWidth="980" MinHeight="680"
+        Width="1280" Height="820"
+        MinWidth="1040" MinHeight="720"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BrushBg}">
 
   <Window.Resources>
     <cv:BoolToVisibilityConverter x:Key="BoolVis"/>
     <cv:StringEqualConverter x:Key="StrEq"/>
+    <cv:VatRateLabelConverter x:Key="VatLabel"/>
 
     <Style x:Key="SettingsNav" TargetType="ToggleButton">
       <Setter Property="Background" Value="Transparent"/>
@@ -21,7 +22,7 @@
       <Setter Property="Margin" Value="0,0,0,5"/>
       <Setter Property="HorizontalContentAlignment" Value="Left"/>
       <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontSize" Value="14"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Template">
         <Setter.Value>
@@ -54,7 +55,7 @@
           <ControlTemplate TargetType="ListBoxItem">
             <Border x:Name="choice" Background="{DynamicResource BrushSurface1}"
                     BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
-                    CornerRadius="8" Padding="15" Cursor="Hand">
+                    CornerRadius="6" Padding="16" Cursor="Hand">
               <ContentPresenter/>
             </Border>
             <ControlTemplate.Triggers>
@@ -85,11 +86,12 @@
       <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
       <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="SelectionMode" Value="Single"/>
-      <Setter Property="SelectionUnit" Value="FullRow"/>
-      <Setter Property="RowHeight" Value="36"/>
-      <Setter Property="ColumnHeaderHeight" Value="38"/>
-      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="SelectionMode" Value="Extended"/>
+      <Setter Property="SelectionUnit" Value="CellOrRowHeader"/>
+      <Setter Property="ClipboardCopyMode" Value="IncludeHeader"/>
+      <Setter Property="RowHeight" Value="42"/>
+      <Setter Property="ColumnHeaderHeight" Value="40"/>
+      <Setter Property="FontSize" Value="13"/>
       <Setter Property="HorizontalScrollBarVisibility" Value="Auto"/>
       <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
     </Style>
@@ -97,23 +99,23 @@
 
   <Grid Background="{DynamicResource BrushBg}">
     <Grid.RowDefinitions>
-      <RowDefinition Height="72"/>
+      <RowDefinition Height="78"/>
       <RowDefinition Height="*"/>
       <RowDefinition Height="66"/>
     </Grid.RowDefinitions>
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="220"/>
+      <ColumnDefinition Width="236"/>
       <ColumnDefinition Width="*"/>
     </Grid.ColumnDefinitions>
 
     <Border Grid.Row="0" Grid.ColumnSpan="2"
             Background="{DynamicResource BrushSurface1}"
             BorderBrush="{DynamicResource BrushBorder}" BorderThickness="0,0,0,1">
-      <Grid Margin="24,0">
+      <Grid Margin="28,0">
         <StackPanel VerticalAlignment="Center">
-          <TextBlock Text="Настройки" FontSize="22" FontWeight="SemiBold"/>
+          <TextBlock Text="Настройки" Style="{StaticResource PageTitle}"/>
           <TextBlock Text="Подключения, оформление и правила формирования чеков"
-                     Foreground="{DynamicResource BrushText3}" FontSize="12" Margin="0,4,0,0"/>
+                     Style="{StaticResource PageSubtitle}" Margin="0,4,0,0"/>
         </StackPanel>
       </Grid>
     </Border>
@@ -121,8 +123,8 @@
     <Border Grid.Row="1" Grid.Column="0"
             Background="{DynamicResource BrushSurface2}"
             BorderBrush="{DynamicResource BrushBorder}" BorderThickness="0,0,1,0">
-      <StackPanel Margin="16,20">
-        <TextBlock Text="РАЗДЕЛЫ" Style="{StaticResource SectionTitle}"/>
+      <StackPanel Margin="18,22">
+        <TextBlock Text="Разделы" Style="{StaticResource SectionTitle}"/>
         <ToggleButton Style="{StaticResource SettingsNav}"
                       IsChecked="{Binding Section, Mode=OneWay, Converter={StaticResource StrEq}, ConverterParameter=connections}"
                       Command="{Binding SelectSectionCommand}" CommandParameter="connections"
@@ -330,14 +332,18 @@
             <DataGridTextColumn Header="Агент / поставщик" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="2*"/>
             <DataGridTextColumn Header="ИНН" Binding="{Binding Inn, UpdateSourceTrigger=PropertyChanged}" Width="125"/>
             <DataGridTextColumn Header="Телефон" Binding="{Binding Phone, UpdateSourceTrigger=PropertyChanged}" Width="130"/>
-            <DataGridTemplateColumn Header="НДС" Width="90">
+            <DataGridTemplateColumn Header="НДС" Width="145">
               <DataGridTemplateColumn.CellTemplate>
-                <DataTemplate><TextBlock Text="{Binding VatType}" VerticalAlignment="Center"/></DataTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding VatType, Converter={StaticResource VatLabel}}"
+                             VerticalAlignment="Center"/>
+                </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
               <DataGridTemplateColumn.CellEditingTemplate>
                 <DataTemplate>
                   <ComboBox ItemsSource="{Binding DataContext.VatTypes, RelativeSource={RelativeSource AncestorType=Window}}"
-                            SelectedItem="{Binding VatType, UpdateSourceTrigger=PropertyChanged}"/>
+                            DisplayMemberPath="Label" SelectedValuePath="Code"
+                            SelectedValue="{Binding VatType, UpdateSourceTrigger=PropertyChanged}"/>
                 </DataTemplate>
               </DataGridTemplateColumn.CellEditingTemplate>
             </DataGridTemplateColumn>

@@ -1185,40 +1185,66 @@ public class MainViewModel : BaseViewModel
     private void EditOrder(OrderEntry? order)
     {
         if (order is null) return;
-
-        // Работаем с копией — если пользователь отменит, оригинал не пострадает
-        var copy = CloneOrderEntry(order);
-        var dlg  = new Views.CorrectionEditorWindow(copy)
+        try
         {
-            Owner = System.Windows.Application.Current?.MainWindow,
-        };
+            // Работаем с копией — если пользователь отменит, оригинал не пострадает.
+            var copy = CloneOrderEntry(order);
+            var dlg = new Views.CorrectionEditorWindow(copy)
+            {
+                Owner = ResolveDialogOwner(),
+            };
 
-        if (dlg.ShowDialog() != true) return;
+            if (dlg.ShowDialog() != true) return;
 
-        // Применяем правки обратно к оригиналу
-        ApplyOrderEntry(copy, order);
-
-        // Перерисовываем карточку: убрать + вставить на то же место → CollectionChanged
-        var idx = Orders.IndexOf(order);
-        if (idx >= 0)
+            ApplyOrderEntry(copy, order);
+            var idx = Orders.IndexOf(order);
+            if (idx >= 0)
+            {
+                Orders.RemoveAt(idx);
+                Orders.Insert(idx, order);
+            }
+        }
+        catch (Exception ex)
         {
-            Orders.RemoveAt(idx);
-            Orders.Insert(idx, order);
+            ShowEditorError(ex);
         }
     }
 
     private void EditCorrectionWorkItem(CorrectionWorkItemViewModel item)
     {
-        var copy = CloneOrderEntry(item.Entry);
-        var dialog = new Views.CorrectionEditorWindow(copy)
+        try
         {
-            Owner = System.Windows.Application.Current?.MainWindow,
-        };
-        if (dialog.ShowDialog() != true) return;
+            var copy = CloneOrderEntry(item.Entry);
+            var dialog = new Views.CorrectionEditorWindow(copy)
+            {
+                Owner = ResolveDialogOwner(),
+            };
+            if (dialog.ShowDialog() != true) return;
 
-        ApplyOrderEntry(copy, item.Entry);
-        CorrectionWork.RefreshItem(item);
-        StatusText = $"Исправление {item.DocumentNumber} обновлено";
+            ApplyOrderEntry(copy, item.Entry);
+            CorrectionWork.RefreshItem(item);
+            StatusText = $"Исправление {item.DocumentNumber} обновлено";
+        }
+        catch (Exception ex)
+        {
+            ShowEditorError(ex);
+        }
+    }
+
+    private Window? ResolveDialogOwner() =>
+        _correctionWorkWindow is { IsVisible: true }
+            ? _correctionWorkWindow
+            : System.Windows.Application.Current?.MainWindow;
+
+    private void ShowEditorError(Exception ex)
+    {
+        StatusText = "Не удалось открыть редактор исправления";
+        ShowToast(StatusText, true);
+        MessageBox.Show(
+            $"Редактор не смог открыть выбранный чек.\n\n{ex.Message}",
+            "Редактирование исправления",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
     }
 
     /// <summary>Создаёт независимую копию OrderEntry (мелкое клонирование).</summary>
@@ -1235,12 +1261,14 @@ public class MainViewModel : BaseViewModel
             Name     = i.Name,
             Quantity = i.Quantity,
             Sum      = i.Sum,
+            VatType  = i.VatType,
         }).ToList(),
         OriginalItems        = s.OriginalItems.Select(i => new OrderItem
         {
             Name     = i.Name,
             Quantity = i.Quantity,
             Sum      = i.Sum,
+            VatType  = i.VatType,
         }).ToList(),
         AgentInfo            = s.AgentInfo,
         CorrectionDate       = s.CorrectionDate,
@@ -1260,6 +1288,8 @@ public class MainViewModel : BaseViewModel
         CorrectPaymentIsCash   = s.CorrectPaymentIsCash,
         PlannedReverseOperation = s.PlannedReverseOperation,
         PlannedCorrectOperation = s.PlannedCorrectOperation,
+        OriginalVatType = s.OriginalVatType,
+        CorrectVatType = s.CorrectVatType,
         PlannedVatType = s.PlannedVatType,
         OriginalCheckDate = s.OriginalCheckDate,
         OriginalCheckOperation = s.OriginalCheckOperation,
@@ -1282,12 +1312,14 @@ public class MainViewModel : BaseViewModel
             Name     = i.Name,
             Quantity = i.Quantity,
             Sum      = i.Sum,
+            VatType  = i.VatType,
         }).ToList();
         to.OriginalItems        = from.OriginalItems.Select(i => new OrderItem
         {
             Name     = i.Name,
             Quantity = i.Quantity,
             Sum      = i.Sum,
+            VatType  = i.VatType,
         }).ToList();
         to.AgentInfo            = from.AgentInfo;
         to.CorrectionDate       = from.CorrectionDate;
@@ -1307,6 +1339,8 @@ public class MainViewModel : BaseViewModel
         to.CorrectPaymentIsCash   = from.CorrectPaymentIsCash;
         to.PlannedReverseOperation = from.PlannedReverseOperation;
         to.PlannedCorrectOperation = from.PlannedCorrectOperation;
+        to.OriginalVatType = from.OriginalVatType;
+        to.CorrectVatType = from.CorrectVatType;
         to.PlannedVatType = from.PlannedVatType;
         to.OriginalCheckDate = from.OriginalCheckDate;
         to.OriginalCheckOperation = from.OriginalCheckOperation;

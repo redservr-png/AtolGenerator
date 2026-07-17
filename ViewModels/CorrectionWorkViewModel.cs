@@ -27,15 +27,7 @@ public sealed class CorrectionWorkStepViewModel
     public string PaymentType { get; init; } = string.Empty;
     public string PaymentLabel => PaymentType == "cash" ? "Наличные" : "Безналичные";
     public string VatType { get; init; } = string.Empty;
-    public string VatLabel => VatType switch
-    {
-        "vat122" => "НДС 22/122",
-        "vat22" => "НДС 22%",
-        "vat105" => "НДС 5/105",
-        "vat5" => "НДС 5%",
-        "none" => "Без НДС",
-        _ => VatType,
-    };
+    public string VatLabel => VatRateCatalog.LabelFor(VatType);
     public bool UsesTag1192 { get; init; }
     public string Tag1192Text { get; init; } = string.Empty;
     public string ItemsText { get; init; } = string.Empty;
@@ -117,7 +109,8 @@ public sealed class CorrectionWorkItemViewModel : BaseViewModel
                 Entry.OriginalCheckAmount ?? Entry.Amount,
                 ResolvePayment(Entry.OriginalPaymentWasCash),
                 usesTag1192: true,
-                Entry.OriginalItems.Count > 0 ? Entry.OriginalItems : Entry.Items));
+                vatType: VatRateCatalog.Normalize(Entry.OriginalVatType, Entry.PlannedVatType),
+                items: Entry.OriginalItems.Count > 0 ? Entry.OriginalItems : Entry.Items));
         }
 
         if (!string.IsNullOrWhiteSpace(Entry.PlannedCorrectOperation))
@@ -132,7 +125,8 @@ public sealed class CorrectionWorkItemViewModel : BaseViewModel
                 ResolvePayment(Entry.CorrectPaymentIsCash),
                 usesTag1192: hasReverse &&
                              !Entry.PlannedCorrectOperation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase),
-                Entry.Items));
+                vatType: VatRateCatalog.Normalize(Entry.CorrectVatType, Entry.PlannedVatType),
+                items: Entry.Items));
         }
 
         IsReady = Validate(out var message);
@@ -157,6 +151,7 @@ public sealed class CorrectionWorkItemViewModel : BaseViewModel
         double amount,
         string payment,
         bool usesTag1192,
+        string vatType,
         IReadOnlyCollection<OrderItem> items)
     {
         var isCorrection = operation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase);
@@ -168,7 +163,7 @@ public sealed class CorrectionWorkItemViewModel : BaseViewModel
             Operation = operation,
             Amount = amount,
             PaymentType = payment,
-            VatType = Entry.PlannedVatType,
+            VatType = VatRateCatalog.Normalize(vatType, "none"),
             UsesTag1192 = usesTag1192,
             Tag1192Text = usesTag1192
                 ? $"Тег 1192: {OriginalFiscalNumber}"

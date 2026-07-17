@@ -72,7 +72,8 @@ public static class CheckGeneratorService
                 if (p.Tab == "payment")
                 {
                     bool isService = orderIsService;
-                    var serviceVatType = order.IsOwnService ? "vat122" : "none";
+                    var serviceVatType = ServiceClassificationService.ResolveVatType(
+                        order.IsOwnService, agentInfo, "payment");
                     var name = $"Аванс от покупателя по заказу № {order.OrderNum}";
                     if (!string.IsNullOrEmpty(order.OrderDate))
                         name += $" от {order.OrderDate}";
@@ -345,16 +346,11 @@ public static class CheckGeneratorService
         DocxGeneratorService.Generate(memo, docxPath);
     }
 
-    private static double CalcVat122(double amount) => Math.Round(amount * 22.0 / 122.0, 2);
+    private static double CalcVat122(double amount) => VatRateCatalog.CalculateFiscalSum(amount, "vat122");
     // НДС 22% — сумма уже включает налог в цену (22/122)
-    private static double CalcVat22(double amount)  => Math.Round(amount * 22.0 / 122.0, 2);
-    private static double CalcServiceVat(double amount, string vatType) => vatType switch
-    {
-        "vat5" => Math.Round(amount * 5.0 / 100.0, 2),
-        "vat105" => Math.Round(amount * 5.0 / 105.0, 2),
-        "vat22" or "vat122" => Math.Round(amount * 22.0 / 122.0, 2),
-        _ => amount,
-    };
+    private static double CalcVat22(double amount)  => VatRateCatalog.CalculateFiscalSum(amount, "vat22");
+    private static double CalcServiceVat(double amount, string vatType) =>
+        VatRateCatalog.CalculateFiscalSum(amount, vatType);
 
     private static void ValidateCorrectionVat(OrderEntry order)
     {

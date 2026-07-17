@@ -44,9 +44,19 @@ public static class ServiceClassificationService
     {
         if (isOwnService) return tab == "payment" ? "vat122" : "vat22";
 
-        var agentVat = agent?.VatType ?? "none";
-        return tab == "payment" && agentVat == "vat5" ? "vat105" : agentVat;
+        var agentVat = VatRateCatalog.Normalize(agent?.VatType, "none");
+        return tab == "payment" ? ToCalculatedRate(agentVat) : agentVat;
     }
+
+    public static string ToCalculatedRate(string vatType) => VatRateCatalog.Normalize(vatType) switch
+    {
+        "vat5" => "vat105",
+        "vat7" => "vat107",
+        "vat10" => "vat110",
+        "vat20" => "vat120",
+        "vat22" => "vat122",
+        var value => value,
+    };
 
     private static string Normalize(string? value) => string.Join(
         " ",

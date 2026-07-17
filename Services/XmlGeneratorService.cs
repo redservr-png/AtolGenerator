@@ -95,12 +95,30 @@ public static class XmlGeneratorService
                 new XElement("type", payType),
                 new XElement("sum",  Fmt(c.Amount)))));
 
-        // VATs
-        var totalVat = c.Items.Sum(i => i.VatSum);
-        receipt.Add(new XElement("vats",
+        // VAT totals are grouped by item rate so mixed-rate receipts remain valid.
+        var vatGroups = c.Items
+            .GroupBy(item => VatRateCatalog.Normalize(item.VatType, c.CheckVatType),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => new
+            {
+                Type = group.Key,
+                Sum = group.Sum(item => item.VatSum),
+            })
+            .ToList();
+        if (vatGroups.Count == 0)
+        {
+            var fallbackType = VatRateCatalog.Normalize(c.CheckVatType, "none");
+            vatGroups.Add(new
+            {
+                Type = fallbackType,
+                Sum = VatRateCatalog.CalculateFiscalSum(c.Amount, fallbackType),
+            });
+        }
+
+        receipt.Add(new XElement("vats", vatGroups.Select(group =>
             new XElement("vat",
-                new XElement("type", c.CheckVatType),
-                new XElement("sum",  Fmt(totalVat)))));
+                new XElement("type", group.Type),
+                new XElement("sum", Fmt(group.Sum))))));
 
         receipt.Add(new XElement("total", Fmt(c.Amount)));
 
@@ -127,29 +145,9 @@ public static class XmlGeneratorService
         var payCode = c.Tab == "realization" ? "2"
                     : c.PaymentType == "cash" ? "0" : "1";
 
-        // НДС: агент/услуга — берём из CheckVatType (задаётся при генерации); оплата → vat122; реализация → vat22
-        string vatType; double vatSum;
-        if (c.Agent is not null || c.IsService)
-        {
-            vatType = c.CheckVatType;  // "vat5" для Страхова, "none" для остальных
-            vatSum = vatType switch
-            {
-                "vat5" => Math.Round(c.Amount * 5.0 / 100.0, 2),
-                "vat105" => Math.Round(c.Amount * 5.0 / 105.0, 2),
-                "vat22" or "vat122" => Math.Round(c.Amount * 22.0 / 122.0, 2),
-                _ => c.Amount,
-            };
-        }
-        else if (c.Tab == "realization")
-        {
-            vatType = "vat22";
-            vatSum  = Math.Round(c.Amount * 22.0 / 122.0, 2);  // 22/122 включено в цену
-        }
-        else
-        {
-            vatType = "vat122";
-            vatSum  = Math.Round(c.Amount * 22.0 / 122.0, 2);  // 22/122 включено в цену
-        }
+        var defaultVatType = c.Tab == "realization" ? "vat22" : "vat122";
+        var vatType = VatRateCatalog.Normalize(c.CheckVatType, defaultVatType);
+        var vatSum = VatRateCatalog.CalculateFiscalSum(c.Amount, vatType);
 
         // В ФФД 1.05 XSD АТОЛ не допускает additional_check_props и
         // additional_user_props внутри <correction>. Номер реализации уже

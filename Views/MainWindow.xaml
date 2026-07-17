@@ -6,8 +6,8 @@
         xmlns:views="clr-namespace:AtolGenerator.Views"
         Title="АТОЛ Чек-генератор"
         Icon="/Resources/app.ico"
-        Height="900" Width="1440"
-        MinHeight="720" MinWidth="1180"
+        Height="940" Width="1560"
+        MinHeight="760" MinWidth="1240"
         Background="{DynamicResource BrushBg}"
         WindowStartupLocation="CenterScreen"
         Loaded="OnLoaded">
@@ -42,12 +42,12 @@
 
   <Grid>
     <Grid.RowDefinitions>
-      <RowDefinition Height="66"/>   <!-- header -->
+      <RowDefinition Height="72"/>   <!-- header -->
       <RowDefinition Height="*"/>    <!-- content -->
-      <RowDefinition Height="34"/>   <!-- status bar -->
+      <RowDefinition Height="32"/>   <!-- status bar -->
     </Grid.RowDefinitions>
     <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="220"/>
+      <ColumnDefinition Width="244"/>
       <ColumnDefinition Width="*"/>
     </Grid.ColumnDefinitions>
 
@@ -56,7 +56,7 @@
             Background="{DynamicResource BrushSidebarBg}"
             BorderBrush="{DynamicResource BrushSidebarBorder}"
             BorderThickness="0,0,1,0">
-      <Grid Margin="16,18">
+      <Grid Margin="18,20">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto"/>
           <RowDefinition Height="Auto"/>
@@ -64,73 +64,76 @@
           <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,34">
-          <Border Width="38" Height="38" CornerRadius="8" Margin="0,0,10,0">
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,30">
+          <Border Width="42" Height="42" CornerRadius="6" Margin="0,0,12,0">
             <Border.Background>
               <SolidColorBrush Color="#0F766E"/>
             </Border.Background>
-            <TextBlock Text="▣" FontSize="18" Foreground="White"
+            <TextBlock Text="&#xE8B7;" FontFamily="Segoe Fluent Icons"
+                       FontSize="19" Foreground="White"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
-          <TextBlock Text="АТОЛ&#x0a;Чек-генератор"
-                     FontSize="14" FontWeight="Bold"
-                     Foreground="{DynamicResource BrushSidebarText}"
-                     LineHeight="18" VerticalAlignment="Center"/>
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="АТОЛ" FontSize="12" FontWeight="SemiBold"
+                       Foreground="{DynamicResource BrushSidebarMuted}"/>
+            <TextBlock Text="Чек-генератор" FontSize="15" FontWeight="Bold"
+                       Foreground="{DynamicResource BrushSidebarText}" Margin="0,2,0,0"/>
+          </StackPanel>
         </StackPanel>
 
         <StackPanel Grid.Row="1">
-          <TextBlock Text="РАБОЧИЕ СЦЕНАРИИ" FontSize="11"
+          <TextBlock Text="ОПЕРАЦИИ" FontSize="11" FontWeight="SemiBold"
                      Foreground="{DynamicResource BrushSidebarMuted}" Margin="0,0,0,10"/>
-          <Button Style="{StaticResource BtnGhost}"
+          <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="refunds">
-            <TextBlock Text="↩  Возвраты по заказам" Foreground="{DynamicResource BrushSidebarText}"/>
+            <TextBlock Text="↩   Возвраты по заказам"/>
           </Button>
-          <Button Style="{StaticResource BtnGhost}"
+          <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="realizationCorrections">
-            <TextBlock Text="⚡  Коррекции реализаций 1С" Foreground="{DynamicResource BrushSidebarText}"/>
+            <TextBlock Text="⇄   Коррекции реализаций 1С"/>
           </Button>
-          <Button Style="{StaticResource BtnGhost}"
+          <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="obsidian">
-            <TextBlock Text="▧  Исправление чеков" Foreground="{DynamicResource BrushSidebarText}"/>
+            <TextBlock Text="▧   Исправление чеков"/>
           </Button>
-          <Button Style="{StaticResource BtnGhost}"
+          <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="correctionWork">
-            <TextBlock Text="▦  Пробитие исправлений" Foreground="{DynamicResource BrushSidebarText}"/>
+            <TextBlock Text="▦   Пробитие исправлений"/>
           </Button>
-          <Button Style="{StaticResource BtnGhost}"
+          <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,22"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="reports">
-            <TextBlock Text="▤  Отчёты" Foreground="{DynamicResource BrushSidebarText}"/>
+            <TextBlock Text="▤   Отчёты"/>
           </Button>
 
-          <TextBlock Text="ДОПОЛНИТЕЛЬНО" FontSize="11"
+          <TextBlock Text="СЕРВИС" FontSize="11" FontWeight="SemiBold"
                      Foreground="{DynamicResource BrushSidebarMuted}" Margin="0,0,0,10"/>
-          <Button Style="{StaticResource BtnGhost}"
+          <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="payment">
-            <TextBlock Text="▣  Оплаты / приход" Foreground="{DynamicResource BrushSidebarText}"/>
+            <TextBlock Text="＋   Оплаты / приход"/>
           </Button>
-          <Button Style="{StaticResource BtnGhost}"
+          <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,22"
                   Command="{Binding OpenSettingsCommand}">
-            <TextBlock Text="⚙  Настройки" Foreground="{DynamicResource BrushSidebarText}"/>
+            <TextBlock Text="⚙   Настройки"/>
           </Button>
         </StackPanel>
 
@@ -153,30 +156,28 @@
             Background="{DynamicResource BrushSurface1}"
             BorderBrush="{DynamicResource BrushBorder}"
             BorderThickness="0,0,0,1">
-      <Grid Margin="18,0">
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <Button Content="Исправление чеков"
-                  Style="{StaticResource BtnSecondary}"
-                  Padding="12,7" FontSize="12" Margin="0,0,8,0"
-                  ToolTip="Загрузка списка чеков для исправления из Obsidian-файла"
-                  Command="{Binding OpenWorkspaceCommand}"
-                  CommandParameter="obsidian"/>
-          <Button Content="Пробитие исправлений"
-                  Style="{StaticResource BtnSecondary}"
-                  Padding="12,7" FontSize="12" Margin="0,0,8,0"
-                  ToolTip="Проверка и формирование исправительных XML по ФФД 1.05"
-                  Command="{Binding OpenWorkspaceCommand}"
-                  CommandParameter="correctionWork"/>
-          <Button Content="⚙  Настройки"
-                  Style="{StaticResource BtnSecondary}"
-                  Padding="12,7" FontSize="12" Margin="0,0,12,0"
-                  Command="{Binding OpenSettingsCommand}"/>
+      <Grid Margin="24,0">
+        <StackPanel VerticalAlignment="Center">
+          <TextBlock Text="Рабочее место кассира" FontSize="16" FontWeight="SemiBold"/>
+          <TextBlock Text="Чеки, исправления и сверка фискальных данных"
+                     FontSize="12" Foreground="{DynamicResource BrushText3}" Margin="0,3,0,0"/>
         </StackPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-          <TextBlock Text="ИП Шевелев Е.Н. · ИНН 352526561274 · ФФД 1.05"
-                     FontSize="12" Foreground="{DynamicResource BrushText2}"
-                     VerticalAlignment="Center"/>
-          <Ellipse Width="8" Height="8" Fill="{DynamicResource BrushGreen}" Margin="14,0,0,0"/>
+          <Border Background="{DynamicResource BrushSurface2}"
+                  BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                  CornerRadius="6" Padding="11,7" Margin="0,0,10,0">
+            <StackPanel Orientation="Horizontal">
+              <Ellipse Width="7" Height="7" Fill="{DynamicResource BrushGreen}" Margin="0,0,8,0"/>
+              <TextBlock Text="ИП Шевелев Е.Н. · ФФД 1.05" FontSize="12"
+                         Foreground="{DynamicResource BrushText2}"/>
+            </StackPanel>
+          </Border>
+          <Button Content="Исправления" Style="{StaticResource BtnSecondary}"
+                  Padding="12,7" FontSize="12" Margin="0,0,8,0"
+                  ToolTip="Подготовить исправительные XML"
+                  Command="{Binding OpenWorkspaceCommand}" CommandParameter="correctionWork"/>
+          <Button Content="Настройки" Style="{StaticResource BtnSecondary}"
+                  Padding="12,7" FontSize="12" Command="{Binding OpenSettingsCommand}"/>
         </StackPanel>
       </Grid>
     </Border>
@@ -185,7 +186,7 @@
     <ScrollViewer Grid.Row="1" Grid.Column="1"
                   VerticalScrollBarVisibility="Auto"
                   Visibility="{Binding ShowMainWorkspace, Converter={StaticResource BoolVis}}">
-      <Grid Margin="24,20,24,20">
+      <Grid Margin="28,24,28,24">
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto"/>  <!-- Row 0: основной контент -->
           <RowDefinition Height="Auto"/>  <!-- Row 1: результаты + предпросмотр -->
@@ -193,12 +194,25 @@
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="22"/>
-          <ColumnDefinition Width="460"/>
+          <ColumnDefinition Width="20"/>
+          <ColumnDefinition Width="430"/>
         </Grid.ColumnDefinitions>
 
         <!-- ════ LEFT COLUMN ════ -->
         <StackPanel Grid.Row="0" Grid.Column="0">
+
+          <Grid Margin="0,0,0,18">
+            <StackPanel>
+              <TextBlock Text="Формирование чеков" Style="{StaticResource PageTitle}"/>
+              <TextBlock Text="Подготовка возвратов, оплат и документов по данным 1С"
+                         Style="{StaticResource PageSubtitle}" Margin="0,4,0,0"/>
+            </StackPanel>
+            <Border HorizontalAlignment="Right" VerticalAlignment="Center"
+                    Background="{DynamicResource BrushSurface3}" CornerRadius="6" Padding="10,6">
+              <TextBlock Text="ФФД 1.05" FontSize="12" FontWeight="SemiBold"
+                         Foreground="{DynamicResource BrushAccent2}"/>
+            </Border>
+          </Grid>
 
           <!-- Tabs -->
           <Border Background="{DynamicResource BrushSurface2}"
@@ -227,22 +241,22 @@
               <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
                 <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
                         CornerRadius="2" Margin="0,0,7,0"/>
-                <TextBlock Text="ТИП ЧЕКА" Style="{StaticResource SectionTitle}" Margin="0"/>
+                <TextBlock Text="Тип чека" Style="{StaticResource SectionTitle}" Margin="0"/>
               </StackPanel>
 
               <!-- Radio chips -->
               <WrapPanel>
-                <RadioButton Style="{StaticResource RadioChip}" Content="✅ Приход"
+                <RadioButton Style="{StaticResource RadioChip}" Content="Приход"
                              IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=sell, Mode=TwoWay}"/>
-                <RadioButton Style="{StaticResource RadioChip}" Content="↩ Возврат прихода"
+                <RadioButton Style="{StaticResource RadioChip}" Content="Возврат прихода"
                              IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=sell_refund, Mode=TwoWay}"/>
-                <RadioButton Style="{StaticResource RadioChip}" Content="⚡ Корр. Приход"
+                <RadioButton Style="{StaticResource RadioChip}" Content="Коррекция прихода"
                              IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=sell_correction, Mode=TwoWay}"
                              ToolTip="Коррекция не поддерживается через АТОЛ API — пробейте вручную через XML"/>
-                <RadioButton Style="{StaticResource RadioChip}" Content="⚡ Корр. Расход"
+                <RadioButton Style="{StaticResource RadioChip}" Content="Коррекция расхода"
                              IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=buy_correction, Mode=TwoWay}"
                              ToolTip="Коррекция не поддерживается через АТОЛ API — пробейте вручную через XML"/>
-                <RadioButton Style="{StaticResource RadioChip}" Content="🔄 Корр. Возврат прихода"
+                <RadioButton Style="{StaticResource RadioChip}" Content="Коррекция возврата"
                              IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=buy_refund, Mode=TwoWay}"
                              Visibility="{Binding ShowBuyRefundOption, Converter={StaticResource BoolVis}}"/>
               </WrapPanel>
@@ -253,12 +267,12 @@
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                   <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
                           CornerRadius="2" Margin="0,0,7,0"/>
-                  <TextBlock Text="ТИП ОПЛАТЫ" Style="{StaticResource SectionTitle}" Margin="0"/>
+                  <TextBlock Text="Способ оплаты" Style="{StaticResource SectionTitle}" Margin="0"/>
                 </StackPanel>
                 <WrapPanel>
-                  <RadioButton Style="{StaticResource RadioChip}" Content="💵 Наличные"
+                  <RadioButton Style="{StaticResource RadioChip}" Content="Наличные"
                                IsChecked="{Binding PaymentType, Converter={StaticResource StrEq}, ConverterParameter=cash, Mode=TwoWay}"/>
-                  <RadioButton Style="{StaticResource RadioChip}" Content="💳 Безналичные"
+                  <RadioButton Style="{StaticResource RadioChip}" Content="Безналичные"
                                IsChecked="{Binding PaymentType, Converter={StaticResource StrEq}, ConverterParameter=card, Mode=TwoWay}"/>
                 </WrapPanel>
               </StackPanel>
@@ -268,7 +282,7 @@
                       Background="#12F0960F" BorderBrush="#33F0960F"
                       BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,10,0,0">
                 <StackPanel>
-                  <TextBlock Text="⚡ ДАННЫЕ КОРРЕКЦИИ" FontSize="11" FontWeight="Bold"
+                  <TextBlock Text="Данные коррекции" FontSize="12" FontWeight="SemiBold"
                              Foreground="{DynamicResource BrushOrange}"
                              Margin="0,0,0,10"/>
                   <Grid>
@@ -302,7 +316,7 @@
               <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
                 <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
                         CornerRadius="2" Margin="0,0,7,0"/>
-                <TextBlock Text="МАССОВЫЙ ВВОД ЗАКАЗОВ" Style="{StaticResource SectionTitle}" Margin="0"/>
+                <TextBlock Text="Массовый ввод заказов" Style="{StaticResource SectionTitle}" Margin="0"/>
               </StackPanel>
               <TextBlock Text="Вставьте сообщение с заказами" Style="{StaticResource FieldLabel}"/>
               <TextBox Text="{Binding BulkText, UpdateSourceTrigger=PropertyChanged}"
@@ -312,17 +326,17 @@
               <TextBlock Text="Ctrl+V · Разделитель: «;» или перевод строки."
                          Style="{StaticResource HintText}"/>
               <WrapPanel Margin="0,10,0,0">
-                <Button Content="🔍  Распознать заказы"
+                <Button Content="Распознать заказы"
                         Style="{StaticResource BtnPrimary}"
                         Padding="13,7" FontSize="13"
                         Margin="0,0,8,0"
                         Command="{Binding ParseBulkCommand}"/>
-                <Button Content="📊  Импорт из Excel"
+                <Button Content="Импорт из Excel"
                         Style="{StaticResource BtnSecondary}"
                         Padding="13,7" FontSize="13"
                         Visibility="{Binding IsRealizationTab, Converter={StaticResource BoolVis}}"
                         Command="{Binding ImportExcelCommand}"/>
-                <Button Content="🔗  Загрузить из 1С"
+                <Button Content="Загрузить из 1С"
                         Style="{StaticResource BtnSecondary}"
                         Padding="13,7" FontSize="13" Margin="8,0,0,0"
                         Visibility="{Binding IsRealizationTab, Converter={StaticResource BoolVis}}"
@@ -743,9 +757,7 @@
           </Border>
 
           <!-- Generate box -->
-          <Border Background="{DynamicResource BrushSurface1}"
-                  BorderBrush="{DynamicResource BrushBorder}"
-                  BorderThickness="1" CornerRadius="10" Padding="16">
+          <Border Style="{StaticResource Panel}">
             <StackPanel>
               <TextBlock FontSize="13" Foreground="{DynamicResource BrushText2}"
                          Margin="0,0,0,12" LineHeight="22">
@@ -775,23 +787,15 @@
                         Margin="0,0,0,10" FontSize="13"/>
               <Button Style="{StaticResource BtnGenerate}"
                       Command="{Binding GenerateCommand}"
-                      IsEnabled="{Binding OrderCount, Mode=OneWay, Converter={StaticResource NonZeroBool}}">
-                <StackPanel Orientation="Horizontal">
-                  <TextBlock Text="⚡" FontSize="15" Margin="0,0,8,0"/>
-                  <TextBlock Text="Сформировать документы" FontSize="15" FontWeight="Bold"/>
-                </StackPanel>
-              </Button>
+                      Content="Сформировать документы"
+                      IsEnabled="{Binding OrderCount, Mode=OneWay, Converter={StaticResource NonZeroBool}}"/>
               <Button Style="{StaticResource BtnPrimary}"
                       Command="{Binding PunchOrdersViaAtolCommand}"
                       IsEnabled="{Binding CanPunchOrdersViaAtol, Mode=OneWay}"
                       ToolTip="{Binding CorrectionPunchHint}"
                       ToolTipService.ShowOnDisabled="True"
-                      Margin="0,8,0,0" Padding="0,11">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                  <TextBlock Text="🔥" FontSize="15" Margin="0,0,8,0"/>
-                  <TextBlock Text="Пробить в АТОЛ Online" FontSize="15" FontWeight="Bold"/>
-                </StackPanel>
-              </Button>
+                      Margin="0,8,0,0" Padding="0,11"
+                      Content="Пробить в АТОЛ Online"/>
               <!-- Подсказка при выборе коррекции или наличии XML-only коррекций в списке -->
               <TextBlock Text="{Binding CorrectionPunchHint}"
                          FontSize="11" Foreground="#FFAA44"

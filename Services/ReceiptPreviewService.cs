@@ -1,5 +1,6 @@
 using System.Text;
 using AtolGenerator.Constants;
+using AtolGenerator.Models;
 
 namespace AtolGenerator.Services;
 
@@ -63,13 +64,27 @@ public static class ReceiptPreviewService
         sb.AppendLine(line);
 
         // ── НДС ───────────────────────────────────────────────────────────────
-        if (c.CheckVatType != "none")
+        var vatGroups = c.Items.Count > 0
+            ? c.Items
+                .GroupBy(item => VatRateCatalog.Normalize(item.VatType, c.CheckVatType),
+                    StringComparer.OrdinalIgnoreCase)
+                .Select(group => new
+                {
+                    Type = group.Key,
+                    Sum = group.Sum(item => VatRateCatalog.Calculate(item.Sum, group.Key)),
+                })
+            : new[]
+            {
+                new
+                {
+                    Type = VatRateCatalog.Normalize(c.CheckVatType, "none"),
+                    Sum = VatRateCatalog.Calculate(c.Amount, c.CheckVatType),
+                },
+            };
+        foreach (var vat in vatGroups.Where(vat => vat.Type is not "none" and not "vat0"))
         {
-            var totalVat = c.Items.Count > 0
-                ? c.Items.Sum(i => i.VatSum)
-                : CalcVat(c.CheckVatType, c.Amount);
-            if (totalVat > 0)
-                sb.AppendLine(PadRight(VatTypeName(c.CheckVatType) + ":", FmtMoney(totalVat) + " руб."));
+            sb.AppendLine(PadRight(VatRateCatalog.LabelFor(vat.Type) + ":",
+                FmtMoney(vat.Sum) + " руб."));
         }
         sb.AppendLine(line);
 
@@ -100,30 +115,11 @@ public static class ReceiptPreviewService
         _                 => op.ToUpperInvariant(),
     };
 
-    private static string VatTypeName(string vat) => vat switch
-    {
-        "vat5"   => "НДС 5%",
-        "vat105" => "НДС 5% (вкл.)",
-        "vat22"  => "НДС 22%",
-        "vat122" => "НДС 22% (вкл.)",
-        "none"   => "Без НДС",
-        _        => vat,
-    };
-
     private static string VatLine(string vatType, double vatSum)
     {
-        if (vatType == "none" || vatSum == 0) return string.Empty;
-        return $"{VatTypeName(vatType)}: {FmtMoney(vatSum)} руб.";
+        if (vatType is "none" or "vat0" || vatSum == 0) return string.Empty;
+        return $"{VatRateCatalog.LabelFor(vatType)}: {FmtMoney(vatSum)} руб.";
     }
-
-    private static double CalcVat(string vatType, double amount) => vatType switch
-    {
-        "vat5"   => Math.Round(amount * 5.0  / 100.0, 2),
-        "vat105" => Math.Round(amount * 5.0  / 105.0, 2),
-        "vat22"  => Math.Round(amount * 22.0 / 122.0, 2),
-        "vat122" => Math.Round(amount * 22.0 / 122.0, 2),
-        _        => 0,
-    };
 
     private static string Center(string text)
     {

@@ -34,7 +34,11 @@ public static class CorrectionPlanService
                 "Для услуги не определены вид услуги, агент или ставка НДС.");
 
         var sameDay = documentDate.Date == today.Date;
-        var vatType = ResolveVatType(order, isService);
+        var suggestedVatType = ResolveVatType(order, isService);
+        var correctVatType = VatRateCatalog.Normalize(
+            order.CorrectVatType,
+            VatRateCatalog.Normalize(order.PlannedVatType, suggestedVatType));
+        var originalVatType = VatRateCatalog.Normalize(order.OriginalVatType, correctVatType);
         var paymentType = ResolvePaymentType(order);
         var plan = new CorrectionPlan
         {
@@ -55,7 +59,7 @@ public static class CorrectionPlanService
                     "В 1С указан ФП, поэтому чек существует. Загрузите отчёт ОФД для проверки даты и операции.");
             var operation = ResolveCorrectOperation(order, sameDay);
             plan.Checks.Add(Check(1, operation, CorrectTitle(operation), correctAmount,
-                paymentType, vatType, requiresItems: !IsCorrection(operation), usesFp: false));
+                paymentType, correctVatType, requiresItems: !IsCorrection(operation), usesFp: false));
             plan.Message = sameDay
                 ? "Исходного чека нет: формируется один обычный чек с правильными реквизитами."
                 : "Исходного чека нет и дата расчёта прошла: формируется один чек коррекции.";
@@ -79,7 +83,7 @@ public static class CorrectionPlanService
                 "В исходном чеке ОФД не заполнена сумма.");
 
         plan.Checks.Add(Check(1, reverseOperation, ReverseTitle(reverseOperation), wrongAmount,
-            ResolveOriginalPaymentType(order, paymentType), vatType,
+            ResolveOriginalPaymentType(order, paymentType), originalVatType,
             requiresItems: true, usesFp: true));
 
         if (order.CorrectionScenario == CorrectionScenario.FullCancel)
@@ -90,7 +94,7 @@ public static class CorrectionPlanService
         }
 
         plan.Checks.Add(Check(2, originalOperation, CorrectTitle(originalOperation), correctAmount,
-            ResolveCorrectPaymentType(order, paymentType), vatType,
+            ResolveCorrectPaymentType(order, paymentType), correctVatType,
             requiresItems: true, usesFp: true));
         plan.Message = "ФФД 1.05: исходный чек отменяется обычным обратным чеком, затем создаётся " +
                        "правильный обычный чек. В обоих чеках указывается ФП исходного чека в теге 1192.";

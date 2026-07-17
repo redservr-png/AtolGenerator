@@ -3,28 +3,29 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
         Title="Редактирование коррекции"
-        Width="1160" Height="820" MinWidth="980" MinHeight="680"
+        Width="1380" Height="900" MinWidth="1120" MinHeight="740"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize" ShowInTaskbar="False"
         Background="{DynamicResource BrushBg}"
         Foreground="{DynamicResource BrushText}"
-        FontFamily="Segoe UI" FontSize="13">
+        FontFamily="Segoe UI" FontSize="14">
 
     <Window.Resources>
         <cv:OrderKindLabelConverter             x:Key="KindLabel"/>
         <cv:CorrectionScenarioLabelConverter    x:Key="ScenarioLabel"/>
         <cv:SourceDocumentTypeLabelConverter    x:Key="DocTypeLabel"/>
         <cv:BoolToVisibilityConverter           x:Key="BoolVis"/>
+        <cv:VatRateLabelConverter               x:Key="VatLabel"/>
 
         <Style x:Key="FieldLabel" TargetType="TextBlock">
-            <Setter Property="FontSize"   Value="11"/>
+            <Setter Property="FontSize"   Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
             <Setter Property="Margin"     Value="0,0,0,4"/>
         </Style>
 
         <Style x:Key="SectionTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontSize" Value="15"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
         </Style>
@@ -35,11 +36,7 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
 
-        <Style x:Key="PanelBorder" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource BrushSurface1}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="8"/>
+        <Style x:Key="PanelBorder" TargetType="Border" BasedOn="{StaticResource Panel}">
             <Setter Property="Padding" Value="16"/>
         </Style>
 
@@ -47,46 +44,36 @@
             <Setter Property="Background" Value="{DynamicResource BrushSurface2}"/>
         </Style>
 
-        <Style TargetType="TextBox">
+        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
             <Setter Property="Background"   Value="{DynamicResource BrushSurface2}"/>
             <Setter Property="Foreground"   Value="{DynamicResource BrushText}"/>
             <Setter Property="BorderBrush"  Value="{DynamicResource BrushBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding"      Value="10,7"/>
-            <Setter Property="FontSize"     Value="13"/>
+            <Setter Property="FontSize"     Value="14"/>
+            <Setter Property="MinHeight"    Value="40"/>
             <Setter Property="CaretBrush"   Value="{DynamicResource BrushAccent}"/>
         </Style>
 
-        <Style TargetType="ComboBox">
+        <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
             <Setter Property="Background"      Value="{DynamicResource BrushSurface2}"/>
             <Setter Property="Foreground"      Value="{DynamicResource BrushText}"/>
             <Setter Property="BorderBrush"     Value="{DynamicResource BrushBorder}"/>
             <Setter Property="Padding"         Value="10,7"/>
-            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="FontSize"        Value="14"/>
+            <Setter Property="MinHeight"       Value="40"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
 
-        <Style x:Key="BtnPrimary" TargetType="Button">
-            <Setter Property="Background"  Value="{DynamicResource BrushAccent}"/>
-            <Setter Property="Foreground"  Value="White"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding"     Value="20,9"/>
-            <Setter Property="FontSize"    Value="13"/>
-            <Setter Property="FontWeight"  Value="Bold"/>
-            <Setter Property="Cursor"      Value="Hand"/>
+        <Style x:Key="EditorPrimary" TargetType="Button" BasedOn="{StaticResource BtnPrimary}">
+            <Setter Property="Padding" Value="22,9"/>
         </Style>
 
-        <Style x:Key="BtnGhost" TargetType="Button">
-            <Setter Property="Background"  Value="{DynamicResource BrushSurface2}"/>
-            <Setter Property="Foreground"  Value="{DynamicResource BrushText}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding"     Value="14,8"/>
-            <Setter Property="FontSize"    Value="13"/>
-            <Setter Property="Cursor"      Value="Hand"/>
+        <Style x:Key="EditorGhost" TargetType="Button" BasedOn="{StaticResource BtnGhost}">
+            <Setter Property="MinHeight" Value="36"/>
         </Style>
 
-        <Style TargetType="DataGrid">
+        <Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
             <Setter Property="Background" Value="{DynamicResource BrushSurface1}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -99,7 +86,7 @@
             <Setter Property="AutoGenerateColumns" Value="False"/>
         </Style>
 
-        <Style TargetType="DataGridColumnHeader">
+        <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
             <Setter Property="Background" Value="{DynamicResource BrushSurface2}"/>
             <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -107,13 +94,13 @@
             <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
         </Style>
 
-        <Style TargetType="DataGridCell">
+        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
             <Setter Property="Padding" Value="8,4"/>
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
     </Window.Resources>
 
-    <Border Margin="16" Style="{StaticResource PanelBorder}">
+    <Grid Margin="28,24,28,22">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -128,11 +115,9 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel>
-                    <TextBlock Text="Редактирование коррекции"
-                               FontSize="20" FontWeight="Bold"
-                               Foreground="{DynamicResource BrushText}"/>
+                    <TextBlock Text="Редактирование исправления" Style="{StaticResource PageTitle}"/>
                     <TextBlock Text="Проверьте две стороны исправления: исходный ошибочный чек и правильный чек."
-                               Style="{StaticResource MutedText}" Margin="0,3,0,0"/>
+                               Style="{StaticResource PageSubtitle}" Margin="0,4,0,0"/>
                 </StackPanel>
 
                 <Border Grid.Column="1" Background="#102563EB" CornerRadius="6"
@@ -211,8 +196,7 @@
                         </Grid>
                     </Border>
 
-                    <Border x:Name="RepairPairPanel" Style="{StaticResource PanelBorder}"
-                            BorderBrush="#66D97706" Margin="0,0,0,12"
+                    <Border x:Name="RepairPairPanel" Margin="0,2,0,14"
                             Visibility="Collapsed">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,12">
@@ -220,10 +204,10 @@
                                         Background="{DynamicResource BrushOrange}" CornerRadius="2"
                                         Margin="0,0,10,0"/>
                                 <StackPanel>
-                                    <TextBlock Text="Исправительный комплект"
+                                    <TextBlock Text="План исправления"
                                                FontSize="16" FontWeight="Bold"
                                                Foreground="{DynamicResource BrushOrange}"/>
-                                    <TextBlock Text="Сначала отменяется исходный ошибочный чек, затем формируется правильный чек по рассчитанному плану."
+                                    <TextBlock Text="Исходная и правильная стороны настраиваются независимо и сохраняются в XML по рассчитанному сценарию."
                                                Style="{StaticResource MutedText}"/>
                                 </StackPanel>
                             </DockPanel>
@@ -262,15 +246,35 @@
                                             </StackPanel>
                                         </Grid>
 
+                                        <Grid Margin="0,0,0,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="12"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Ставка НДС старого чека" Style="{StaticResource FieldLabel}"/>
+                                                <ComboBox ItemsSource="{Binding AvailableVatRates, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                          DisplayMemberPath="Label" SelectedValuePath="Code"
+                                                          SelectedValue="{Binding OriginalVatType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                          SelectionChanged="OriginalVat_SelectionChanged"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
+                                                <TextBlock Text="Сумма НДС" Style="{StaticResource FieldLabel}"/>
+                                                <TextBlock x:Name="OriginalVatAmountText" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource BrushAccent2}" Margin="2,8,0,8"/>
+                                            </StackPanel>
+                                        </Grid>
+
                                         <DockPanel Margin="0,2,0,6">
                                             <TextBlock Text="Табличная часть отмены"
                                                        Style="{StaticResource FieldLabel}"
                                                        DockPanel.Dock="Left"/>
                                             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                                                <Button Content="+ Позиция" Style="{StaticResource BtnGhost}"
+                                                <Button Content="Добавить позицию" Style="{StaticResource EditorGhost}"
                                                         Padding="10,5" Margin="0,0,6,0"
                                                         Click="AddOriginalItem_Click"/>
-                                                <Button Content="Удалить" Style="{StaticResource BtnGhost}"
+                                                <Button Content="Удалить" Style="{StaticResource EditorGhost}"
                                                         Padding="10,5"
                                                         Click="DeleteOriginalItem_Click"/>
                                             </StackPanel>
@@ -292,6 +296,21 @@
                                                 <DataGridTextColumn Header="Сумма, ₽"
                                                                     Binding="{Binding Sum, UpdateSourceTrigger=PropertyChanged}"
                                                                     Width="110"/>
+                                                <DataGridTemplateColumn Header="НДС" Width="145">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding VatType, Converter={StaticResource VatLabel}}" VerticalAlignment="Center"/>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                    <DataGridTemplateColumn.CellEditingTemplate>
+                                                        <DataTemplate>
+                                                            <ComboBox ItemsSource="{Binding AvailableVatRates, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                      DisplayMemberPath="Label" SelectedValuePath="Code"
+                                                                      SelectedValue="{Binding VatType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                      SelectionChanged="ItemVat_SelectionChanged"/>
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellEditingTemplate>
+                                                </DataGridTemplateColumn>
                                             </DataGrid.Columns>
                                         </DataGrid>
 
@@ -303,7 +322,7 @@
 
                                 <Border x:Name="CorrectSidePanel" Grid.Column="2" Style="{StaticResource SoftPanelBorder}">
                                     <StackPanel>
-                                        <TextBlock Text="2. Правильный чек" Style="{StaticResource SectionTitle}"/>
+                                        <TextBlock Text="Правильная сторона" Style="{StaticResource SectionTitle}"/>
                                         <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,12">
                                             <Run Text="Операция: "/>
                                             <Run Text="{Binding PlannedCorrectOperation, Mode=OneWay}" FontWeight="SemiBold"/>
@@ -314,16 +333,36 @@
                                         <TextBox Text="{Binding CorrectAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
                                                  ToolTip="Итог правильного чека после исправления"/>
 
+                                        <Grid Margin="0,12,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="12"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="Ставка НДС правильного чека" Style="{StaticResource FieldLabel}"/>
+                                                <ComboBox ItemsSource="{Binding AvailableVatRates, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                          DisplayMemberPath="Label" SelectedValuePath="Code"
+                                                          SelectedValue="{Binding CorrectVatType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                          SelectionChanged="CorrectVat_SelectionChanged"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
+                                                <TextBlock Text="Сумма НДС" Style="{StaticResource FieldLabel}"/>
+                                                <TextBlock x:Name="CorrectVatAmountText" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource BrushAccent2}" Margin="2,8,0,8"/>
+                                            </StackPanel>
+                                        </Grid>
+
                                         <StackPanel x:Name="CorrectItemsPanel" Margin="0,12,0,0">
                                             <DockPanel Margin="0,0,0,6">
                                                 <TextBlock Text="Табличная часть правильного чека"
                                                            Style="{StaticResource FieldLabel}"
                                                            DockPanel.Dock="Left"/>
                                                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                                                    <Button Content="+ Позиция" Style="{StaticResource BtnGhost}"
+                                                    <Button Content="Добавить позицию" Style="{StaticResource EditorGhost}"
                                                             Padding="10,5" Margin="0,0,6,0"
                                                             Click="AddCorrectItem_Click"/>
-                                                    <Button Content="Удалить" Style="{StaticResource BtnGhost}"
+                                                    <Button Content="Удалить" Style="{StaticResource EditorGhost}"
                                                             Padding="10,5"
                                                             Click="DeleteCorrectItem_Click"/>
                                                 </StackPanel>
@@ -345,6 +384,21 @@
                                                     <DataGridTextColumn Header="Сумма, ₽"
                                                                         Binding="{Binding Sum, UpdateSourceTrigger=PropertyChanged}"
                                                                         Width="110"/>
+                                                    <DataGridTemplateColumn Header="НДС" Width="145">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding VatType, Converter={StaticResource VatLabel}}" VerticalAlignment="Center"/>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                        <DataGridTemplateColumn.CellEditingTemplate>
+                                                            <DataTemplate>
+                                                                <ComboBox ItemsSource="{Binding AvailableVatRates, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                          DisplayMemberPath="Label" SelectedValuePath="Code"
+                                                                          SelectedValue="{Binding VatType, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                          SelectionChanged="ItemVat_SelectionChanged"/>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellEditingTemplate>
+                                                    </DataGridTemplateColumn>
                                                 </DataGrid.Columns>
                                             </DataGrid>
 
@@ -387,12 +441,10 @@
                                                            Foreground="{DynamicResource BrushAccent2}"
                                                            Margin="0,0,12,0"/>
                                                 <StackPanel Grid.Column="1">
-                                                    <TextBlock>
-                                                        <Run Text="Услуга: "/>
-                                                        <Run Text="{Binding ServiceType, Mode=OneWay, TargetNullValue=''}"/>
-                                                    </TextBlock>
-                                                    <TextBlock>
-                                                        <Run Text="Агент / ставка: "/>
+                                                    <TextBlock Text="Ставки задаются отдельно для старого и правильного чека. Ставка строки номенклатуры имеет приоритет над ставкой чека."
+                                                               TextWrapping="Wrap"/>
+                                                    <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource BrushText2}">
+                                                        <Run Text="Правило 1С / агент: "/>
                                                         <Run Text="{Binding AgentVatDisplay, Mode=OneWay}"/>
                                                     </TextBlock>
                                                 </StackPanel>
@@ -404,7 +456,7 @@
                         </StackPanel>
                     </Border>
 
-                    <Border Style="{StaticResource SoftPanelBorder}" Margin="0,0,0,12">
+                    <Border x:Name="FallbackDataPanel" Style="{StaticResource SoftPanelBorder}" Margin="0,0,0,12">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -450,12 +502,12 @@
             </ScrollViewer>
 
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-                <Button Content="Отмена" Style="{StaticResource BtnGhost}"
+                <Button Content="Отмена" Style="{StaticResource EditorGhost}"
                         Margin="0,0,8,0"
                         Click="Cancel_Click"/>
-                <Button Content="Сохранить" Style="{StaticResource BtnPrimary}"
+                <Button Content="Сохранить изменения" Style="{StaticResource EditorPrimary}"
                         Click="Save_Click" IsDefault="True"/>
             </StackPanel>
         </Grid>
-    </Border>
+    </Grid>
 </Window>

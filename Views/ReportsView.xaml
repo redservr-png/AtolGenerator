@@ -6,9 +6,9 @@
     <Style x:Key="ReportTabItem" TargetType="TabItem">
       <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
-      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontSize" Value="14"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Padding" Value="18,10"/>
+      <Setter Property="Padding" Value="18,12"/>
       <Setter Property="Margin" Value="0,0,4,0"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template">
@@ -46,14 +46,14 @@
           <ControlTemplate TargetType="TabControl">
             <Grid KeyboardNavigation.TabNavigation="Local">
               <Grid.RowDefinitions>
-                <RowDefinition Height="46"/>
+                <RowDefinition Height="50"/>
                 <RowDefinition Height="*"/>
               </Grid.RowDefinitions>
               <Border Grid.Row="0"
                       Background="{DynamicResource BrushSurface2}"
                       BorderBrush="{DynamicResource BrushBorder}"
                       BorderThickness="1"
-                      CornerRadius="7,7,0,0"
+                      CornerRadius="6,6,0,0"
                       Padding="6,0">
                 <TabPanel IsItemsHost="True" VerticalAlignment="Stretch"/>
               </Border>
@@ -61,7 +61,7 @@
                       Background="{DynamicResource BrushSurface1}"
                       BorderBrush="{DynamicResource BrushBorder}"
                       BorderThickness="1,0,1,1"
-                      CornerRadius="0,0,7,7">
+                      CornerRadius="0,0,6,6">
                 <ContentPresenter ContentSource="SelectedContent"/>
               </Border>
             </Grid>
@@ -79,17 +79,18 @@
       <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BrushBorder}"/>
       <Setter Property="VerticalGridLinesBrush" Value="Transparent"/>
       <Setter Property="HeadersVisibility" Value="Column"/>
-      <Setter Property="RowHeight" Value="38"/>
-      <Setter Property="ColumnHeaderHeight" Value="38"/>
+      <Setter Property="RowHeight" Value="42"/>
+      <Setter Property="ColumnHeaderHeight" Value="40"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
-      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontSize" Value="13"/>
       <Setter Property="CanUserAddRows" Value="False"/>
       <Setter Property="CanUserDeleteRows" Value="False"/>
       <Setter Property="CanUserResizeRows" Value="False"/>
       <Setter Property="IsReadOnly" Value="True"/>
       <Setter Property="AutoGenerateColumns" Value="False"/>
-      <Setter Property="SelectionMode" Value="Single"/>
-      <Setter Property="SelectionUnit" Value="FullRow"/>
+      <Setter Property="SelectionMode" Value="Extended"/>
+      <Setter Property="SelectionUnit" Value="CellOrRowHeader"/>
+      <Setter Property="ClipboardCopyMode" Value="IncludeHeader"/>
       <Setter Property="EnableRowVirtualization" Value="True"/>
       <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
       <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
@@ -101,7 +102,7 @@
       <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
       <Setter Property="BorderThickness" Value="0,0,1,1"/>
       <Setter Property="Padding" Value="10,0"/>
-      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontSize" Value="12"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="HorizontalContentAlignment" Value="Left"/>
     </Style>
@@ -137,15 +138,15 @@
 
     <Style x:Key="FilterLabel" TargetType="TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource BrushText3}"/>
-      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontSize" Value="12"/>
       <Setter Property="VerticalAlignment" Value="Center"/>
       <Setter Property="Margin" Value="0,0,6,0"/>
     </Style>
     <Style x:Key="ReportDatePicker" TargetType="DatePicker"
            BasedOn="{StaticResource {x:Type DatePicker}}">
       <Setter Property="Width" Value="140"/>
-      <Setter Property="Height" Value="34"/>
-      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Height" Value="40"/>
+      <Setter Property="FontSize" Value="13"/>
       <Setter Property="SelectedDateFormat" Value="Short"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
@@ -158,7 +159,7 @@
     </Style>
   </UserControl.Resources>
 
-  <Grid Margin="24,18,24,20">
+  <Grid Margin="28,24,28,24">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/>
       <RowDefinition Height="14"/>
@@ -171,12 +172,9 @@
         <ColumnDefinition Width="Auto"/>
       </Grid.ColumnDefinitions>
       <StackPanel>
-        <TextBlock Text="Работа с отчётами"
-                   Foreground="{DynamicResource BrushText}"
-                   FontSize="23" FontWeight="SemiBold"/>
+        <TextBlock Text="Работа с отчётами" Style="{StaticResource PageTitle}"/>
         <TextBlock Text="АТОЛ Online · ОФД / Такском · подготовка CSV для 1С"
-                   Foreground="{DynamicResource BrushText3}"
-                   FontSize="12" Margin="0,4,0,0"/>
+                   Style="{StaticResource PageSubtitle}" Margin="0,4,0,0"/>
       </StackPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
         <TextBlock Foreground="{DynamicResource BrushText3}" FontSize="12" VerticalAlignment="Center">

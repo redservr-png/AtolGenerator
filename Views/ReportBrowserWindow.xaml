@@ -4,23 +4,23 @@
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="Получение отчёта"
         Icon="/AtolGenerator;component/Resources/app.ico"
-        Width="1320" Height="840"
-        MinWidth="980" MinHeight="640"
+        Width="1440" Height="900"
+        MinWidth="1080" MinHeight="700"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BrushBg}"
         Loaded="OnLoaded">
   <Grid>
     <Grid.RowDefinitions>
-      <RowDefinition Height="54"/>
+      <RowDefinition Height="64"/>
       <RowDefinition Height="*"/>
-      <RowDefinition Height="48"/>
+      <RowDefinition Height="52"/>
     </Grid.RowDefinitions>
 
     <Border Grid.Row="0"
             Background="{DynamicResource BrushSurface1}"
             BorderBrush="{DynamicResource BrushBorder}"
             BorderThickness="0,0,0,1">
-      <Grid Margin="14,0">
+      <Grid Margin="20,0">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="16"/>
@@ -30,29 +30,29 @@
 
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <Button x:Name="BackButton" Content="←" ToolTip="Назад"
-                  Style="{StaticResource BtnSecondary}" Width="38" Height="34"
+                  Style="{StaticResource BtnSecondary}" Width="40" Height="40"
                   Padding="0" Click="BackButton_Click"/>
           <Button x:Name="ForwardButton" Content="→" ToolTip="Вперёд"
-                  Style="{StaticResource BtnSecondary}" Width="38" Height="34"
+                  Style="{StaticResource BtnSecondary}" Width="40" Height="40"
                   Padding="0" Margin="6,0,0,0" Click="ForwardButton_Click"/>
           <Button Content="↻" ToolTip="Обновить"
-                  Style="{StaticResource BtnSecondary}" Width="38" Height="34"
+                  Style="{StaticResource BtnSecondary}" Width="40" Height="40"
                   Padding="0" Margin="6,0,0,0" Click="ReloadButton_Click"/>
           <Button Content="⌂" ToolTip="Главная страница кабинета"
-                  Style="{StaticResource BtnSecondary}" Width="38" Height="34"
+                  Style="{StaticResource BtnSecondary}" Width="40" Height="40"
                   Padding="0" Margin="6,0,0,0" Click="HomeButton_Click"/>
         </StackPanel>
 
         <StackPanel Grid.Column="2" VerticalAlignment="Center">
-          <TextBlock x:Name="ProviderTitle" Text="Личный кабинет" FontSize="14" FontWeight="SemiBold"
+          <TextBlock x:Name="ProviderTitle" Text="Личный кабинет" FontSize="16" FontWeight="SemiBold"
                      Foreground="{DynamicResource BrushText}"/>
           <TextBlock x:Name="AddressText"
                      Foreground="{DynamicResource BrushText3}" FontSize="11"
                      TextTrimming="CharacterEllipsis"/>
         </StackPanel>
 
-        <Button Grid.Column="3" Content="Папка отчётов"
-                Style="{StaticResource BtnSecondary}" Padding="12,7"
+        <Button Grid.Column="3" Content="Открыть папку отчётов"
+                Style="{StaticResource BtnSecondary}" Padding="16,8"
                 VerticalAlignment="Center" Click="OpenFolderButton_Click"/>
       </Grid>
     </Border>
@@ -74,21 +74,21 @@
             Background="{DynamicResource BrushSurface1}"
             BorderBrush="{DynamicResource BrushBorder}"
             BorderThickness="0,1,0,0">
-      <Grid Margin="16,0">
+      <Grid Margin="20,0">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="10"/>
           <ColumnDefinition Width="*"/>
           <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
-        <Ellipse x:Name="StatusIndicator" Width="8" Height="8"
+        <Ellipse x:Name="StatusIndicator" Width="9" Height="9"
                  Fill="{DynamicResource BrushAccent}" VerticalAlignment="Center"/>
         <TextBlock x:Name="StatusText" Grid.Column="2"
                    Text="Ожидание отчёта"
-                   Foreground="{DynamicResource BrushText2}" FontSize="12"
+                   Foreground="{DynamicResource BrushText2}" FontSize="13"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
         <Button Grid.Column="3" Content="Закрыть"
-                Style="{StaticResource BtnSecondary}" Padding="14,7"
+                Style="{StaticResource BtnSecondary}" Padding="16,8"
                 Click="CloseButton_Click"/>
       </Grid>
     </Border>

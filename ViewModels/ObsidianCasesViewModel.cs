@@ -225,6 +225,7 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
                 Name = x.Name,
                 Quantity = x.Quantity,
                 Sum = x.Sum,
+                VatType = x.VatType,
             }).ToList(),
             OriginalItems = (source.OriginalItems.Count > 0 ? source.OriginalItems : source.Items)
                 .Select(x => new OrderItem
@@ -232,6 +233,7 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
                     Name = x.Name,
                     Quantity = x.Quantity,
                     Sum = x.Sum,
+                    VatType = x.VatType,
                 }).ToList(),
             AgentInfo = source.AgentInfo,
             CorrectionDate = source.CorrectionDate,
@@ -260,6 +262,8 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
             PlannedCorrectOperation = source.CorrectionScenario == CorrectionScenario.FullCancel
                 ? string.Empty
                 : Plan.Checks.LastOrDefault()?.Operation ?? string.Empty,
+            OriginalVatType = source.OriginalVatType,
+            CorrectVatType = source.CorrectVatType,
             PlannedVatType = Plan.Checks.LastOrDefault()?.VatType ?? string.Empty,
         };
         entry.OriginalCheckAmount = State.OriginalReceipt is not null
@@ -275,15 +279,7 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
         return entry;
     }
 
-    private static string VatLabel(string value) => value switch
-    {
-        "vat122" => "НДС 22/122",
-        "vat22" => "НДС 22%",
-        "vat105" => "НДС 5/105",
-        "vat5" => "НДС 5%",
-        "none" => "без НДС",
-        _ => value,
-    };
+    private static string VatLabel(string value) => VatRateCatalog.LabelFor(value);
 
     private static string SourceDocumentDate(OrderEntry entry) =>
         string.IsNullOrWhiteSpace(entry.SourceDocumentDate)
@@ -1119,12 +1115,14 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
             Name = x.Name,
             Quantity = x.Quantity,
             Sum = x.Sum,
+            VatType = x.VatType,
         }).ToList(),
         OriginalItems = source.OriginalItems.Select(x => new OrderItem
         {
             Name = x.Name,
             Quantity = x.Quantity,
             Sum = x.Sum,
+            VatType = x.VatType,
         }).ToList(),
         AgentInfo = source.AgentInfo is null ? null : new ServiceProvider
         {
@@ -1153,6 +1151,11 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         OneCCheckDate = source.OneCCheckDate,
         OriginalPaymentWasCash = source.OriginalPaymentWasCash,
         CorrectPaymentIsCash = source.CorrectPaymentIsCash,
+        PlannedReverseOperation = source.PlannedReverseOperation,
+        PlannedCorrectOperation = source.PlannedCorrectOperation,
+        OriginalVatType = source.OriginalVatType,
+        CorrectVatType = source.CorrectVatType,
+        PlannedVatType = source.PlannedVatType,
     };
 
     private static void ApplySnapshot(OrderEntry snapshot, OrderEntry target)
@@ -1166,12 +1169,14 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
             Name = x.Name,
             Quantity = x.Quantity,
             Sum = x.Sum,
+            VatType = x.VatType,
         }).ToList();
         target.OriginalItems = snapshot.OriginalItems.Select(x => new OrderItem
         {
             Name = x.Name,
             Quantity = x.Quantity,
             Sum = x.Sum,
+            VatType = x.VatType,
         }).ToList();
         target.AgentInfo = snapshot.AgentInfo;
         target.CorrectionDate = snapshot.CorrectionDate;
@@ -1188,6 +1193,11 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         target.OneCCheckDate = NormalizeReceiptDate(snapshot.OneCCheckDate);
         target.OriginalPaymentWasCash = snapshot.OriginalPaymentWasCash;
         target.CorrectPaymentIsCash = snapshot.CorrectPaymentIsCash;
+        target.PlannedReverseOperation = snapshot.PlannedReverseOperation;
+        target.PlannedCorrectOperation = snapshot.PlannedCorrectOperation;
+        target.OriginalVatType = snapshot.OriginalVatType;
+        target.CorrectVatType = snapshot.CorrectVatType;
+        target.PlannedVatType = snapshot.PlannedVatType;
     }
 
     private bool FilterCase(object value)

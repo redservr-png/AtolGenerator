@@ -8,10 +8,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>AtolGenerator</RootNamespace>
     <AssemblyName>AtolGenerator</AssemblyName>
-    <Version>2.2</Version>
-    <AssemblyVersion>2.2.0.0</AssemblyVersion>
-    <FileVersion>2.2.0.0</FileVersion>
-    <InformationalVersion>2.2</InformationalVersion>
+    <Version>2.2.1</Version>
+    <AssemblyVersion>2.2.1.0</AssemblyVersion>
+    <FileVersion>2.2.1.0</FileVersion>
+    <InformationalVersion>2.2.1</InformationalVersion>
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
     <InvariantGlobalization>false</InvariantGlobalization>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>

@@ -31,17 +31,17 @@ public static class ThemeService
         new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase)
         {
             ["light"] = Palette(
-                "#F4F7FA", "#FFFFFF", "#EEF3F8", "#E3EBF4", "#D4DEE9",
-                "#2563EB", "#0F766E", "#111827", "#4B5563", "#7C8796",
-                "#14202B", "#243244", "#F8FAFC", "#8DA0B8", "#7DD3C7", "#314154", "#223244"),
+                "#F5F7FA", "#FFFFFF", "#F8FAFC", "#EAF0F6", "#D7E0E9",
+                "#155EEF", "#0E9384", "#101828", "#475467", "#667085",
+                "#101828", "#27364A", "#F8FAFC", "#98A2B3", "#5FE9D0", "#344054", "#1D2939"),
             ["dark"] = Palette(
-                "#11161A", "#171E24", "#202A32", "#293641", "#384752",
-                "#6F9CFF", "#42B7A8", "#F3F5F7", "#C4CDD5", "#8997A4",
-                "#0B1014", "#25313A", "#F7FAFC", "#8796A3", "#65D5C0", "#303E48", "#1A252D"),
+                "#0C111D", "#161B26", "#1D2939", "#344054", "#344054",
+                "#84ADFF", "#5FE9D0", "#F2F4F7", "#D0D5DD", "#98A2B3",
+                "#070B12", "#1D2939", "#F9FAFB", "#98A2B3", "#5FE9D0", "#344054", "#182230"),
             ["warm"] = Palette(
-                "#F3F0EA", "#FFFCF7", "#ECE7DE", "#E1D9CE", "#D2C8BA",
-                "#C45F3C", "#2F7D6D", "#292622", "#5E5750", "#8A8178",
-                "#292723", "#3D3934", "#FFF9F1", "#A99F94", "#7FD1BC", "#4A453F", "#3A3732"),
+                "#F7F5F2", "#FFFFFF", "#F4F1EC", "#EAE4DC", "#D8D0C5",
+                "#C55232", "#187E72", "#1F2937", "#4B5563", "#7C746C",
+                "#20262E", "#374151", "#FFFDF9", "#A7AFBA", "#75E0CD", "#3D4652", "#303844"),
         };
 
     public static string NormalizeKey(string? key) =>

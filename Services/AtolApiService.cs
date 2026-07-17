@@ -209,15 +209,14 @@ public static class AtolApiService
         if (order.IsOwnService)
         {
             var ownServiceVat = tab == "payment" ? "vat122" : "vat22";
-            return (ownServiceVat, Math.Round(amount * 22.0 / 122.0, 2));
+            return (ownServiceVat, VatRateCatalog.CalculateFiscalSum(amount, ownServiceVat));
         }
 
         if (order.IsService)
         {
-            var serviceVat = order.AgentInfo?.VatType ?? "none";
-            var serviceVatSum = serviceVat == "vat5"
-                ? Math.Round(amount * 5.0 / 100.0, 2)
-                : amount;
+            var serviceVat = ServiceClassificationService.ResolveVatType(
+                order.IsOwnService, order.AgentInfo, tab);
+            var serviceVatSum = VatRateCatalog.CalculateFiscalSum(amount, serviceVat);
             return (serviceVat, serviceVatSum);
         }
 
@@ -225,7 +224,7 @@ public static class AtolApiService
             return ("none", amount);
 
         var vatType = tab == "realization" ? "vat22" : "vat122";
-        return (vatType, Math.Round(amount * 22.0 / 122.0, 2));
+        return (vatType, VatRateCatalog.CalculateFiscalSum(amount, vatType));
     }
 
     private static object BuildReceiptItem(
@@ -331,20 +330,19 @@ public static class AtolApiService
         if (r.IsOwnService)
         {
             vatType = "vat22";
-            vatSum = Math.Round(r.Amount * 22.0 / 122.0, 2);
+            vatSum = VatRateCatalog.CalculateFiscalSum(r.Amount, vatType);
         }
         else if (r.IsService)
         {
-            // НДС по городу реализации: Страхов → vat5, остальные → none
-            vatType = AppConstants.GetServiceVatTypeByCity(r.City);
-            vatSum  = vatType == "vat5"
-                ? Math.Round(r.Amount * 5.0 / 100.0, 2)
-                : r.Amount;
+            vatType = VatRateCatalog.Normalize(
+                r.AgentInfo?.VatType,
+                AppConstants.GetServiceVatTypeByCity(r.City));
+            vatSum = VatRateCatalog.CalculateFiscalSum(r.Amount, vatType);
         }
         else
         {
             vatType = "vat122";
-            vatSum  = Math.Round(r.Amount * 22.0 / 122.0, 2);
+            vatSum = VatRateCatalog.CalculateFiscalSum(r.Amount, vatType);
         }
 
         // sell_refund (возврат прихода) — единственная из пары, которую поддерживает API.

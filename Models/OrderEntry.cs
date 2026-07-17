@@ -61,7 +61,13 @@ public class OrderEntry
     /// <summary>Операция правильного чека, рассчитанная по дате и типу документа.</summary>
     public string               PlannedCorrectOperation { get; set; } = string.Empty;
 
-    /// <summary>Ставка правильного чека из правила 1С/агента.</summary>
+    /// <summary>Ставка исходного ошибочного чека и его отменяющей стороны.</summary>
+    public string               OriginalVatType { get; set; } = string.Empty;
+
+    /// <summary>Ставка правильного чека после исправления.</summary>
+    public string               CorrectVatType { get; set; } = string.Empty;
+
+    /// <summary>Ставка плана для совместимости со старыми сохранёнными случаями.</summary>
     public string               PlannedVatType { get; set; } = string.Empty;
 
     /// <summary>Дата исходного ошибочного чека из отчёта ОФД.</summary>
@@ -79,8 +85,8 @@ public class OrderEntry
     public bool IsCorrection => Kind != OrderKind.Regular;
 
     public string AgentVatDisplay => IsOwnService
-        ? "Без агента / vat22"
+        ? "Без агента / НДС 22%"
         : AgentInfo is null
-            ? "Товарная реализация / vat22"
-            : $"{AgentInfo.Name} / {AgentInfo.VatType}";
+            ? "Товарная реализация / НДС 22%"
+            : $"{AgentInfo.Name} / {VatRateCatalog.LabelFor(AgentInfo.VatType)}";
 }

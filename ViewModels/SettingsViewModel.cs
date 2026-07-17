@@ -45,17 +45,17 @@ public sealed class SettingsViewModel : BaseViewModel
             new()
             {
                 Key = "light", Name = "Светлая", Description = "Чистый рабочий интерфейс",
-                Background = "#F4F7FA", Surface = "#FFFFFF", Accent = "#2563EB",
+                Background = "#F5F7FA", Surface = "#FFFFFF", Accent = "#155EEF",
             },
             new()
             {
                 Key = "dark", Name = "Тёмная", Description = "Спокойная работа вечером",
-                Background = "#11161A", Surface = "#202A32", Accent = "#6F9CFF",
+                Background = "#0C111D", Surface = "#1D2939", Accent = "#84ADFF",
             },
             new()
             {
                 Key = "warm", Name = "Тёплая", Description = "Мягкая палитра в стиле Claude",
-                Background = "#F3F0EA", Surface = "#FFFCF7", Accent = "#C45F3C",
+                Background = "#F7F5F2", Surface = "#FFFFFF", Accent = "#C55232",
             },
         };
 
@@ -108,7 +108,7 @@ public sealed class SettingsViewModel : BaseViewModel
     public ObservableCollection<CashierInfo> Cashiers { get; }
     public ObservableCollection<ServiceProvider> Agents { get; }
     public IReadOnlyList<string> ServiceTypes { get; } = new[] { "Доставка", "Сборка" };
-    public IReadOnlyList<string> VatTypes { get; } = new[] { "none", "vat5" };
+    public IReadOnlyList<VatRateOption> VatTypes { get; } = VatRateCatalog.All;
 
     public ICommand SelectSectionCommand { get; }
     public ICommand AddCashierCommand { get; }
@@ -346,8 +346,8 @@ public sealed class SettingsViewModel : BaseViewModel
         if (Agents.Any(a => !ServiceTypes.Contains(a.Service.Trim())))
             return "Для агента можно выбрать только услугу «Доставка» или «Сборка».";
 
-        if (Agents.Any(a => !VatTypes.Contains(a.VatType)))
-            return "Допустимые ставки агента: none (без НДС) или vat5 (НДС 5%).";
+        if (Agents.Any(a => !VatRateCatalog.IsKnown(a.VatType)))
+            return "Выберите ставку НДС агента из справочника.";
 
         if (Agents.Any(a =>
                 a.Inn.Trim().Length is not (10 or 12) ||
