@@ -24,6 +24,12 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
     {
         Record = record;
         State = state;
+        if (Record.PrimaryDocument.CorrectionScenario == CorrectionScenario.RealRefund)
+        {
+            Record.PrimaryDocument.CorrectionScenario = CorrectionScenario.Unknown;
+            Record.PrimaryDocument.Kind = OrderKind.SingleRefund;
+            State.ScenarioOverride = null;
+        }
         _editableProblem = record.PrimaryDocument.Notes;
         NormalizeOriginalReceiptLookupState();
         _plan = CorrectionPlanService.Build(record.PrimaryDocument, state.OriginalReceipt, DateTime.Today);
@@ -211,6 +217,7 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
             ObsidianCaseId = CaseId,
             OrderNum = source.OrderNum,
             OrderDate = source.OrderDate,
+            SourceDocumentDate = source.SourceDocumentDate,
             Amount = source.Amount,
             CustomerName = source.CustomerName,
             Items = source.Items.Select(x => new OrderItem
@@ -219,6 +226,13 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
                 Quantity = x.Quantity,
                 Sum = x.Sum,
             }).ToList(),
+            OriginalItems = (source.OriginalItems.Count > 0 ? source.OriginalItems : source.Items)
+                .Select(x => new OrderItem
+                {
+                    Name = x.Name,
+                    Quantity = x.Quantity,
+                    Sum = x.Sum,
+                }).ToList(),
             AgentInfo = source.AgentInfo,
             CorrectionDate = source.CorrectionDate,
             CorrectionNumber = source.CorrectionNumber,
@@ -333,7 +347,10 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
 
     public ObservableCollection<ObsidianCaseItemViewModel> Cases { get; } = new();
     public ObservableCollection<string> PeriodOptions { get; } = new() { "Все периоды" };
-    public Array ScenarioOptions { get; } = Enum.GetValues(typeof(CorrectionScenario));
+    public CorrectionScenario[] ScenarioOptions { get; } = Enum
+        .GetValues<CorrectionScenario>()
+        .Where(x => x != CorrectionScenario.RealRefund)
+        .ToArray();
     public ICollectionView CasesView { get; }
     public ICommand SyncCommand { get; }
     public ICommand SendToWorkCommand { get; }
@@ -567,15 +584,15 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         foreach (var item in selected)
         {
             item.State.SentToWork = true;
-            item.State.LastMessage = "Добавлено в рабочий список";
+            item.State.LastMessage = "Открыто в пробитии исправлений";
             item.State.UpdatedAt = DateTime.Now;
             item.Refresh();
         }
         SaveStates();
         var skipped = allSelected.Count - selected.Count;
         Status = skipped == 0
-            ? $"Передано в работу: {entries.Count}"
-            : $"Передано в работу: {entries.Count}; требуют подготовки: {skipped}";
+            ? $"Открыто в пробитии исправлений: {entries.Count}"
+            : $"Открыто в пробитии исправлений: {entries.Count}; требуют подготовки: {skipped}";
         SendToWorkRequested?.Invoke(entries);
     }
 
@@ -1103,6 +1120,12 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
             Quantity = x.Quantity,
             Sum = x.Sum,
         }).ToList(),
+        OriginalItems = source.OriginalItems.Select(x => new OrderItem
+        {
+            Name = x.Name,
+            Quantity = x.Quantity,
+            Sum = x.Sum,
+        }).ToList(),
         AgentInfo = source.AgentInfo is null ? null : new ServiceProvider
         {
             Service = source.AgentInfo.Service,
@@ -1139,6 +1162,12 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         target.Amount = snapshot.Amount;
         target.CustomerName = snapshot.CustomerName;
         target.Items = snapshot.Items.Select(x => new OrderItem
+        {
+            Name = x.Name,
+            Quantity = x.Quantity,
+            Sum = x.Sum,
+        }).ToList();
+        target.OriginalItems = snapshot.OriginalItems.Select(x => new OrderItem
         {
             Name = x.Name,
             Quantity = x.Quantity,

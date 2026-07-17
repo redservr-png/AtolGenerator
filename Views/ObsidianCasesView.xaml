@@ -214,7 +214,7 @@
           <Button Grid.Column="4" Content="Найти чеки по ФП" Style="{StaticResource WorkflowButton}"
                   Margin="8,0,0,0" Command="{Binding LoadSourceOfdReportCommand}"
                   ToolTip="Сначала проверить локальный архив, затем найти отсутствующие чеки в Такскоме"/>
-          <Button Grid.Column="6" Content="Передать готовые в работу" Style="{StaticResource BtnPrimary}"
+          <Button Grid.Column="6" Content="Открыть пробитие исправлений" Style="{StaticResource BtnPrimary}"
                   MinHeight="36" Command="{Binding SendToWorkCommand}"/>
         </Grid>
       </Grid>

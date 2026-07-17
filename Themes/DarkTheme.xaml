@@ -140,6 +140,7 @@
     <Setter Property="Padding"     Value="10,7"/>
     <Setter Property="FontFamily"  Value="Segoe UI"/>
     <Setter Property="FontSize"    Value="14"/>
+    <Setter Property="MinHeight"   Value="36"/>
     <Setter Property="CaretBrush"  Value="{DynamicResource BrushAccent}"/>
     <Setter Property="SelectionBrush" Value="{DynamicResource BrushAccent}"/>
     <Setter Property="Template">
@@ -238,6 +239,7 @@
     <Setter Property="Padding"     Value="10,7,4,7"/>
     <Setter Property="FontFamily"  Value="Segoe UI"/>
     <Setter Property="FontSize"    Value="14"/>
+    <Setter Property="MinHeight"   Value="36"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ComboBox">
@@ -347,6 +349,10 @@
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
             </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource BrushAccent2}"/>
+              <Setter TargetName="box" Property="BorderThickness" Value="2"/>
+            </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
@@ -393,7 +399,14 @@
               <Setter TargetName="brd" Property="Background" Value="#3A70D0"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-              <Setter TargetName="brd" Property="Opacity" Value="0.5"/>
+              <Setter TargetName="brd" Property="Background" Value="{DynamicResource BrushSurface3}"/>
+              <Setter TargetName="brd" Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+              <Setter Property="Foreground" Value="{DynamicResource BrushText3}"/>
+              <Setter Property="Cursor" Value="Arrow"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="brd" Property="BorderBrush" Value="{DynamicResource BrushAccent2}"/>
+              <Setter TargetName="brd" Property="BorderThickness" Value="2"/>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -430,6 +443,10 @@
             <Trigger Property="IsPressed" Value="True">
               <Setter TargetName="brd" Property="Background" Value="{DynamicResource BrushSurface3}"/>
             </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="brd" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+              <Setter TargetName="brd" Property="BorderThickness" Value="2"/>
+            </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
@@ -440,6 +457,7 @@
   <Style x:Key="BtnGhost" TargetType="Button">
     <Setter Property="Background"  Value="Transparent"/>
     <Setter Property="Foreground"  Value="{DynamicResource BrushText2}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="Padding"     Value="11,7"/>
     <Setter Property="FontFamily"  Value="Segoe UI"/>
@@ -449,24 +467,19 @@
       <Setter.Value>
         <ControlTemplate TargetType="Button">
           <Border x:Name="brd" Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
                   CornerRadius="6" Padding="{TemplateBinding Padding}">
-            <Border.BorderBrush>
-              <DrawingBrush TileMode="Tile" Viewport="0,0,8,8" ViewportUnits="Absolute">
-                <DrawingBrush.Drawing>
-                  <GeometryDrawing Brush="{DynamicResource BrushBorder}">
-                    <GeometryDrawing.Geometry>
-                      <RectangleGeometry Rect="0,3,6,1.5"/>
-                    </GeometryDrawing.Geometry>
-                  </GeometryDrawing>
-                </DrawingBrush.Drawing>
-              </DrawingBrush>
-            </Border.BorderBrush>
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="brd" Property="Background" Value="{DynamicResource BrushSurface2}"/>
               <Setter Property="Foreground" Value="{DynamicResource BrushAccent2}"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="brd" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+              <Setter TargetName="brd" Property="BorderThickness" Value="2"/>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -504,10 +517,12 @@
     </Setter>
   </Style>
 
-  <!-- ── BUTTON: Generate (gradient) ── -->
+  <!-- ── BUTTON: Generate ── -->
   <Style x:Key="BtnGenerate" TargetType="Button">
+    <Setter Property="Background"      Value="{DynamicResource BrushAccent2}"/>
     <Setter Property="Foreground"      Value="White"/>
-    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="BorderBrush"     Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="Padding"         Value="0,12"/>
     <Setter Property="FontFamily"      Value="Segoe UI"/>
     <Setter Property="FontSize"        Value="15"/>
@@ -516,30 +531,22 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="brd" CornerRadius="9" Padding="{TemplateBinding Padding}">
-            <Border.Background>
-              <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                <GradientStop Color="#2563EB" Offset="0"/>
-                <GradientStop Color="#0F766E" Offset="1"/>
-              </LinearGradientBrush>
-            </Border.Background>
-            <Border.Effect>
-              <DropShadowEffect Color="{StaticResource ColorAccent}" BlurRadius="12"
-                                ShadowDepth="2" Opacity="0.18"/>
-            </Border.Effect>
+          <Border x:Name="brd" CornerRadius="7" Padding="{TemplateBinding Padding}"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}">
             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="brd" Property="Effect">
-                <Setter.Value>
-                  <DropShadowEffect Color="{StaticResource ColorAccent}" BlurRadius="26"
-                                    ShadowDepth="6" Opacity="0.5"/>
-                </Setter.Value>
-              </Setter>
+              <Setter TargetName="brd" Property="Background" Value="#0B5F59"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter TargetName="brd" Property="Opacity" Value="0.5"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="brd" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+              <Setter TargetName="brd" Property="BorderThickness" Value="2"/>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -572,6 +579,10 @@
             </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="brd" Property="Background" Value="{DynamicResource BrushSurface3}"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="brd" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+              <Setter TargetName="brd" Property="BorderThickness" Value="2"/>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -615,6 +626,10 @@
               <Setter TargetName="brd" Property="BorderBrush" Value="#2CA6B5"/>
               <Setter Property="Foreground" Value="#FFFFFF"/>
             </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="brd" Property="BorderBrush" Value="#7DD3C7"/>
+              <Setter TargetName="brd" Property="BorderThickness" Value="2"/>
+            </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
@@ -650,6 +665,10 @@
             </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="brd" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="brd" Property="BorderBrush" Value="{DynamicResource BrushAccent2}"/>
+              <Setter TargetName="brd" Property="BorderThickness" Value="2"/>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>

@@ -11,7 +11,14 @@ public class OrderEntry
     public string          SourceDocumentDate { get; set; } = string.Empty;
     public double          Amount           { get; set; }
     public string          CustomerName     { get; set; } = string.Empty;
+    /// <summary>Позиции правильного чека по актуальным данным 1С.</summary>
     public List<OrderItem> Items            { get; set; } = new();
+
+    /// <summary>
+    /// Позиции исходного ошибочного чека. Для исправлений по ФФД 1.05 они
+    /// используются в обычном обратном чеке и могут отличаться от Items.
+    /// </summary>
+    public List<OrderItem> OriginalItems    { get; set; } = new();
     public ServiceProvider? AgentInfo       { get; set; }
     public string          CorrectionDate   { get; set; } = string.Empty;  // DD.MM.YYYY
     public string          CorrectionNumber { get; set; } = string.Empty;

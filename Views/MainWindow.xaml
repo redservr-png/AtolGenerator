@@ -67,10 +67,7 @@
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,34">
           <Border Width="38" Height="38" CornerRadius="8" Margin="0,0,10,0">
             <Border.Background>
-              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                <GradientStop Color="#2563EB" Offset="0"/>
-                <GradientStop Color="#0F766E" Offset="1"/>
-              </LinearGradientBrush>
+              <SolidColorBrush Color="#0F766E"/>
             </Border.Background>
             <TextBlock Text="▣" FontSize="18" Foreground="White"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -104,6 +101,13 @@
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="obsidian">
             <TextBlock Text="▧  Исправление чеков" Foreground="{DynamicResource BrushSidebarText}"/>
+          </Button>
+          <Button Style="{StaticResource BtnGhost}"
+                  HorizontalContentAlignment="Left"
+                  Margin="0,0,0,8"
+                  Command="{Binding OpenWorkspaceCommand}"
+                  CommandParameter="correctionWork">
+            <TextBlock Text="▦  Пробитие исправлений" Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource BtnGhost}"
                   HorizontalContentAlignment="Left"
@@ -157,6 +161,12 @@
                   ToolTip="Загрузка списка чеков для исправления из Obsidian-файла"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="obsidian"/>
+          <Button Content="Пробитие исправлений"
+                  Style="{StaticResource BtnSecondary}"
+                  Padding="12,7" FontSize="12" Margin="0,0,8,0"
+                  ToolTip="Проверка и формирование исправительных XML по ФФД 1.05"
+                  Command="{Binding OpenWorkspaceCommand}"
+                  CommandParameter="correctionWork"/>
           <Button Content="⚙  Настройки"
                   Style="{StaticResource BtnSecondary}"
                   Padding="12,7" FontSize="12" Margin="0,0,12,0"
@@ -775,16 +785,11 @@
                       Command="{Binding PunchOrdersViaAtolCommand}"
                       IsEnabled="{Binding CanPunchOrdersViaAtol, Mode=OneWay}"
                       ToolTip="{Binding CorrectionPunchHint}"
+                      ToolTipService.ShowOnDisabled="True"
                       Margin="0,8,0,0" Padding="0,11">
-                <Button.Background>
-                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="#1E6BD4" Offset="0"/>
-                    <GradientStop Color="#7040FF" Offset="1"/>
-                  </LinearGradientBrush>
-                </Button.Background>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                   <TextBlock Text="🔥" FontSize="15" Margin="0,0,8,0"/>
-                  <TextBlock Text="Пробить в АТОЛ Online" FontSize="15" FontWeight="Bold" Foreground="White"/>
+                  <TextBlock Text="Пробить в АТОЛ Online" FontSize="15" FontWeight="Bold"/>
                 </StackPanel>
               </Button>
               <!-- Подсказка при выборе коррекции или наличии XML-only коррекций в списке -->

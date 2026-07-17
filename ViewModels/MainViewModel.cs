@@ -14,9 +14,11 @@ public class MainViewModel : BaseViewModel
 {
     private string _activeWorkspace = "main";
     private bool _startupInitialized;
+    private Views.CorrectionWorkWindow? _correctionWorkWindow;
 
     public ReportsViewModel Reports { get; } = new();
     public ObsidianCasesViewModel ObsidianCases { get; }
+    public CorrectionWorkViewModel CorrectionWork { get; }
     public bool ShowMainWorkspace => _activeWorkspace == "main";
     public bool ShowReportsWorkspace => _activeWorkspace == "reports";
     public bool ShowObsidianWorkspace => _activeWorkspace == "obsidian";
@@ -64,17 +66,22 @@ public class MainViewModel : BaseViewModel
     public bool IsCorrection         => CheckType is "sell_correction" or "buy_correction";
     public bool ShowCorrectionBox    => IsCorrection;
 
-    /// <summary>В списке есть коррекции, которые можно пробить только через XML (sell_correction).</summary>
+    /// <summary>В списке есть исправления, которые разрешено формировать только через XML.</summary>
     public bool HasXmlOnlyCorrection =>
-        Orders.Any(o => o.CorrectionScenario.RequiresXmlOnly());
+        Orders.Any(IsXmlOnlyOrder);
 
     /// <summary>Количество таких «XML-только» коррекций в списке.</summary>
     public int XmlOnlyCorrectionCount =>
-        Orders.Count(o => o.CorrectionScenario.RequiresXmlOnly());
+        Orders.Count(IsXmlOnlyOrder);
 
     // Пробитие через API: коррекции не поддерживаются (ошибка 31)
     public bool CanPunchOrdersViaAtol =>
         OrderCount > 0 && !IsCorrection && !HasXmlOnlyCorrection;
+
+    private static bool IsXmlOnlyOrder(OrderEntry order) =>
+        order.IsCorrection ||
+        !string.IsNullOrWhiteSpace(order.ObsidianCaseId) ||
+        order.CorrectionScenario.RequiresXmlOnly();
 
     public string CorrectionPunchHint
     {
@@ -386,10 +393,19 @@ public class MainViewModel : BaseViewModel
     public MainViewModel()
     {
         ObsidianCases = new ObsidianCasesViewModel();
+        CorrectionWork = new CorrectionWorkViewModel();
         ObsidianCases.OfdReportProvider = () =>
             (Reports.OfdReportPath, Reports.OfdChecks.ToList());
         ObsidianCases.OnlineOfdRowsImported = Reports.AddOnlineOfdReceipts;
         ObsidianCases.SendToWorkRequested += AddObsidianCasesToWork;
+        CorrectionWork.BackRequested += CloseCorrectionWorkWindow;
+        CorrectionWork.EditRequested += EditCorrectionWorkItem;
+        CorrectionWork.Generated += results =>
+        {
+            ObsidianCases.RecordGenerated(results);
+            StatusText = $"Сформировано исправительных чеков: {results.Count}";
+            ShowToast($"XML готов: {results.Count} чеков", false);
+        };
 
         // Любое изменение списка заказов автоматически обновляет
         // флаги доступности кнопки «Пробить в АТОЛ» и подсказку.
@@ -527,6 +543,12 @@ public class MainViewModel : BaseViewModel
             return;
         }
 
+        if (target == "correctionWork")
+        {
+            OpenCorrectionWorkWindow();
+            return;
+        }
+
         if (target is not ("atol" or "settings"))
             SetWorkspace("main");
 
@@ -580,6 +602,38 @@ public class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(ShowObsidianWorkspace));
     }
 
+    private void OpenCorrectionWorkWindow()
+    {
+        CorrectionWork.SyncCashiers(AvailableCashiers, SelectedCashier);
+        if (_correctionWorkWindow is not null)
+        {
+            if (_correctionWorkWindow.WindowState == WindowState.Minimized)
+                _correctionWorkWindow.WindowState = WindowState.Normal;
+            _correctionWorkWindow.Activate();
+            return;
+        }
+
+        var owner = Application.Current?.MainWindow;
+        var window = new Views.CorrectionWorkWindow { DataContext = CorrectionWork };
+        if (owner is not null && !ReferenceEquals(owner, window))
+            window.Owner = owner;
+        window.Closed += (_, _) => _correctionWorkWindow = null;
+        _correctionWorkWindow = window;
+        window.Show();
+        StatusText = "Открыто отдельное окно пробития исправлений";
+    }
+
+    private void CloseCorrectionWorkWindow()
+    {
+        var window = _correctionWorkWindow;
+        _correctionWorkWindow = null;
+        window?.Close();
+        SetWorkspace("obsidian");
+        ObsidianCases.Activate();
+        StatusText = "Исправление чеков";
+        Application.Current?.MainWindow?.Activate();
+    }
+
     private void OpenSettings()
     {
         var dialog = new Views.SettingsWindow
@@ -617,6 +671,7 @@ public class MainViewModel : BaseViewModel
             c.ShortName, settings.SelectedCashierShortName, StringComparison.OrdinalIgnoreCase))
             ?? AvailableCashiers.FirstOrDefault()
             ?? AppConstants.DefaultCashier;
+        CorrectionWork.SyncCashiers(AvailableCashiers, SelectedCashier);
 
         if (!string.IsNullOrWhiteSpace(SelectedServiceType))
             RefreshCities();
@@ -1152,15 +1207,36 @@ public class MainViewModel : BaseViewModel
         }
     }
 
+    private void EditCorrectionWorkItem(CorrectionWorkItemViewModel item)
+    {
+        var copy = CloneOrderEntry(item.Entry);
+        var dialog = new Views.CorrectionEditorWindow(copy)
+        {
+            Owner = System.Windows.Application.Current?.MainWindow,
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        ApplyOrderEntry(copy, item.Entry);
+        CorrectionWork.RefreshItem(item);
+        StatusText = $"Исправление {item.DocumentNumber} обновлено";
+    }
+
     /// <summary>Создаёт независимую копию OrderEntry (мелкое клонирование).</summary>
     private static OrderEntry CloneOrderEntry(OrderEntry s) => new()
     {
         ObsidianCaseId        = s.ObsidianCaseId,
         OrderNum             = s.OrderNum,
         OrderDate            = s.OrderDate,
+        SourceDocumentDate   = s.SourceDocumentDate,
         Amount               = s.Amount,
         CustomerName         = s.CustomerName,
         Items                = s.Items.Select(i => new OrderItem
+        {
+            Name     = i.Name,
+            Quantity = i.Quantity,
+            Sum      = i.Sum,
+        }).ToList(),
+        OriginalItems        = s.OriginalItems.Select(i => new OrderItem
         {
             Name     = i.Name,
             Quantity = i.Quantity,
@@ -1198,9 +1274,16 @@ public class MainViewModel : BaseViewModel
         to.ObsidianCaseId        = from.ObsidianCaseId;
         to.OrderNum             = from.OrderNum;
         to.OrderDate            = from.OrderDate;
+        to.SourceDocumentDate   = from.SourceDocumentDate;
         to.Amount               = from.Amount;
         to.CustomerName         = from.CustomerName;
         to.Items                = from.Items.Select(i => new OrderItem
+        {
+            Name     = i.Name,
+            Quantity = i.Quantity,
+            Sum      = i.Sum,
+        }).ToList();
+        to.OriginalItems        = from.OriginalItems.Select(i => new OrderItem
         {
             Name     = i.Name,
             Quantity = i.Quantity,
@@ -1509,6 +1592,12 @@ public class MainViewModel : BaseViewModel
         if (Orders.Count == 0)
         { ShowToast("Нет заказов для пробития", true); return; }
 
+        if (Orders.Any(IsXmlOnlyOrder))
+        {
+            ShowToast("Исправления из Obsidian формируются только в XML на отдельном экране", true);
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(AtolGroupCode) || string.IsNullOrWhiteSpace(AtolLogin))
         { ShowToast("Заполните настройки АТОЛ (кнопка 🔑 в шапке)", true); return; }
 
@@ -1737,53 +1826,16 @@ public class MainViewModel : BaseViewModel
 
     private void AddObsidianCasesToWork(IReadOnlyList<OrderEntry> entries)
     {
-        var added = 0;
-        var updated = 0;
-        foreach (var entry in entries)
-        {
-            var existing = string.IsNullOrWhiteSpace(entry.ObsidianCaseId)
-                ? null
-                : Orders.FirstOrDefault(x => x.ObsidianCaseId.Equals(
-                    entry.ObsidianCaseId, StringComparison.OrdinalIgnoreCase));
-            if (existing is not null)
-            {
-                var correctionPlanChanged =
-                    existing.CorrectionScenario != entry.CorrectionScenario ||
-                    existing.Kind != entry.Kind ||
-                    !string.Equals(existing.PlannedReverseOperation, entry.PlannedReverseOperation,
-                        StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(existing.PlannedCorrectOperation, entry.PlannedCorrectOperation,
-                        StringComparison.OrdinalIgnoreCase) ||
-                    !string.Equals(existing.PlannedVatType, entry.PlannedVatType,
-                        StringComparison.OrdinalIgnoreCase);
-                if (correctionPlanChanged)
-                {
-                    Orders[Orders.IndexOf(existing)] = entry;
-                    updated++;
-                }
-                continue;
-            }
-
-            Orders.Add(entry);
-            added++;
-        }
-
-        if (added == 0 && updated == 0)
-        {
-            ShowToast("Выбранные случаи уже находятся в рабочем списке", true);
-            return;
-        }
-
-        var realizationCount = entries.Count(x => x.DocumentType == SourceDocumentType.Realization);
-        Tab = realizationCount >= entries.Count - realizationCount ? "realization" : "payment";
-        SetWorkspace("main");
+        CorrectionWork.SyncCashiers(AvailableCashiers, SelectedCashier);
+        var (added, updated) = CorrectionWork.AddOrUpdate(entries);
+        OpenCorrectionWorkWindow();
         ShowOfdToolsPanel = false;
         StatusText = updated > 0
-            ? $"Добавлено из Obsidian: {added}; обновлено: {updated}"
-            : $"Добавлено из Obsidian: {added}";
+            ? $"Исправления: добавлено {added}; обновлено {updated}"
+            : $"Подготовлено исправлений: {added}";
         ShowToast(updated > 0
-            ? $"Добавлено: {added}; обновлено в работе: {updated}"
-            : $"Добавлено в работу: {added}", false);
+            ? $"Пробитие исправлений: добавлено {added}, обновлено {updated}"
+            : $"Открыто исправлений: {added}", false);
     }
 
     public int OrderCount => Orders.Count;

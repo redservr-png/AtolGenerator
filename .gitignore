@@ -15,6 +15,15 @@ obj/
 # Output files
 atol_output/
 
+# Runtime settings and operational data (may contain credentials or fiscal data)
+app_settings.json
+atol_settings.json
+onec_settings.json
+obsidian_settings.json
+atol_log.txt
+1c_log.txt
+punched_checks.jsonl
+
 # NuGet
 packages/
 *.nupkg

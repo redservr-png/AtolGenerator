@@ -60,19 +60,13 @@ public static class CorrectionTypeDetector
         {
             e.CorrectionScenario = CorrectionScenario.WrongDate;
         }
-        // ── 6. Возврат по бухгалтерии — реальный возврат ──────────────────────────
-        else if (n.Contains("возврат по бух") || n.Contains("деньги вернулись")
-              || n.Contains("возврат денег"))
-        {
-            e.CorrectionScenario = CorrectionScenario.RealRefund;
-        }
-        // ── 7. Расход (для агентских РКО) ─────────────────────────────────────────
+        // ── 6. Расход (для агентских РКО) ─────────────────────────────────────────
         else if (e.DocumentType == SourceDocumentType.CashExpense
               || n.Contains("чек коррекции расход") || n.Contains("без агента"))
         {
             e.CorrectionScenario = CorrectionScenario.ExpenseCorrection;
         }
-        // ── 8. Все остальные «лишний/не было/удалить/не должно» — полная отмена ───
+        // ── 7. Все остальные «лишний/не было/удалить/не должно» — полная отмена ───
         else if (n.Contains("не было") || n.Contains("не должно")
               || n.Contains("лишний")    || n.Contains("деньги не списались")
               || n.Contains("оплаты не было") || n.Contains("реализации не было")
@@ -90,7 +84,7 @@ public static class CorrectionTypeDetector
         {
             e.CorrectionScenario = CorrectionScenario.FullCancel;
         }
-        // ── 9. Не смогли распознать — пользователь решит ──────────────────────────
+        // ── 8. Не смогли распознать — пользователь решит ──────────────────────────
         else
         {
             e.CorrectionScenario = CorrectionScenario.Unknown;

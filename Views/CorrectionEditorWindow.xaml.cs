@@ -2,41 +2,54 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using AtolGenerator.Models;
+using AtolGenerator.Services;
 
 namespace AtolGenerator.Views;
 
 /// <summary>
-/// Модальное окно редактирования параметров коррекции для строки OrderEntry.
-/// На вход — копия OrderEntry, чтобы отмена не затронула оригинал.
+/// Редактор исправительного комплекта. Для ФФД 1.05 исходная и правильная
+/// стороны обычных чеков редактируются раздельно.
 /// </summary>
 public partial class CorrectionEditorWindow : Window
 {
-    /// <summary>Редактируемая (изменённая) копия записи.</summary>
-    public OrderEntry Entry { get; private set; } = null!;
+    private bool _initializing;
 
-    /// <summary>Списки enum-значений для combobox'ов.</summary>
-    public Array AllScenarios     { get; } = Enum.GetValues(typeof(CorrectionScenario));
-    public Array AllDocumentTypes { get; } = Enum.GetValues(typeof(SourceDocumentType));
+    public OrderEntry Entry { get; private set; }
+
+    public CorrectionScenario[] AllScenarios { get; } = Enum
+        .GetValues<CorrectionScenario>()
+        .Where(x => x != CorrectionScenario.RealRefund)
+        .ToArray();
+
+    public SourceDocumentType[] AllDocumentTypes { get; } =
+        Enum.GetValues<SourceDocumentType>();
 
     public CorrectionEditorWindow(OrderEntry entry)
     {
+        _initializing = true;
         InitializeComponent();
-        Entry       = entry;
-        DataContext = entry;
-        EnsureRepairPairItems();
+        Entry = entry;
+        RebuildOfficialPlan();
+        EnsureReceiptItems();
+        DataContext = Entry;
         RefreshLayoutMode();
+        _initializing = false;
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        if (!ValidateRepairPair())
+        RebuildOfficialPlan();
+        EnsureReceiptItems();
+        if (!ValidateWorkflow())
             return;
 
-        // Для реализаций с уже пробитым чеком "другая дата" — это именно
-        // исправительный комплект: sell_refund + sell_correction.
-        Entry.Kind = IsRepairPair()
+        Entry.Kind = !string.IsNullOrWhiteSpace(Entry.PlannedReverseOperation) &&
+                     !string.IsNullOrWhiteSpace(Entry.PlannedCorrectOperation)
             ? OrderKind.RefundCorrectionPair
-            : Entry.CorrectionScenario.ToOrderKind();
+            : !string.IsNullOrWhiteSpace(Entry.PlannedCorrectOperation) &&
+              Entry.PlannedCorrectOperation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase)
+                ? OrderKind.SingleCorrection
+                : OrderKind.SingleRefund;
 
         DialogResult = true;
         Close();
@@ -50,45 +63,122 @@ public partial class CorrectionEditorWindow : Window
 
     private void LayoutMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (Entry is null)
+        if (_initializing || Entry is null)
             return;
 
-        EnsureRepairPairItems();
+        RebuildOfficialPlan();
+        EnsureReceiptItems();
         RefreshLayoutMode();
     }
 
-    private void AddRepairItem_Click(object sender, RoutedEventArgs e)
+    private void AddOriginalItem_Click(object sender, RoutedEventArgs e)
     {
-        var target = Entry.OriginalCheckAmount ?? Entry.CorrectAmount ?? Entry.Amount;
-        var current = Entry.Items.Sum(i => i.Sum);
-        var nextSum = Math.Round(target - current, 2);
-        if (nextSum <= 0)
-            nextSum = Math.Round(target > 0 ? target : Entry.Amount, 2);
-
-        Entry.Items.Add(new OrderItem
-        {
-            Name     = DefaultRepairItemName(),
-            Quantity = 1,
-            Sum      = nextSum,
-        });
-
-        RepairItemsGrid.Items.Refresh();
-        RefreshRepairTotals();
+        AddItem(Entry.OriginalItems, Entry.OriginalCheckAmount ?? Entry.Amount);
+        OriginalItemsGrid.Items.Refresh();
+        RefreshTotals();
     }
 
-    private void DeleteRepairItem_Click(object sender, RoutedEventArgs e)
+    private void DeleteOriginalItem_Click(object sender, RoutedEventArgs e)
     {
-        if (RepairItemsGrid.SelectedItem is not OrderItem item)
+        if (OriginalItemsGrid.SelectedItem is not OrderItem item)
+            return;
+
+        Entry.OriginalItems.Remove(item);
+        OriginalItemsGrid.Items.Refresh();
+        RefreshTotals();
+    }
+
+    private void AddCorrectItem_Click(object sender, RoutedEventArgs e)
+    {
+        AddItem(Entry.Items, Entry.CorrectAmount ?? Entry.Amount);
+        CorrectItemsGrid.Items.Refresh();
+        RefreshTotals();
+    }
+
+    private void DeleteCorrectItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (CorrectItemsGrid.SelectedItem is not OrderItem item)
             return;
 
         Entry.Items.Remove(item);
-        RepairItemsGrid.Items.Refresh();
-        RefreshRepairTotals();
+        CorrectItemsGrid.Items.Refresh();
+        RefreshTotals();
     }
 
-    private void RepairItemsGrid_CurrentCellChanged(object sender, EventArgs e)
+    private void ItemsGrid_CurrentCellChanged(object sender, EventArgs e) => RefreshTotals();
+
+    private void RebuildOfficialPlan()
     {
-        RefreshRepairTotals();
+        ObsidianOriginalReceipt? receipt = null;
+        if (!string.IsNullOrWhiteSpace(Entry.OriginalFiscalNumber) &&
+            long.TryParse(Entry.OriginalFiscalNumber, out var fiscalSign))
+        {
+            receipt = new ObsidianOriginalReceipt
+            {
+                FiscalSign = fiscalSign,
+                Amount = Entry.OriginalCheckAmount ?? Entry.Amount,
+                RegisteredAt = Entry.OriginalCheckDate,
+                Operation = ResolveOriginalOperation(),
+                Document = Entry.DocumentType.ToString(),
+            };
+        }
+
+        var plan = CorrectionPlanService.Build(Entry, receipt, DateTime.Today);
+        if (!plan.IsReady)
+            return;
+
+        Entry.PlannedReverseOperation = plan.Checks.Count > 1 ||
+                                        Entry.CorrectionScenario == CorrectionScenario.FullCancel
+            ? plan.Checks.First().Operation
+            : string.Empty;
+        Entry.PlannedCorrectOperation = Entry.CorrectionScenario == CorrectionScenario.FullCancel
+            ? string.Empty
+            : plan.Checks.Last().Operation;
+        Entry.PlannedVatType = plan.Checks.Last().VatType;
+    }
+
+    private string ResolveOriginalOperation()
+    {
+        if (!string.IsNullOrWhiteSpace(Entry.OriginalCheckOperation))
+            return Entry.OriginalCheckOperation;
+
+        return Entry.PlannedReverseOperation switch
+        {
+            "sell_refund" => "sell",
+            "sell" => "sell_refund",
+            "buy_refund" => "buy",
+            "buy" => "buy_refund",
+            _ => Entry.DocumentType == SourceDocumentType.CashExpense ? "sell_refund" : "sell",
+        };
+    }
+
+    private void EnsureReceiptItems()
+    {
+        if (!string.IsNullOrWhiteSpace(Entry.PlannedReverseOperation) && Entry.OriginalItems.Count == 0)
+        {
+            if (Entry.Items.Count > 0)
+                Entry.OriginalItems = CloneItems(Entry.Items);
+            else
+                AddItem(Entry.OriginalItems, Entry.OriginalCheckAmount ?? Entry.Amount);
+        }
+
+        if (HasCorrectOrdinaryReceipt() && Entry.Items.Count == 0)
+            AddItem(Entry.Items, Entry.CorrectAmount ?? Entry.Amount);
+    }
+
+    private void AddItem(ICollection<OrderItem> target, double amount)
+    {
+        var current = target.Sum(i => i.Sum);
+        var nextSum = Math.Round(amount - current, 2);
+        if (nextSum <= 0)
+            nextSum = Math.Round(amount > 0 ? amount : Entry.Amount, 2);
+
+        target.Add(new OrderItem
+        {
+            Name = DefaultItemName(),
+            Quantity = 1,
+            Sum = nextSum,
+        });
     }
 
     private void RefreshLayoutMode()
@@ -96,107 +186,96 @@ public partial class CorrectionEditorWindow : Window
         if (RepairPairPanel is null)
             return;
 
-        var isRepair = IsRepairPair();
-        RepairPairPanel.Visibility = isRepair ? Visibility.Visible : Visibility.Collapsed;
-        RefreshRepairTotals();
+        var hasReverse = !string.IsNullOrWhiteSpace(Entry.PlannedReverseOperation);
+        var hasCorrect = !string.IsNullOrWhiteSpace(Entry.PlannedCorrectOperation);
+        RepairPairPanel.Visibility = hasReverse || HasCorrectOrdinaryReceipt()
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        ReverseSidePanel.Visibility = hasReverse ? Visibility.Visible : Visibility.Collapsed;
+        CorrectSidePanel.Visibility = hasCorrect ? Visibility.Visible : Visibility.Collapsed;
+        CorrectItemsPanel.Visibility = HasCorrectOrdinaryReceipt()
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        CorrectCorrectionHint.Visibility = hasCorrect && !HasCorrectOrdinaryReceipt()
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        DataContext = null;
+        DataContext = Entry;
+        RefreshTotals();
     }
 
-    private void EnsureRepairPairItems()
+    private bool ValidateWorkflow()
     {
-        if (!IsRepairPair() || Entry.Items.Count > 0)
-            return;
-
-        var amount = Entry.OriginalCheckAmount ?? Entry.CorrectAmount ?? Entry.Amount;
-        Entry.Items.Add(new OrderItem
+        var hasReverse = !string.IsNullOrWhiteSpace(Entry.PlannedReverseOperation);
+        if (hasReverse)
         {
-            Name     = DefaultRepairItemName(),
-            Quantity = 1,
-            Sum      = amount,
-        });
-    }
+            if (string.IsNullOrWhiteSpace(Entry.OriginalFiscalNumber))
+                return Warn("Для отмены исходного чека нужен ФП. Он будет записан в тег 1192.");
 
-    private bool ValidateRepairPair()
-    {
-        if (!IsRepairPair())
-            return true;
+            if ((Entry.OriginalCheckAmount ?? 0) <= 0)
+                return Warn("Заполните сумму исходного ошибочного чека.");
 
-        if (string.IsNullOrWhiteSpace(Entry.OriginalFiscalNumber))
-        {
-            MessageBox.Show(
-                "Для исправительного комплекта нужен ФП исходного чека из 1С или отчёта ОФД.",
-                "Проверка исправительного комплекта",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return false;
+            if (!ValidateItems(Entry.OriginalItems, Entry.OriginalCheckAmount!.Value,
+                    "исходного ошибочного чека"))
+                return false;
         }
 
-        if ((Entry.CorrectAmount ?? 0) <= 0)
+        if (HasCorrectOrdinaryReceipt())
         {
-            MessageBox.Show(
-                "Заполните исправленную сумму для чека коррекции.",
-                "Проверка исправительного комплекта",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return false;
-        }
+            var correctAmount = Entry.CorrectAmount ?? Entry.Amount;
+            if (correctAmount <= 0)
+                return Warn("Заполните исправленную сумму правильного чека.");
 
-        if ((Entry.OriginalCheckAmount ?? 0) <= 0)
-        {
-            MessageBox.Show(
-                "Заполните сумму старого ошибочного чека для возврата.",
-                "Проверка исправительного комплекта",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return false;
-        }
-
-        var itemsTotal = Entry.Items.Sum(i => i.Sum);
-        if (Entry.Items.Count == 0 || itemsTotal <= 0)
-        {
-            MessageBox.Show(
-                "Добавьте хотя бы одну позицию в табличную часть возврата.",
-                "Проверка исправительного комплекта",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return false;
-        }
-
-        var target = Entry.OriginalCheckAmount!.Value;
-        if (Math.Abs(itemsTotal - target) > 0.01)
-        {
-            MessageBox.Show(
-                $"Сумма табличной части возврата ({itemsTotal:N2}) не равна сумме старого чека ({target:N2}).\n\n" +
-                "Поправьте позиции или сумму старого чека, чтобы XML не разошёлся по итогам.",
-                "Проверка исправительного комплекта",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return false;
+            if (!ValidateItems(Entry.Items, correctAmount, "правильного чека"))
+                return false;
         }
 
         return true;
     }
 
-    private void RefreshRepairTotals()
+    private bool ValidateItems(IReadOnlyCollection<OrderItem> items, double target, string side)
     {
-        if (RefundItemsTotalText is null || Entry is null)
-            return;
+        if (items.Count == 0)
+            return Warn($"Добавьте хотя бы одну позицию для {side}.");
 
-        var itemsTotal = Entry.Items.Sum(i => i.Sum);
-        var target = Entry.OriginalCheckAmount ?? Entry.CorrectAmount ?? Entry.Amount;
-        RefundItemsTotalText.Text = $"Итог позиций: {itemsTotal:N2} ₽ / сумма старого чека: {target:N2} ₽";
+        var total = Math.Round(items.Sum(i => i.Sum), 2);
+        if (Math.Abs(total - target) <= 0.01)
+            return true;
 
-        var ok = Math.Abs(itemsTotal - target) <= 0.01;
-        RefundItemsTotalText.Foreground = TryFindResource(ok ? "BrushAccent2" : "BrushOrange") as Brush
-                                          ?? RefundItemsTotalText.Foreground;
+        return Warn($"Сумма позиций {side} ({total:N2} ₽) не равна итогу чека ({target:N2} ₽).");
     }
 
-    private bool IsRepairPair()
-        => (!string.IsNullOrWhiteSpace(Entry.PlannedReverseOperation) &&
-            !string.IsNullOrWhiteSpace(Entry.PlannedCorrectOperation)) ||
-           (Entry.DocumentType == SourceDocumentType.Realization &&
-            Entry.CorrectionScenario == CorrectionScenario.WrongDate);
+    private bool Warn(string message)
+    {
+        MessageBox.Show(message, "Проверка исправления", MessageBoxButton.OK, MessageBoxImage.Warning);
+        return false;
+    }
 
-    private string DefaultRepairItemName()
+    private void RefreshTotals()
+    {
+        if (OriginalItemsTotalText is null || CorrectItemsTotalText is null)
+            return;
+
+        SetTotal(OriginalItemsTotalText, Entry.OriginalItems.Sum(i => i.Sum),
+            Entry.OriginalCheckAmount ?? Entry.Amount, "исходный чек");
+        SetTotal(CorrectItemsTotalText, Entry.Items.Sum(i => i.Sum),
+            Entry.CorrectAmount ?? Entry.Amount, "правильный чек");
+    }
+
+    private void SetTotal(TextBlock target, double total, double expected, string label)
+    {
+        target.Text = $"Итог позиций: {total:N2} ₽ / {label}: {expected:N2} ₽";
+        var ok = Math.Abs(total - expected) <= 0.01;
+        target.Foreground = TryFindResource(ok ? "BrushAccent2" : "BrushOrange") as Brush
+                            ?? target.Foreground;
+    }
+
+    private bool HasCorrectOrdinaryReceipt() =>
+        !string.IsNullOrWhiteSpace(Entry.PlannedCorrectOperation) &&
+        !Entry.PlannedCorrectOperation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase);
+
+    private string DefaultItemName()
     {
         var docNum = !string.IsNullOrWhiteSpace(Entry.CorrectionNumber)
             ? Entry.CorrectionNumber
@@ -204,6 +283,15 @@ public partial class CorrectionEditorWindow : Window
         var prefix = Entry.IsService || Entry.AgentInfo is not null ? "Услуга" : "Товар";
         return Entry.DocumentType == SourceDocumentType.Realization
             ? $"{prefix} по реализации {docNum}"
-            : $"{prefix} по документу {docNum}";
+            : $"Аванс по документу {docNum}";
     }
+
+    private static List<OrderItem> CloneItems(IEnumerable<OrderItem> source) => source
+        .Select(item => new OrderItem
+        {
+            Name = item.Name,
+            Quantity = item.Quantity,
+            Sum = item.Sum,
+        })
+        .ToList();
 }

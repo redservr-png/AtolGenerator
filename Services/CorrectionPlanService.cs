@@ -14,10 +14,18 @@ public static class CorrectionPlanService
             return Stop(CorrectionPlanStatus.NeedsScenario,
                 "Не удалось определить сценарий по пояснению. Выберите его в редакторе.");
 
+        if (order.CorrectionScenario == CorrectionScenario.RealRefund)
+            return Stop(CorrectionPlanStatus.NeedsScenario,
+                "Реальный возврат не является исправлением. Оформите его в разделе «Возвраты по заказам».");
+
         var correctAmount = order.CorrectAmount ?? order.Amount;
-        if (correctAmount <= 0 || !TryReadDocumentDate(order.OrderDate, out var documentDate))
+        if (!TryReadDocumentDate(order.OrderDate, out var documentDate))
             return Stop(CorrectionPlanStatus.NeedsOneC,
-                "Сначала загрузите правильную сумму и дату документа из 1С.");
+                "Сначала загрузите дату документа из 1С.");
+
+        if (order.CorrectionScenario != CorrectionScenario.FullCancel && correctAmount <= 0)
+            return Stop(CorrectionPlanStatus.NeedsOneC,
+                "Сначала загрузите правильную сумму документа из 1С.");
 
         var isService = order.IsService || order.AgentInfo is not null;
         if (isService && (string.IsNullOrWhiteSpace(order.ServiceType) ||
@@ -32,31 +40,15 @@ public static class CorrectionPlanService
         {
             Status = CorrectionPlanStatus.Ready,
             IsSameDay = sameDay,
-            Message = sameDay
-                ? "Документ создан сегодня: правильная сторона формируется обычным чеком."
-                : "Дата документа прошла: правильная сторона формируется чеком коррекции.",
+            Message = "План подготовлен по официальным правилам АТОЛ для ФФД 1.05.",
         };
-
-        if (order.CorrectionScenario == CorrectionScenario.RealRefund)
-        {
-            plan.Checks.Add(Check(1, "sell_refund", "Возврат покупателю", correctAmount,
-                paymentType, vatType, requiresItems: true, usesFp: false));
-            return plan;
-        }
-
-        if (order.CorrectionScenario == CorrectionScenario.ExpenseCorrection)
-        {
-            plan.Checks.Add(Check(1, sameDay ? "sell_refund" : "buy_correction",
-                sameDay ? "Возврат прихода" : "Коррекция возврата", correctAmount,
-                paymentType, vatType, requiresItems: sameDay, usesFp: false));
-            return plan;
-        }
 
         if (originalReceipt is not null && IsCorrectionReceipt(originalReceipt))
             return Stop(CorrectionPlanStatus.DeferredCorrectionReceipt,
                 "Исходный чек является чеком коррекции. Этот случай будет обработан на третьем этапе.");
 
-        if (order.CorrectionScenario == CorrectionScenario.CheckNotPunched && originalReceipt is null)
+        if (order.CorrectionScenario is CorrectionScenario.CheckNotPunched or CorrectionScenario.ExpenseCorrection &&
+            originalReceipt is null)
         {
             if (!string.IsNullOrWhiteSpace(order.OriginalFiscalNumber))
                 return Stop(CorrectionPlanStatus.NeedsOriginalReceipt,
@@ -64,6 +56,9 @@ public static class CorrectionPlanService
             var operation = ResolveCorrectOperation(order, sameDay);
             plan.Checks.Add(Check(1, operation, CorrectTitle(operation), correctAmount,
                 paymentType, vatType, requiresItems: !IsCorrection(operation), usesFp: false));
+            plan.Message = sameDay
+                ? "Исходного чека нет: формируется один обычный чек с правильными реквизитами."
+                : "Исходного чека нет и дата расчёта прошла: формируется один чек коррекции.";
             return plan;
         }
 
@@ -71,10 +66,12 @@ public static class CorrectionPlanService
             return Stop(CorrectionPlanStatus.NeedsOriginalReceipt,
                 "Загрузите отчёт ОФД: исходный ошибочный чек должен быть найден строго по ФП.");
 
-        var reverseOperation = ReverseOperation(originalReceipt.Operation, originalReceipt.Document);
-        if (string.IsNullOrWhiteSpace(reverseOperation))
+        var originalOperation = NormalizeOriginalOperation(originalReceipt.Operation, originalReceipt.Document);
+        if (string.IsNullOrWhiteSpace(originalOperation))
             return Stop(CorrectionPlanStatus.NeedsOriginalReceipt,
                 "В отчёте ОФД не удалось определить операцию исходного чека.");
+
+        var reverseOperation = ReverseOperation(originalOperation);
 
         var wrongAmount = Math.Abs(originalReceipt.Amount);
         if (wrongAmount <= 0)
@@ -85,18 +82,18 @@ public static class CorrectionPlanService
             ResolveOriginalPaymentType(order, paymentType), vatType,
             requiresItems: true, usesFp: true));
 
-        if (order.CorrectionScenario == CorrectionScenario.CheckNotPunched)
-            plan.Message = sameDay
-                ? "В 1С и ОФД найден исходный чек: вместо одиночного чека подготовлена отмена и правильный обычный чек."
-                : "В 1С и ОФД найден исходный чек: вместо одиночной коррекции подготовлен исправительный комплект.";
-
-        if (order.CorrectionScenario != CorrectionScenario.FullCancel)
+        if (order.CorrectionScenario == CorrectionScenario.FullCancel)
         {
-            var correctOperation = ResolveCorrectOperation(order, sameDay);
-            plan.Checks.Add(Check(2, correctOperation, CorrectTitle(correctOperation), correctAmount,
-                ResolveCorrectPaymentType(order, paymentType), vatType,
-                requiresItems: !IsCorrection(correctOperation), usesFp: IsCorrection(correctOperation)));
+            plan.Message = "ФФД 1.05: лишний исходный чек отменяется обычным обратным чеком " +
+                           "с ФП исходного чека в теге 1192.";
+            return plan;
         }
+
+        plan.Checks.Add(Check(2, originalOperation, CorrectTitle(originalOperation), correctAmount,
+            ResolveCorrectPaymentType(order, paymentType), vatType,
+            requiresItems: true, usesFp: true));
+        plan.Message = "ФФД 1.05: исходный чек отменяется обычным обратным чеком, затем создаётся " +
+                       "правильный обычный чек. В обоих чеках указывается ФП исходного чека в теге 1192.";
 
         return plan;
     }
@@ -131,7 +128,7 @@ public static class CorrectionPlanService
         VatType = vatType,
         RequiresItems = requiresItems,
         UsesOriginalFiscalSign = usesFp,
-        XmlOnly = IsCorrection(operation),
+        XmlOnly = true,
     };
 
     private static string ResolveCorrectOperation(OrderEntry order, bool sameDay)
@@ -141,15 +138,24 @@ public static class CorrectionPlanService
         return isReturn ? "buy_correction" : "sell_correction";
     }
 
-    private static string ReverseOperation(string operation, string document)
+    private static string NormalizeOriginalOperation(string operation, string document)
     {
         var value = $"{operation} {document}".ToLowerInvariant();
-        if (value.Contains("возврат прихода") || value.Contains("sell_refund")) return "sell";
-        if (value.Contains("возврат расхода") || value.Contains("buy_refund")) return "buy";
-        if (value.Contains("приход") || value.Contains("sell")) return "sell_refund";
-        if (value.Contains("расход") || value.Contains("buy")) return "buy_refund";
+        if (value.Contains("возврат прихода") || value.Contains("sell_refund")) return "sell_refund";
+        if (value.Contains("возврат расхода") || value.Contains("buy_refund")) return "buy_refund";
+        if (value.Contains("приход") || value.Contains("sell")) return "sell";
+        if (value.Contains("расход") || value.Contains("buy")) return "buy";
         return string.Empty;
     }
+
+    private static string ReverseOperation(string operation) => operation switch
+    {
+        "sell" => "sell_refund",
+        "sell_refund" => "sell",
+        "buy" => "buy_refund",
+        "buy_refund" => "buy",
+        _ => string.Empty,
+    };
 
     private static string ResolveVatType(OrderEntry order, bool isService)
     {
@@ -182,6 +188,8 @@ public static class CorrectionPlanService
     {
         "sell" => "Правильный приход",
         "sell_refund" => "Правильный возврат прихода",
+        "buy" => "Правильный расход",
+        "buy_refund" => "Правильный возврат расхода",
         "sell_correction" => "Коррекция прихода",
         "buy_correction" => "Коррекция возврата",
         _ => "Правильный чек",

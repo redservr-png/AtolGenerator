@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
         Title="Редактирование коррекции"
-        Width="1020" Height="760" MinWidth="860" MinHeight="620"
+        Width="1160" Height="820" MinWidth="980" MinHeight="680"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize" ShowInTaskbar="False"
         Background="{DynamicResource BrushBg}"
@@ -131,7 +131,7 @@
                     <TextBlock Text="Редактирование коррекции"
                                FontSize="20" FontWeight="Bold"
                                Foreground="{DynamicResource BrushText}"/>
-                    <TextBlock Text="Проверьте основание, суммы, ФП исходного чека и табличную часть возврата."
+                    <TextBlock Text="Проверьте две стороны исправления: исходный ошибочный чек и правильный чек."
                                Style="{StaticResource MutedText}" Margin="0,3,0,0"/>
                 </StackPanel>
 
@@ -235,13 +235,13 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <Border Grid.Column="0" Style="{StaticResource SoftPanelBorder}">
+                                <Border x:Name="ReverseSidePanel" Grid.Column="0" Style="{StaticResource SoftPanelBorder}">
                                     <StackPanel>
                                         <TextBlock Text="1. Отмена старого чека" Style="{StaticResource SectionTitle}"/>
                                         <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,12">
                                             <Run Text="Операция: "/>
-                                            <Run Text="{Binding PlannedReverseOperation}" FontWeight="SemiBold"/>
-                                            <Run Text=". ФП исходного чека сохранён в карточке и служебной записке."/>
+                                            <Run Text="{Binding PlannedReverseOperation, Mode=OneWay}" FontWeight="SemiBold"/>
+                                            <Run Text=". ФП исходного чека будет записан в тег 1192."/>
                                         </TextBlock>
 
                                         <Grid Margin="0,0,0,10">
@@ -269,19 +269,19 @@
                                             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
                                                 <Button Content="+ Позиция" Style="{StaticResource BtnGhost}"
                                                         Padding="10,5" Margin="0,0,6,0"
-                                                        Click="AddRepairItem_Click"/>
+                                                        Click="AddOriginalItem_Click"/>
                                                 <Button Content="Удалить" Style="{StaticResource BtnGhost}"
                                                         Padding="10,5"
-                                                        Click="DeleteRepairItem_Click"/>
+                                                        Click="DeleteOriginalItem_Click"/>
                                             </StackPanel>
                                         </DockPanel>
 
-                                        <DataGrid x:Name="RepairItemsGrid"
-                                                  ItemsSource="{Binding Items}"
+                                        <DataGrid x:Name="OriginalItemsGrid"
+                                                  ItemsSource="{Binding OriginalItems}"
                                                   Height="190"
                                                   CanUserAddRows="False"
                                                   CanUserDeleteRows="False"
-                                                  CurrentCellChanged="RepairItemsGrid_CurrentCellChanged">
+                                                  CurrentCellChanged="ItemsGrid_CurrentCellChanged">
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn Header="Номенклатура"
                                                                     Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
@@ -295,24 +295,68 @@
                                             </DataGrid.Columns>
                                         </DataGrid>
 
-                                        <TextBlock x:Name="RefundItemsTotalText"
+                                        <TextBlock x:Name="OriginalItemsTotalText"
                                                    Style="{StaticResource MutedText}"
                                                    Margin="0,8,0,0"/>
                                     </StackPanel>
                                 </Border>
 
-                                <Border Grid.Column="2" Style="{StaticResource SoftPanelBorder}">
+                                <Border x:Name="CorrectSidePanel" Grid.Column="2" Style="{StaticResource SoftPanelBorder}">
                                     <StackPanel>
                                         <TextBlock Text="2. Правильный чек" Style="{StaticResource SectionTitle}"/>
                                         <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,12">
                                             <Run Text="Операция: "/>
-                                            <Run Text="{Binding PlannedCorrectOperation}" FontWeight="SemiBold"/>
-                                            <Run Text=". Для чека коррекции ФФД 1.05 табличная часть не формируется."/>
+                                            <Run Text="{Binding PlannedCorrectOperation, Mode=OneWay}" FontWeight="SemiBold"/>
+                                            <Run Text=". Если исправляется уже пробитый чек, это обычный чек с тем же тегом 1192."/>
                                         </TextBlock>
 
                                         <TextBlock Text="Исправленная сумма, ₽" Style="{StaticResource FieldLabel}"/>
                                         <TextBox Text="{Binding CorrectAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
-                                                 ToolTip="Сумма реализации после исправления, используется в чеке коррекции"/>
+                                                 ToolTip="Итог правильного чека после исправления"/>
+
+                                        <StackPanel x:Name="CorrectItemsPanel" Margin="0,12,0,0">
+                                            <DockPanel Margin="0,0,0,6">
+                                                <TextBlock Text="Табличная часть правильного чека"
+                                                           Style="{StaticResource FieldLabel}"
+                                                           DockPanel.Dock="Left"/>
+                                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                                    <Button Content="+ Позиция" Style="{StaticResource BtnGhost}"
+                                                            Padding="10,5" Margin="0,0,6,0"
+                                                            Click="AddCorrectItem_Click"/>
+                                                    <Button Content="Удалить" Style="{StaticResource BtnGhost}"
+                                                            Padding="10,5"
+                                                            Click="DeleteCorrectItem_Click"/>
+                                                </StackPanel>
+                                            </DockPanel>
+
+                                            <DataGrid x:Name="CorrectItemsGrid"
+                                                      ItemsSource="{Binding Items}"
+                                                      Height="190"
+                                                      CanUserAddRows="False"
+                                                      CanUserDeleteRows="False"
+                                                      CurrentCellChanged="ItemsGrid_CurrentCellChanged">
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Номенклатура"
+                                                                        Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
+                                                                        Width="*"/>
+                                                    <DataGridTextColumn Header="Кол-во"
+                                                                        Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}"
+                                                                        Width="90"/>
+                                                    <DataGridTextColumn Header="Сумма, ₽"
+                                                                        Binding="{Binding Sum, UpdateSourceTrigger=PropertyChanged}"
+                                                                        Width="110"/>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+
+                                            <TextBlock x:Name="CorrectItemsTotalText"
+                                                       Style="{StaticResource MutedText}"
+                                                       Margin="0,8,0,0"/>
+                                        </StackPanel>
+
+                                        <TextBlock x:Name="CorrectCorrectionHint"
+                                                   Text="Для одиночного чека коррекции ФФД 1.05 табличная часть не передаётся."
+                                                   Style="{StaticResource MutedText}"
+                                                   Margin="0,12,0,0"/>
 
                                         <Grid Margin="0,10,0,0">
                                             <Grid.ColumnDefinitions>
@@ -345,11 +389,11 @@
                                                 <StackPanel Grid.Column="1">
                                                     <TextBlock>
                                                         <Run Text="Услуга: "/>
-                                                        <Run Text="{Binding ServiceType, TargetNullValue=''}"/>
+                                                        <Run Text="{Binding ServiceType, Mode=OneWay, TargetNullValue=''}"/>
                                                     </TextBlock>
                                                     <TextBlock>
                                                         <Run Text="Агент / ставка: "/>
-                                                        <Run Text="{Binding AgentVatDisplay}"/>
+                                                        <Run Text="{Binding AgentVatDisplay, Mode=OneWay}"/>
                                                     </TextBlock>
                                                 </StackPanel>
                                             </Grid>

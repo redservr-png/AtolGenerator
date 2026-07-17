@@ -13,22 +13,22 @@ public enum CorrectionScenario
     /// Лишний чек — отменить полностью.
     /// «Не было», «Не должно», «Лишний», «Деньги не списались», «Оплаты не было»,
     /// «Удалить», «Покупатель не платил», «помечен на удаление чек пробит».
-    /// → Один sell_refund на полную сумму.
+    /// → Один обычный обратный чек с ФП исходного чека в теге 1192.
     /// </summary>
     FullCancel,
 
     /// <summary>
     /// Чек пробит большей суммой — нужно уменьшить базу.
     /// «Чек большей суммой».
-    /// → sell_refund(ошибочная сумма из чека) + sell_correction(правильная сумма из 1С).
+    /// → Обычная отмена ошибочной суммы + правильный обычный чек; тег 1192 в обоих.
     /// </summary>
     CheckLargerAmount,
 
     /// <summary>
     /// Чек пробит меньшей суммой — нужно увеличить базу.
     /// «Чек меньшей суммой».
-    /// Чек был пробит, поэтому нужно сначала возврат, потом коррекция.
-    /// → sell_refund(ошибочная сумма из чека) + sell_correction(правильная сумма из 1С).
+    /// Чек был пробит, поэтому нужно сначала отменить его, затем пробить правильный.
+    /// → Два обычных чека с ФП исходного чека в теге 1192.
     /// </summary>
     CheckSmallerAmount,
 
@@ -42,14 +42,14 @@ public enum CorrectionScenario
     /// <summary>
     /// Неправильный способ оплаты — отменить и пробить заново.
     /// «Чек пробит наличными» (а было картой), «перепутали оплаты», «нал и безнал».
-    /// → sell_refund + sell_correction с правильным payments.type.
+    /// → Обычная отмена + правильный обычный чек с верным payments.type; тег 1192 в обоих.
     /// </summary>
     WrongPaymentType,
 
     /// <summary>
     /// Неправильная номенклатура — заменить.
     /// «Перепутали номенклатуру», «ошибочно провела сборку», «другая номенклатура».
-    /// → sell_refund + sell_correction с правильной номенклатурой.
+    /// → Обычная отмена + правильный обычный чек с верной номенклатурой; тег 1192 в обоих.
     /// </summary>
     WrongNomenclature,
 
@@ -58,12 +58,14 @@ public enum CorrectionScenario
     /// «Возврат по бухгалтерии», «деньги вернулись клиенту».
     /// → Один sell_refund (самостоятельная операция, не исправление).
     /// </summary>
+    // Устаревшее значение для чтения сохранённых данных. Реальные возвраты
+    // оформляются в отдельном сценарии «Возвраты по заказам».
     RealRefund,
 
     /// <summary>
     /// Чек пробит другой датой — корректировка.
     /// «Чек другой датой», «дата следующая».
-    /// → sell_correction с правильной base_date.
+    /// → Отмена исходного и правильный обычный чек с тегом 1192 в обоих.
     /// </summary>
     WrongDate,
 
@@ -89,7 +91,7 @@ public enum OrderKind
     /// <summary>Только sell_correction — доплата/корректировка</summary>
     SingleCorrection,
 
-    /// <summary>Пара sell_refund + sell_correction (или sell_refund + sell)</summary>
+    /// <summary>Пара обычных чеков: отмена исходного + правильный чек</summary>
     RefundCorrectionPair,
 }
 
@@ -141,7 +143,7 @@ public static class CorrectionScenarioExtensions
         _ => OrderKind.Regular,
     };
 
-    /// <summary>Требует ли сценарий sell_correction (= нельзя через API АТОЛ).</summary>
+    /// <summary>Требует ли сценарий отдельного XML-процесса без отправки через API.</summary>
     public static bool RequiresXmlOnly(this CorrectionScenario s) =>
-        s.ToOrderKind() is OrderKind.SingleCorrection or OrderKind.RefundCorrectionPair;
+        s is not CorrectionScenario.Unknown and not CorrectionScenario.RealRefund;
 }

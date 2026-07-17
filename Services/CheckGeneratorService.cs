@@ -378,28 +378,64 @@ public static class CheckGeneratorService
 
     private static void ValidateRepairPairItems(OrderEntry order)
     {
-        var plannedPair = !string.IsNullOrWhiteSpace(order.PlannedReverseOperation) &&
-                          !string.IsNullOrWhiteSpace(order.PlannedCorrectOperation);
-        if (!order.IsCorrection ||
-            order.DocumentType != SourceDocumentType.Realization ||
-            (!plannedPair && order.CorrectionScenario != CorrectionScenario.WrongDate) ||
-            string.IsNullOrWhiteSpace(order.OriginalFiscalNumber))
+        if (!order.IsCorrection)
+            return;
+
+        var fallbackReverseScenario = order.CorrectionScenario is CorrectionScenario.FullCancel or
+            CorrectionScenario.CheckLargerAmount or
+            CorrectionScenario.CheckSmallerAmount or
+            CorrectionScenario.WrongPaymentType or
+            CorrectionScenario.WrongNomenclature or
+            CorrectionScenario.WrongDate;
+        var hasReverse = !string.IsNullOrWhiteSpace(order.PlannedReverseOperation) ||
+                         (fallbackReverseScenario && !string.IsNullOrWhiteSpace(order.OriginalFiscalNumber));
+        if (!hasReverse)
             return;
 
         var docNum = !string.IsNullOrWhiteSpace(order.CorrectionNumber)
             ? order.CorrectionNumber
             : order.OrderNum;
+
+        if (string.IsNullOrWhiteSpace(order.OriginalFiscalNumber))
+            throw new InvalidOperationException(
+                $"{docNum}: для исправления по ФФД 1.05 не заполнен ФП исходного чека (тег 1192).");
+
         var originalAmount = order.OriginalCheckAmount ?? 0;
-        var itemsAmount = Math.Round(order.Items.Sum(i => i.Sum), 2);
-
-        if (originalAmount <= 0 || order.Items.Count == 0)
+        if (originalAmount <= 0)
             throw new InvalidOperationException(
-                $"{docNum}: для возврата исправительного комплекта не заполнена сумма старого чека или табличная часть.");
+                $"{docNum}: не заполнена сумма исходного ошибочного чека.");
 
-        if (Math.Abs(itemsAmount - originalAmount) > 0.01)
+        if (order.DocumentType != SourceDocumentType.Realization)
+            return;
+
+        var originalItems = order.OriginalItems.Count > 0 ? order.OriginalItems : order.Items;
+        var originalItemsAmount = Math.Round(originalItems.Sum(i => i.Sum), 2);
+
+        if (originalItems.Count == 0)
             throw new InvalidOperationException(
-                $"{docNum}: сумма строк возврата ({itemsAmount:N2}) не равна сумме старого чека ({originalAmount:N2}). " +
-                "Перезагрузите реализацию из 1С или исправьте табличную часть перед формированием XML.");
+                $"{docNum}: не заполнена табличная часть исходного ошибочного чека.");
+
+        if (Math.Abs(originalItemsAmount - originalAmount) > 0.01)
+            throw new InvalidOperationException(
+                $"{docNum}: сумма позиций исходного чека ({originalItemsAmount:N2}) не равна его итогу ({originalAmount:N2}). " +
+                "Исправьте табличную часть отмены перед формированием XML.");
+
+        var hasCorrectOrdinaryReceipt = !string.IsNullOrWhiteSpace(order.PlannedCorrectOperation) &&
+                                        !order.PlannedCorrectOperation.EndsWith(
+                                            "_correction", StringComparison.OrdinalIgnoreCase);
+        if (!hasCorrectOrdinaryReceipt)
+            return;
+
+        var correctAmount = order.CorrectAmount ?? order.Amount;
+        var correctItemsAmount = Math.Round(order.Items.Sum(i => i.Sum), 2);
+        if (correctAmount <= 0 || order.Items.Count == 0)
+            throw new InvalidOperationException(
+                $"{docNum}: не заполнена сумма или табличная часть правильного чека.");
+
+        if (Math.Abs(correctItemsAmount - correctAmount) > 0.01)
+            throw new InvalidOperationException(
+                $"{docNum}: сумма позиций правильного чека ({correctItemsAmount:N2}) не равна исправленной сумме ({correctAmount:N2}). " +
+                "Исправьте правильную табличную часть перед формированием XML.");
     }
 
     private static string ToIsoDate(string ddMmYyyy)

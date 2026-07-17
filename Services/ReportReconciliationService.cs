@@ -26,7 +26,8 @@ public static class ReportReconciliationService
             .Where(IsSupportedOperation)
             .Where(x => !string.IsNullOrWhiteSpace(x.RealizationNumber))
             .GroupBy(x => x.RealizationNumber, StringComparer.OrdinalIgnoreCase)
-            .Where(g => g.Any(x => x.Operation == "sell_refund") && g.Any(x => x.Operation == "sell_correction"))
+            .Where(g => g.Any(x => x.Operation == "sell_refund") &&
+                        g.Any(x => x.Operation is "sell" or "sell_correction"))
             .Select(g => g.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -71,9 +72,9 @@ public static class ReportReconciliationService
             }
 
             var isPair = pairRealizations.Contains(xml.RealizationNumber);
-            if (!isPair && xml.Operation == "sell_refund")
+            if (!isPair && xml.Operation is "sell_refund" or "sell")
             {
-                result.Add(ErrorRow(xml, "Одиночный возврат не относится к загрузке коррекции реализации"));
+                result.Add(ErrorRow(xml, "Одиночный обычный чек не относится к загрузке коррекции реализации"));
                 continue;
             }
 
@@ -130,7 +131,7 @@ public static class ReportReconciliationService
     }
 
     private static bool IsSupportedOperation(XmlReportCheck check) =>
-        check.Operation is "sell_correction" or "sell_refund";
+        check.Operation is "sell" or "sell_correction" or "sell_refund";
 
     private static string BuildComment(string operation, DateTime registeredAt, long fiscalSign, bool isPair)
     {
@@ -139,6 +140,8 @@ public static class ReportReconciliationService
         {
             "sell_refund" when isPair =>
                 $"{date} Пробит исправительный чек \"Возврат прихода\" ФП: {fiscalSign}",
+            "sell" when isPair =>
+                $"{date} Пробит исправительный чек \"Приход\" ФП: {fiscalSign}",
             "sell_correction" =>
                 $"{date} Пробит чек коррекции \"Приход\" ФП: {fiscalSign}",
             _ => string.Empty,

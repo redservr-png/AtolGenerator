@@ -120,7 +120,8 @@ public static class ObsidianParserService
                 var scenarioMatch = RxScenario.Match(rawBody);
                 var scenario = scenarioMatch.Success &&
                                Enum.TryParse<CorrectionScenario>(scenarioMatch.Groups["scenario"].Value,
-                                   true, out var parsedScenario)
+                                   true, out var parsedScenario) &&
+                               parsedScenario != CorrectionScenario.RealRefund
                     ? parsedScenario
                     : (CorrectionScenario?)null;
                 var body = RxScenario.Replace(
