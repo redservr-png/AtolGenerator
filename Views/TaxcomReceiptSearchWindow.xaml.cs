@@ -20,11 +20,15 @@ public partial class TaxcomReceiptSearchWindow : Window
     private bool _isComplete;
     private int _nextRequestIndex;
     private int? _manualPeriodRequestIndex;
-    private bool _useManualPeriodForBatch;
+    private DateTime? _activePeriodFrom;
+    private DateTime? _activePeriodTo;
 
     public TaxcomReceiptSearchWindow(IReadOnlyList<TaxcomReceiptSearchRequest> requests)
     {
-        _requests = requests;
+        _requests = requests
+            .OrderBy(x => x.PeriodFrom)
+            .ThenBy(x => x.PeriodTo)
+            .ToList();
         InitializeComponent();
         ProgressText.Text = $"Подготовлено запросов: {_requests.Count}";
         SearchButton.IsEnabled = false;
@@ -138,41 +142,43 @@ public partial class TaxcomReceiptSearchWindow : Window
                 return;
             }
 
-            if (_nextRequestIndex == 0 &&
-                !_useManualPeriodForBatch &&
-                _manualPeriodRequestIndex is null &&
-                _requests.Count > 0)
-            {
-                var periodFrom = _requests.Min(x => x.PeriodFrom);
-                var periodTo = _requests.Max(x => x.PeriodTo);
-                _manualPeriodRequestIndex = 0;
-                CurrentDocumentText.Text = "Подготовка общего периода";
-                CurrentFiscalSignText.Text = $"Чеков в пачке: {_requests.Count}";
-                CurrentPeriodText.Text = $"Период {periodFrom:dd.MM.yyyy} - {periodTo:dd.MM.yyyy}";
-                StatusText.Text = $"Установите в Такскоме общий период {periodFrom:dd.MM.yyyy} - {periodTo:dd.MM.yyyy} и нажмите «Продолжить после ввода периода». Затем все чеки будут искаться автоматически.";
-                SearchButton.Content = "Продолжить после ввода периода";
-                SearchButton.IsEnabled = true;
-                return;
-            }
-
             for (var index = _nextRequestIndex; index < _requests.Count; index++)
             {
                 var request = _requests[index];
                 if (_manualPeriodRequestIndex == index)
                 {
-                    _useManualPeriodForBatch = true;
+                    _activePeriodFrom = request.PeriodFrom;
+                    _activePeriodTo = request.PeriodTo;
                     _manualPeriodRequestIndex = null;
+                }
+
+                var periodIsActive = _activePeriodFrom == request.PeriodFrom &&
+                                     _activePeriodTo == request.PeriodTo;
+                if (!periodIsActive)
+                {
+                    var groupSize = _requests
+                        .Skip(index)
+                        .TakeWhile(x => x.PeriodFrom == request.PeriodFrom &&
+                                        x.PeriodTo == request.PeriodTo)
+                        .Count();
+                    _manualPeriodRequestIndex = index;
+                    ProgressText.Text = $"Подготовка периода · обработано {index} из {_requests.Count}";
+                    CurrentDocumentText.Text = "Следующая группа чеков";
+                    CurrentFiscalSignText.Text = $"Чеков в группе: {groupSize}";
+                    CurrentPeriodText.Text = $"Период {request.PeriodFrom:dd.MM.yyyy} - {request.PeriodTo:dd.MM.yyyy}";
+                    StatusText.Text = $"Установите период {request.PeriodFrom:dd.MM.yyyy} - {request.PeriodTo:dd.MM.yyyy} и нажмите «Продолжить после ввода периода». Все {groupSize} чеков этой группы будут найдены автоматически.";
+                    SearchButton.Content = "Продолжить после ввода периода";
+                    SearchButton.IsEnabled = true;
+                    return;
                 }
 
                 ProgressText.Text = $"Запрос {index + 1} из {_requests.Count} · найдено {FoundRows.Count}";
                 CurrentDocumentText.Text = request.DocumentLabel;
                 CurrentFiscalSignText.Text = $"ФПД {request.FiscalSign}";
-                CurrentPeriodText.Text = _useManualPeriodForBatch
-                    ? "Период задан вручную для всей пачки"
-                    : $"Период {request.PeriodFrom:dd.MM.yyyy} - {request.PeriodTo:dd.MM.yyyy}";
+                CurrentPeriodText.Text = $"Период {request.PeriodFrom:dd.MM.yyyy} - {request.PeriodTo:dd.MM.yyyy}";
                 StatusText.Text = "Заполняем параметры поиска...";
 
-                var action = await FillAndSubmitAsync(request, _useManualPeriodForBatch);
+                var action = await FillAndSubmitAsync(request, manualPeriodConfirmed: true);
                 if (!action.Ok)
                 {
                     if (action.RequiresManualPeriod)
@@ -299,10 +305,73 @@ public partial class TaxcomReceiptSearchWindow : Window
             .Replace("__DATE_FROM__", JsonSerializer.Serialize($"{request.PeriodFrom:dd.MM.yyyy}"))
             .Replace("__DATE_TO__", JsonSerializer.Serialize($"{request.PeriodTo:dd.MM.yyyy}"))
             .Replace("__SKIP_PERIOD_VALIDATION__", skipPeriodValidation ? "true" : "false");
-        return await ExecuteAsync<DomActionResult>(script) ?? new DomActionResult
+        var result = await ExecuteAsync<DomActionResult>(script) ?? new DomActionResult
         {
             Message = "Страница поиска не вернула результат заполнения",
         };
+        if (!result.Ok) return result;
+        if (result.ClickX <= 0 || result.ClickY <= 0)
+        {
+            return new DomActionResult
+            {
+                Message = "Не удалось определить положение кнопки «Поиск чека»",
+            };
+        }
+
+        try
+        {
+            await ClickSearchButtonAsync(result.ClickX, result.ClickY);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return new DomActionResult
+            {
+                Message = $"Не удалось нажать кнопку «Поиск чека»: {ex.Message}",
+            };
+        }
+    }
+
+    private async Task ClickSearchButtonAsync(double x, double y)
+    {
+        if (Browser.CoreWebView2 is null)
+            throw new InvalidOperationException("Встроенный браузер не готов");
+
+        Browser.Focus();
+        await Task.Delay(250);
+        var currentTarget = await ExecuteAsync<DomActionResult>(LocateSearchButtonScript);
+        if (currentTarget?.Ok == true && currentTarget.ClickX > 0 && currentTarget.ClickY > 0)
+        {
+            x = currentTarget.ClickX;
+            y = currentTarget.ClickY;
+        }
+        await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+            "Input.dispatchMouseEvent",
+            JsonSerializer.Serialize(new { type = "mouseMoved", x, y }));
+        await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+            "Input.dispatchMouseEvent",
+            JsonSerializer.Serialize(new
+            {
+                type = "mousePressed",
+                x,
+                y,
+                button = "left",
+                buttons = 1,
+                clickCount = 1,
+                pointerType = "mouse",
+            }));
+        await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+            "Input.dispatchMouseEvent",
+            JsonSerializer.Serialize(new
+            {
+                type = "mouseReleased",
+                x,
+                y,
+                button = "left",
+                buttons = 0,
+                clickCount = 1,
+                pointerType = "mouse",
+            }));
     }
 
     private async Task<bool> IsPeriodAppliedAsync(TaxcomReceiptSearchRequest request)
@@ -452,6 +521,22 @@ public partial class TaxcomReceiptSearchWindow : Window
           const controls = Array.from(document.querySelectorAll('button, input[type="submit"], a'));
           const hasSearch = controls.some(x => ((x.textContent || x.value || '').trim().toUpperCase() === 'ПОИСК ЧЕКА'));
           return { ready: hasFiscalSign && hasSearch };
+        })()
+        """;
+
+    private const string LocateSearchButtonScript = """
+        (() => {
+          const controls = Array.from(document.querySelectorAll('button, input[type="submit"], a'));
+          const button = controls.find(x =>
+            ((x.textContent || x.value || '').trim().toUpperCase() === 'ПОИСК ЧЕКА'));
+          if (!button) return { ok: false, clickX: 0, clickY: 0, message: 'Кнопка поиска не найдена' };
+          const rect = button.getBoundingClientRect();
+          return {
+            ok: rect.width > 0 && rect.height > 0,
+            clickX: rect.left + rect.width / 2,
+            clickY: rect.top + rect.height / 2,
+            message: ''
+          };
         })()
         """;
 
@@ -675,16 +760,21 @@ public partial class TaxcomReceiptSearchWindow : Window
           const controls = Array.from(document.querySelectorAll('button, input[type="submit"], a'));
           const searchButton = controls.find(x => ((x.textContent || x.value || '').trim().toUpperCase() === 'ПОИСК ЧЕКА'));
           if (!searchButton) return { ok: false, message: 'На странице не найдена кнопка поиска' };
-          if (searchButton.disabled) return { ok: false, message: 'Кнопка поиска недоступна: проверьте период' };
           const receiptSearch = window.__atolGeneratorReceiptSearch;
           if (receiptSearch && typeof receiptSearch.setState === 'function') {
             receiptSearch.setState({ fiscalSign });
           }
-          window.setTimeout(() => {
-            setValue(fpInput, fiscalSign);
-            searchButton.click();
-          }, 100);
-          return { ok: true, message: '' };
+          searchButton.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          const rect = searchButton.getBoundingClientRect();
+          if (rect.width <= 0 || rect.height <= 0) {
+            return { ok: false, message: 'Кнопка поиска не отображается на странице' };
+          }
+          return {
+            ok: true,
+            clickX: rect.left + rect.width / 2,
+            clickY: rect.top + rect.height / 2,
+            message: ''
+          };
         })()
         """;
 
@@ -713,6 +803,8 @@ public partial class TaxcomReceiptSearchWindow : Window
     {
         public bool Ok { get; init; }
         public bool RequiresManualPeriod { get; init; }
+        public double ClickX { get; init; }
+        public double ClickY { get; init; }
         public string Message { get; init; } = string.Empty;
     }
 

@@ -229,8 +229,9 @@
 
       <DataGrid Grid.Column="0" Style="{StaticResource CaseGrid}"
                 ItemsSource="{Binding CasesView}"
-                SelectedItem="{Binding SelectedCase}"
-                CurrentItem="{Binding SelectedCase, Mode=TwoWay}"
+                SelectedItem="{Binding SelectedCase, Mode=OneWay}"
+                IsSynchronizedWithCurrentItem="False"
+                CurrentCellChanged="CasesGrid_CurrentCellChanged"
                 FrozenColumnCount="2">
         <DataGrid.ContextMenu>
           <ContextMenu>

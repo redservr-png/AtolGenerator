@@ -181,11 +181,11 @@ public static class OneCService
                     result.Add(new OneCRealization
                     {
                         DocNumber    = docNumber,
-                        DocDate      = docDate > DateTime.MinValue
+                        DocDate      = IsMeaningfulDate(docDate)
                                         ? docDate.ToString("dd.MM.yyyy")
                                         : string.Empty,
                         OrderNumber  = orderNum,
-                        OrderDate    = orderDate > DateTime.MinValue
+                        OrderDate    = IsMeaningfulDate(orderDate)
                                         ? orderDate.ToString("dd.MM.yyyy HH:mm:ss")
                                         : string.Empty,
                         CustomerName = Str(selection.Покупатель),
@@ -906,7 +906,7 @@ public static class OneCService
                     var documentDate = ToDateTime(sel.ДатаДок);
                     o.OneCComment = Str(sel.Комментарий).Trim();
                     o.CorrectAmount = sum;
-                    if (documentDate > DateTime.MinValue)
+                    if (IsMeaningfulDate(documentDate))
                     {
                         o.OrderDate = documentDate.ToString("dd.MM.yyyy HH:mm:ss");
                         o.CorrectionDate = documentDate.ToString("dd.MM.yyyy");
@@ -929,7 +929,7 @@ public static class OneCService
                             }
                             o.OneCCheckNumber = Str(sel.НомерЧекаККМ).Trim();
                             var checkDate = ToDateTime(sel.ДатаПечатиЧека);
-                            o.OneCCheckDate = checkDate > DateTime.MinValue ? checkDate : null;
+                            o.OneCCheckDate = IsMeaningfulDate(checkDate) ? checkDate : null;
                         }
                         catch { /* нет поля — пропускаем */ }
                     }
@@ -1125,6 +1125,9 @@ public static class OneCService
         try { return v is null ? DateTime.MinValue : (DateTime)v; }
         catch { return DateTime.MinValue; }
     }
+
+    private static bool IsMeaningfulDate(DateTime value) =>
+        value.Year is >= 2000 and <= 2100;
 
     private static double ToDouble(dynamic? v)
     {

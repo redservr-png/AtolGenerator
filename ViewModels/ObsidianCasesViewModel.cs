@@ -827,7 +827,10 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         long fiscalSign)
     {
         var source = item.Record.PrimaryDocument;
-        var anchorDate = source.OneCCheckDate ?? ParseDocumentDate(source.OrderDate) ?? DateTime.Today;
+        var anchorDate = NormalizeReceiptDate(source.OneCCheckDate)
+                         ?? ParseDocumentDate(source.OrderDate)
+                         ?? ParseDocumentDate(source.SourceDocumentDate)
+                         ?? DateTime.Today;
         var fromMonth = anchorDate.AddMonths(-1);
         var toMonth = anchorDate.AddMonths(1);
         return new TaxcomReceiptSearchRequest
@@ -853,8 +856,15 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         };
         return DateTime.TryParseExact(value?.Trim(), formats, CultureInfo.InvariantCulture,
             DateTimeStyles.AllowWhiteSpaces, out var result)
-            ? result
+            ? NormalizeReceiptDate(result)
             : null;
+    }
+
+    private static DateTime? NormalizeReceiptDate(DateTime? value)
+    {
+        if (!value.HasValue) return null;
+        var date = value.Value;
+        return date.Year is >= 2000 && date.Year <= 2100 ? date : null;
     }
 
     private sealed record ReceiptMatchSummary(int Found, int NotFound, int RequiresAttention);
@@ -1123,7 +1133,8 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
 
     private static void ApplySnapshot(OrderEntry snapshot, OrderEntry target)
     {
-        target.OrderDate = snapshot.OrderDate;
+        if (ParseDocumentDate(snapshot.OrderDate).HasValue)
+            target.OrderDate = snapshot.OrderDate;
         target.Amount = snapshot.Amount;
         target.CustomerName = snapshot.CustomerName;
         target.Items = snapshot.Items.Select(x => new OrderItem
@@ -1144,7 +1155,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         target.CorrectAmount = snapshot.CorrectAmount;
         target.OneCComment = snapshot.OneCComment;
         target.OneCCheckNumber = snapshot.OneCCheckNumber;
-        target.OneCCheckDate = snapshot.OneCCheckDate;
+        target.OneCCheckDate = NormalizeReceiptDate(snapshot.OneCCheckDate);
         target.OriginalPaymentWasCash = snapshot.OriginalPaymentWasCash;
         target.CorrectPaymentIsCash = snapshot.CorrectPaymentIsCash;
     }
