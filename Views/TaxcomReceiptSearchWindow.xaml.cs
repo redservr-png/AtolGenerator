@@ -310,18 +310,10 @@ public partial class TaxcomReceiptSearchWindow : Window
             Message = "Страница поиска не вернула результат заполнения",
         };
         if (!result.Ok) return result;
-        if (result.ClickX <= 0 || result.ClickY <= 0)
-        {
-            return new DomActionResult
-            {
-                Message = "Не удалось определить положение кнопки «Поиск чека»",
-            };
-        }
 
         try
         {
-            await ClickSearchButtonAsync(result.ClickX, result.ClickY);
-            return result;
+            return await ActivateSearchButtonAsync(request.FiscalSign);
         }
         catch (Exception ex)
         {
@@ -332,46 +324,112 @@ public partial class TaxcomReceiptSearchWindow : Window
         }
     }
 
-    private async Task ClickSearchButtonAsync(double x, double y)
+    private async Task<DomActionResult> ActivateSearchButtonAsync(long fiscalSign)
     {
         if (Browser.CoreWebView2 is null)
             throw new InvalidOperationException("Встроенный браузер не готов");
 
         Browser.Focus();
-        await Task.Delay(250);
-        var currentTarget = await ExecuteAsync<DomActionResult>(LocateSearchButtonScript);
-        if (currentTarget?.Ok == true && currentTarget.ClickX > 0 && currentTarget.ClickY > 0)
+        DomActionResult? ready = null;
+        var readyScript = SearchButtonReadyScript.Replace(
+            "__FISCAL_SIGN__", JsonSerializer.Serialize(fiscalSign.ToString()));
+        for (var attempt = 0; attempt < 20; attempt++)
         {
-            x = currentTarget.ClickX;
-            y = currentTarget.ClickY;
+            ready = await ExecuteAsync<DomActionResult>(readyScript);
+            if (ready?.Ready == true) break;
+            await Task.Delay(100);
         }
+
+        if (ready?.Ready != true)
+        {
+            return new DomActionResult
+            {
+                Message = ready?.Message.Length > 0
+                    ? ready.Message
+                    : $"Такском не подтвердил введённый ФПД {fiscalSign}",
+            };
+        }
+
+        var armed = await ExecuteAsync<DomActionResult>(ArmSearchButtonScript);
+        if (armed?.Ok != true)
+        {
+            return new DomActionResult
+            {
+                Message = armed?.Message.Length > 0
+                    ? armed.Message
+                    : "Не удалось подготовить кнопку «Поиск чека» к нажатию",
+            };
+        }
+
+        await DispatchEnterAsync();
+        await Task.Delay(250);
+        if (await WasSearchClickObservedAsync())
+            return new DomActionResult { Ok = true, ClickObserved = true };
+
+        var fallbackSent = await ClickSearchButtonWithUserGestureAsync();
+        await Task.Delay(150);
+        if (fallbackSent && await WasSearchClickObservedAsync())
+            return new DomActionResult { Ok = true, ClickObserved = true };
+
+        return new DomActionResult
+        {
+            Message = "Такском не подтвердил нажатие кнопки «Поиск чека». Поиск этого ФПД не был запущен.",
+        };
+    }
+
+    private async Task DispatchEnterAsync()
+    {
+        if (Browser.CoreWebView2 is null) return;
+
+        const int enterKeyCode = 13;
         await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
-            "Input.dispatchMouseEvent",
-            JsonSerializer.Serialize(new { type = "mouseMoved", x, y }));
-        await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
-            "Input.dispatchMouseEvent",
+            "Input.dispatchKeyEvent",
             JsonSerializer.Serialize(new
             {
-                type = "mousePressed",
-                x,
-                y,
-                button = "left",
-                buttons = 1,
-                clickCount = 1,
-                pointerType = "mouse",
+                type = "keyDown",
+                key = "Enter",
+                code = "Enter",
+                text = "\r",
+                unmodifiedText = "\r",
+                windowsVirtualKeyCode = enterKeyCode,
+                nativeVirtualKeyCode = enterKeyCode,
             }));
         await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
-            "Input.dispatchMouseEvent",
+            "Input.dispatchKeyEvent",
             JsonSerializer.Serialize(new
             {
-                type = "mouseReleased",
-                x,
-                y,
-                button = "left",
-                buttons = 0,
-                clickCount = 1,
-                pointerType = "mouse",
+                type = "keyUp",
+                key = "Enter",
+                code = "Enter",
+                windowsVirtualKeyCode = enterKeyCode,
+                nativeVirtualKeyCode = enterKeyCode,
             }));
+    }
+
+    private async Task<bool> ClickSearchButtonWithUserGestureAsync()
+    {
+        if (Browser.CoreWebView2 is null) return false;
+
+        var response = await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+            "Runtime.evaluate",
+            JsonSerializer.Serialize(new
+            {
+                expression = ClickSearchButtonExpression,
+                userGesture = true,
+                awaitPromise = true,
+                returnByValue = true,
+            }));
+
+        using var document = JsonDocument.Parse(response);
+        return document.RootElement.TryGetProperty("result", out var result) &&
+               result.TryGetProperty("value", out var value) &&
+               value.ValueKind == JsonValueKind.True;
+    }
+
+    private async Task<bool> WasSearchClickObservedAsync()
+    {
+        var result = await ExecuteAsync<DomActionResult>(ClickObservedScript);
+        return result?.ClickObserved == true;
     }
 
     private async Task<bool> IsPeriodAppliedAsync(TaxcomReceiptSearchRequest request)
@@ -524,19 +582,86 @@ public partial class TaxcomReceiptSearchWindow : Window
         })()
         """;
 
-    private const string LocateSearchButtonScript = """
+    private const string SearchButtonReadyScript = """
+        (() => {
+          const fiscalSign = __FISCAL_SIGN__;
+          const fpInput = Array.from(document.querySelectorAll('input'))
+            .find(x => (x.placeholder || '').toUpperCase().includes('ФПД'));
+          const controls = Array.from(document.querySelectorAll('button, input[type="submit"], a'));
+          const button = controls.find(x =>
+            ((x.textContent || x.value || '').trim().toUpperCase() === 'ПОИСК ЧЕКА'));
+          if (!fpInput) return { ok: false, ready: false, message: 'На странице не найдено поле ФПД' };
+          if (!button) return { ok: false, ready: false, message: 'Кнопка поиска не найдена' };
+          const receiptSearch = window.__atolGeneratorReceiptSearch;
+          const stateValue = receiptSearch && receiptSearch.state
+            ? String(receiptSearch.state.fiscalSign || '')
+            : fiscalSign;
+          const rect = button.getBoundingClientRect();
+          return {
+            ok: true,
+            ready: String(fpInput.value || '') === fiscalSign &&
+              stateValue === fiscalSign &&
+              !button.disabled &&
+              rect.width > 0 && rect.height > 0,
+            message: String(fpInput.value || '') !== fiscalSign
+              ? 'Поле ФПД ещё не приняло значение'
+              : stateValue !== fiscalSign
+                ? 'Taxcom ещё обрабатывает введённый ФПД'
+                : button.disabled
+                  ? 'Кнопка поиска пока недоступна'
+                  : ''
+          };
+        })()
+        """;
+
+    private const string ArmSearchButtonScript = """
         (() => {
           const controls = Array.from(document.querySelectorAll('button, input[type="submit"], a'));
           const button = controls.find(x =>
             ((x.textContent || x.value || '').trim().toUpperCase() === 'ПОИСК ЧЕКА'));
-          if (!button) return { ok: false, clickX: 0, clickY: 0, message: 'Кнопка поиска не найдена' };
-          const rect = button.getBoundingClientRect();
-          return {
-            ok: rect.width > 0 && rect.height > 0,
-            clickX: rect.left + rect.width / 2,
-            clickY: rect.top + rect.height / 2,
-            message: ''
+          if (!button) return { ok: false, focused: false, message: 'Кнопка поиска не найдена' };
+          if (window.__atolGeneratorSearchClickTarget && window.__atolGeneratorSearchClickHandler) {
+            window.__atolGeneratorSearchClickTarget.removeEventListener(
+              'click', window.__atolGeneratorSearchClickHandler, true);
+          }
+          window.__atolGeneratorSearchClickObserved = false;
+          window.__atolGeneratorSearchClickTarget = button;
+          window.__atolGeneratorSearchClickHandler = () => {
+            window.__atolGeneratorSearchClickObserved = true;
           };
+          button.addEventListener('click', window.__atolGeneratorSearchClickHandler, {
+            once: true,
+            capture: true
+          });
+          button.focus();
+          return {
+            ok: true,
+            focused: document.activeElement === button,
+            message: document.activeElement === button ? '' : 'Кнопка поиска не получила фокус'
+          };
+        })()
+        """;
+
+    private const string ClickObservedScript = """
+        (() => ({
+          ok: true,
+          clickObserved: window.__atolGeneratorSearchClickObserved === true,
+          message: ''
+        }))()
+        """;
+
+    private const string ClickSearchButtonExpression = """
+        (() => {
+          const controls = Array.from(document.querySelectorAll('button, input[type="submit"], a'));
+          const button = controls.find(x =>
+            ((x.textContent || x.value || '').trim().toUpperCase() === 'ПОИСК ЧЕКА'));
+          if (!button || button.disabled) return false;
+          window.__atolGeneratorSearchClickObserved = false;
+          button.addEventListener('click', () => {
+            window.__atolGeneratorSearchClickObserved = true;
+          }, { once: true, capture: true });
+          button.click();
+          return true;
         })()
         """;
 
@@ -731,6 +856,24 @@ public partial class TaxcomReceiptSearchWindow : Window
           const dateFrom = __DATE_FROM__;
           const dateTo = __DATE_TO__;
           const skipPeriodValidation = __SKIP_PERIOD_VALIDATION__;
+          const findReceiptSearch = element => {
+            if (!element) return null;
+            const key = Object.getOwnPropertyNames(element).find(name =>
+              name.startsWith('__reactFiber$') ||
+              name.startsWith('__reactInternalInstance$'));
+            let fiber = key ? element[key] : null;
+            while (fiber) {
+              const instance = fiber.stateNode;
+              if (instance &&
+                  typeof instance._submitRequest === 'function' &&
+                  instance.state &&
+                  Object.prototype.hasOwnProperty.call(instance.state, 'fiscalSign')) {
+                return instance;
+              }
+              fiber = fiber.return;
+            }
+            return null;
+          };
           const inputs = Array.from(document.querySelectorAll('input'));
           const periodControl = document.querySelector('[data-atol-period-control="true"]') ||
             document.querySelector('.receiptsSearch__filter .date-picker-area') ||
@@ -760,8 +903,12 @@ public partial class TaxcomReceiptSearchWindow : Window
           const controls = Array.from(document.querySelectorAll('button, input[type="submit"], a'));
           const searchButton = controls.find(x => ((x.textContent || x.value || '').trim().toUpperCase() === 'ПОИСК ЧЕКА'));
           if (!searchButton) return { ok: false, message: 'На странице не найдена кнопка поиска' };
-          const receiptSearch = window.__atolGeneratorReceiptSearch;
+          const receiptSearch = window.__atolGeneratorReceiptSearch ||
+            findReceiptSearch(fpInput) ||
+            findReceiptSearch(searchButton) ||
+            findReceiptSearch(periodControl);
           if (receiptSearch && typeof receiptSearch.setState === 'function') {
+            window.__atolGeneratorReceiptSearch = receiptSearch;
             receiptSearch.setState({ fiscalSign });
           }
           searchButton.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -771,8 +918,6 @@ public partial class TaxcomReceiptSearchWindow : Window
           }
           return {
             ok: true,
-            clickX: rect.left + rect.width / 2,
-            clickY: rect.top + rect.height / 2,
             message: ''
           };
         })()
@@ -803,8 +948,9 @@ public partial class TaxcomReceiptSearchWindow : Window
     {
         public bool Ok { get; init; }
         public bool RequiresManualPeriod { get; init; }
-        public double ClickX { get; init; }
-        public double ClickY { get; init; }
+        public bool Ready { get; init; }
+        public bool Focused { get; init; }
+        public bool ClickObserved { get; init; }
         public string Message { get; init; } = string.Empty;
     }
 
