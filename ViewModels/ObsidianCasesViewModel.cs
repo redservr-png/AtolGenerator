@@ -227,6 +227,7 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
             ServiceType = source.ServiceType,
             City = source.City,
             DocumentType = source.DocumentType,
+            CorrectionScenario = source.CorrectionScenario,
             OriginalFiscalNumber = source.OriginalFiscalNumber,
             OriginalCheckAmount = source.OriginalCheckAmount,
             CorrectAmount = source.CorrectAmount,

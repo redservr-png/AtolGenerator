@@ -1738,16 +1738,37 @@ public class MainViewModel : BaseViewModel
     private void AddObsidianCasesToWork(IReadOnlyList<OrderEntry> entries)
     {
         var added = 0;
+        var updated = 0;
         foreach (var entry in entries)
         {
-            if (!string.IsNullOrWhiteSpace(entry.ObsidianCaseId) &&
-                Orders.Any(x => x.ObsidianCaseId.Equals(entry.ObsidianCaseId, StringComparison.OrdinalIgnoreCase)))
+            var existing = string.IsNullOrWhiteSpace(entry.ObsidianCaseId)
+                ? null
+                : Orders.FirstOrDefault(x => x.ObsidianCaseId.Equals(
+                    entry.ObsidianCaseId, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
+            {
+                var correctionPlanChanged =
+                    existing.CorrectionScenario != entry.CorrectionScenario ||
+                    existing.Kind != entry.Kind ||
+                    !string.Equals(existing.PlannedReverseOperation, entry.PlannedReverseOperation,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(existing.PlannedCorrectOperation, entry.PlannedCorrectOperation,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(existing.PlannedVatType, entry.PlannedVatType,
+                        StringComparison.OrdinalIgnoreCase);
+                if (correctionPlanChanged)
+                {
+                    Orders[Orders.IndexOf(existing)] = entry;
+                    updated++;
+                }
                 continue;
+            }
+
             Orders.Add(entry);
             added++;
         }
 
-        if (added == 0)
+        if (added == 0 && updated == 0)
         {
             ShowToast("Выбранные случаи уже находятся в рабочем списке", true);
             return;
@@ -1757,8 +1778,12 @@ public class MainViewModel : BaseViewModel
         Tab = realizationCount >= entries.Count - realizationCount ? "realization" : "payment";
         SetWorkspace("main");
         ShowOfdToolsPanel = false;
-        StatusText = $"Добавлено из Obsidian: {added}";
-        ShowToast($"Добавлено в работу: {added}", false);
+        StatusText = updated > 0
+            ? $"Добавлено из Obsidian: {added}; обновлено: {updated}"
+            : $"Добавлено из Obsidian: {added}";
+        ShowToast(updated > 0
+            ? $"Добавлено: {added}; обновлено в работе: {updated}"
+            : $"Добавлено в работу: {added}", false);
     }
 
     public int OrderCount => Orders.Count;
