@@ -258,8 +258,14 @@ public static class CheckGeneratorService
         if (p.MergeXml && results.Count > 0)
         {
             // Один файл для всех чеков
-            var ts      = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")[..17];
-            var xmlPath = Path.Combine(p.OutputDir, $"{ts}_{results.Count}чеков_{p.CheckType}.xml");
+            var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")[..17];
+            var operations = results
+                .Select(r => r.CheckData?.OperationType)
+                .Where(operation => !string.IsNullOrWhiteSpace(operation))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var operationLabel = operations.Count == 1 ? operations[0]! : "mixed";
+            var xmlPath = Path.Combine(p.OutputDir, $"{ts}_{results.Count}чеков_{operationLabel}.xml");
             XmlGeneratorService.GenerateFile(results.Select(r => r.CheckData!), xmlPath);
             foreach (var r in results) r.XmlPath = xmlPath;
         }

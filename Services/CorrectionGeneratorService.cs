@@ -14,6 +14,11 @@ public static class CorrectionGeneratorService
 {
     public static List<CheckData> BuildCheckDataList(OrderEntry order, GenerationParams p)
     {
+        // A full cancellation is always the reverse side of the original receipt.
+        // Do not let a stale or manually edited plan turn it into a sell operation.
+        if (order.CorrectionScenario == CorrectionScenario.FullCancel)
+            return BuildFullCancel(order, p);
+
         if (!string.IsNullOrWhiteSpace(order.PlannedReverseOperation) ||
             !string.IsNullOrWhiteSpace(order.PlannedCorrectOperation))
             return BuildPlanned(order, p);

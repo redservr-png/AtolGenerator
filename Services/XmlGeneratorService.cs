@@ -104,6 +104,10 @@ public static class XmlGeneratorService
 
         receipt.Add(new XElement("total", Fmt(c.Amount)));
 
+        // Tag 1192 must precede cashier according to the ATOL XML schema.
+        if (!string.IsNullOrWhiteSpace(c.AdditionalCheckProps))
+            receipt.Add(new XElement("additional_check_props", c.AdditionalCheckProps.Trim()));
+
         receipt.Add(new XElement("cashier", c.CashierName));
 
         // Доп. реквизит пользователя (теги 1084/1085/1086) — например, № реализации
@@ -194,7 +198,7 @@ public class CheckData
     public bool            IsService            { get; set; }
     public string          CorrectionBaseDate   { get; set; } = string.Empty;
     public string          CorrectionBaseNumber { get; set; } = "б/н";
-    public string          AdditionalCheckProps { get; set; } = string.Empty;  // ФП исходного чека (API/карточка; не XML ФФД 1.05)
+    public string          AdditionalCheckProps { get; set; } = string.Empty;  // Тег 1192: ФП исходного чека.
     public string          UserAttributeName    { get; set; } = string.Empty;  // тег 1085: наименование доп.реквизита
     public string          UserAttributeValue   { get; set; } = string.Empty;  // тег 1086: значение (например, № реализации)
     public string          CashierName          { get; set; } = AppConstants.CashierName;
