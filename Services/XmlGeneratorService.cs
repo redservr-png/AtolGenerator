@@ -54,18 +54,6 @@ public static class XmlGeneratorService
                 new XElement("payment_address", AppConstants.PaymentAddress))
         );
 
-        // Agent info
-        if (c.Agent is not null)
-        {
-            receipt.Add(new XElement("agent_info",
-                new XElement("type", AgentTypeCatalog.Normalize(c.Agent.AgentType))));
-            receipt.Add(new XElement("supplier_info",
-                new XElement("phones",
-                    new XElement("phone", c.Agent.Phone)),
-                new XElement("name", c.Agent.Name),
-                new XElement("inn",  c.Agent.Inn)));
-        }
-
         // Items
         var itemsEl = new XElement("items");
         foreach (var item in c.Items)
@@ -78,12 +66,20 @@ public static class XmlGeneratorService
                 new XElement("payment_method", item.PaymentMethod),
                 new XElement("payment_object", item.PaymentObject)
             );
-            if (c.Agent is not null && item.IsService)
-                it.Add(new XElement("agent_info",
-                    new XElement("type", AgentTypeCatalog.Normalize(c.Agent.AgentType))));
             it.Add(new XElement("vat",
                 new XElement("type", item.VatType),
                 new XElement("sum",  Fmt(item.VatSum))));
+
+            // ФФД 1.05: агент и поставщик относятся к позиции услуги и
+            // должны идти в XML строго после <vat>. На уровне <receipt>
+            // supplier_info допускает только phones и не принимает name/inn.
+            if (c.Agent is not null && item.IsService)
+            {
+                it.Add(new XElement("agent_info",
+                    new XElement("type", AgentTypeCatalog.Normalize(c.Agent.AgentType))));
+                it.Add(BuildSupplierInfo(c.Agent));
+            }
+
             itemsEl.Add(it);
         }
         receipt.Add(itemsEl);
@@ -179,6 +175,13 @@ public static class XmlGeneratorService
     }
 
     private static string Fmt(double v) => v.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static XElement BuildSupplierInfo(ServiceProvider agent) =>
+        new("supplier_info",
+            new XElement("phones",
+                new XElement("phone", agent.Phone)),
+            new XElement("name", agent.Name),
+            new XElement("inn", agent.Inn));
 }
 
 // ── Internal DTO ─────────────────────────────────────────────────────────────
