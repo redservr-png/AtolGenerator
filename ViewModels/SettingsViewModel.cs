@@ -109,6 +109,7 @@ public sealed class SettingsViewModel : BaseViewModel
     public ObservableCollection<ServiceProvider> Agents { get; }
     public IReadOnlyList<string> ServiceTypes { get; } = new[] { "Доставка", "Сборка" };
     public IReadOnlyList<VatRateOption> VatTypes { get; } = VatRateCatalog.All;
+    public IReadOnlyList<AgentTypeOption> AgentTypes { get; } = AgentTypeCatalog.All;
 
     public ICommand SelectSectionCommand { get; }
     public ICommand AddCashierCommand { get; }
@@ -296,6 +297,8 @@ public sealed class SettingsViewModel : BaseViewModel
             agent.Name = agent.Name.Trim();
             agent.Inn = agent.Inn.Trim();
             agent.Phone = agent.Phone.Trim();
+            agent.VatType = VatRateCatalog.Normalize(agent.VatType, "none");
+            agent.AgentType = AgentTypeCatalog.Normalize(agent.AgentType);
         }
 
         new AtolCredentials
@@ -348,6 +351,9 @@ public sealed class SettingsViewModel : BaseViewModel
 
         if (Agents.Any(a => !VatRateCatalog.IsKnown(a.VatType)))
             return "Выберите ставку НДС агента из справочника.";
+
+        if (Agents.Any(a => !AgentTypeCatalog.IsKnown(a.AgentType)))
+            return "Выберите юридический тип агента из справочника АТОЛ.";
 
         if (Agents.Any(a =>
                 a.Inn.Trim().Length is not (10 or 12) ||
@@ -444,5 +450,6 @@ public sealed class SettingsViewModel : BaseViewModel
     };
 
     private static ServiceProvider CloneAgent(ServiceProvider source) => new(
-        source.Service, source.City, source.Name, source.Inn, source.Phone, source.VatType);
+        source.Service, source.City, source.Name, source.Inn, source.Phone,
+        source.VatType, source.AgentType);
 }

@@ -704,6 +704,14 @@ public class MainViewModel : BaseViewModel
         if (parsed.Count == 0)
         { ShowToast("Заказы не распознаны. Проверьте формат.", true); return; }
 
+        var switchedToRefund = false;
+        if (Tab == "payment" && !IsCorrection &&
+            OrderParserService.HasRefundIntent(BulkText) && CheckType != "sell_refund")
+        {
+            CheckType = "sell_refund";
+            switchedToRefund = true;
+        }
+
         // Обогащаем из 1С ТОЛЬКО для услуг (IsService=true но агент не определён).
         // Обычные чеки (sell) обогащение не требуют — не запрашиваем 1С без нужды.
         var hasOneC = !string.IsNullOrWhiteSpace(OneCServer) && !string.IsNullOrWhiteSpace(OneCDatabase);
@@ -730,7 +738,10 @@ public class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(OrderCount));
         OnPropertyChanged(nameof(CanPunchOrdersViaAtol));
 
-        ShowToast($"Добавлено {added} из {parsed.Count} заказ(ов)", added > 0);
+        var resultMessage = $"Добавлено {added} из {parsed.Count} заказ(ов)";
+        if (switchedToRefund)
+            resultMessage += ". Выбран тип «Возврат прихода»";
+        ShowToast(resultMessage, false);
     }
 
     private void AddSingleOrder()
@@ -1643,11 +1654,19 @@ public class MainViewModel : BaseViewModel
         };
 
         var orders = Orders.ToList();
+        if (!ConfirmPunchOrders(orders))
+        {
+            AtolStatus = "Отправка в АТОЛ отменена оператором";
+            StatusText = "Готов к работе";
+            return;
+        }
+
         AtolLastError = string.Empty;
         AtolStatus    = $"Пробиваем через АТОЛ 0 из {orders.Count}...";
 
         var errors = new System.Text.StringBuilder();
-        int ok = 0, fail = 0;
+        var completed = new List<OrderEntry>();
+        int ok = 0, alreadyProcessed = 0, fail = 0;
 
         for (int i = 0; i < orders.Count; i++)
         {
@@ -1660,7 +1679,11 @@ public class MainViewModel : BaseViewModel
 
             if (result.Success)
             {
-                ok++;
+                completed.Add(order);
+                if (result.AlreadyProcessed)
+                    alreadyProcessed++;
+                else
+                    ok++;
             }
             else
             {
@@ -1670,14 +1693,50 @@ public class MainViewModel : BaseViewModel
             }
         }
 
-        AtolStatus    = $"Готово: пробито {ok}, ошибок {fail}" +
+        foreach (var order in completed)
+            Orders.Remove(order);
+
+        AtolStatus    = $"Готово: пробито {ok}, уже было в журнале {alreadyProcessed}, ошибок {fail}" +
                         (fail > 0 ? $"  |  лог: {AtolApiService.LogPath}" : "");
         AtolLastError = errors.ToString().TrimEnd();
         StatusText    = "Готов к работе";
 
         ShowToast(
-            $"АТОЛ Online: пробито {ok} из {orders.Count}" + (fail > 0 ? $", ошибок {fail}" : ""),
-            fail > 0 && ok == 0);
+            $"АТОЛ Online: новых {ok}, уже в журнале {alreadyProcessed}, ошибок {fail}",
+            fail > 0 && ok + alreadyProcessed == 0);
+    }
+
+    private bool ConfirmPunchOrders(IReadOnlyList<OrderEntry> orders)
+    {
+        var operation = CheckType switch
+        {
+            "sell" => "Приход",
+            "sell_refund" => "Возврат прихода",
+            "buy_refund" => "Возврат расхода",
+            _ => CheckType,
+        };
+        var payment = PaymentType switch
+        {
+            "cash" => "наличные",
+            "advance" => "аванс",
+            _ => "безналичные",
+        };
+        var preview = string.Join(Environment.NewLine, orders.Take(5)
+            .Select(order => $"• {order.OrderNum}: {order.Amount:N2} ₽"));
+        if (orders.Count > 5)
+            preview += Environment.NewLine + $"• и ещё {orders.Count - 5}";
+
+        var message =
+            "Будут отправлены фискальные чеки в АТОЛ Online.\n\n" +
+            $"Операция: {operation}\n" +
+            $"Оплата: {payment}\n" +
+            $"Кассир: {SelectedCashier?.ShortName ?? AppConstants.CashierName}\n" +
+            $"Количество: {orders.Count}\n\n" +
+            $"Заказы:\n{preview}\n\n" +
+            "Проверьте операцию и подтвердите отправку.";
+
+        return MessageBox.Show(message, "Подтверждение пробития", MessageBoxButton.YesNo,
+            MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
     }
 
     private OneCConnectionSettings BuildOneCSettings() => new()

@@ -1132,6 +1132,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
             Inn = source.AgentInfo.Inn,
             Phone = source.AgentInfo.Phone,
             VatType = source.AgentInfo.VatType,
+            AgentType = source.AgentInfo.AgentType,
         },
         CorrectionDate = source.CorrectionDate,
         CorrectionNumber = source.CorrectionNumber,

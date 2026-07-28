@@ -58,7 +58,7 @@ public static class XmlGeneratorService
         if (c.Agent is not null)
         {
             receipt.Add(new XElement("agent_info",
-                new XElement("type", "commission_agent")));
+                new XElement("type", AgentTypeCatalog.Normalize(c.Agent.AgentType))));
             receipt.Add(new XElement("supplier_info",
                 new XElement("phones",
                     new XElement("phone", c.Agent.Phone)),
@@ -79,7 +79,8 @@ public static class XmlGeneratorService
                 new XElement("payment_object", item.PaymentObject)
             );
             if (c.Agent is not null && item.IsService)
-                it.Add(new XElement("agent_info", new XElement("type", "commission_agent")));
+                it.Add(new XElement("agent_info",
+                    new XElement("type", AgentTypeCatalog.Normalize(c.Agent.AgentType))));
             it.Add(new XElement("vat",
                 new XElement("type", item.VatType),
                 new XElement("sum",  Fmt(item.VatSum))));

@@ -60,7 +60,8 @@ public static class CheckGeneratorService
             }
 
             var amount      = order.Amount;
-            var agentInfo   = order.AgentInfo;
+            // Собственная доставка не должна уносить в чек устаревшее правило агента.
+            var agentInfo   = order.IsOwnService ? null : order.AgentInfo;
             var corrDateRaw = order.CorrectionDate;
             // IsService: из заказа (импорт Excel) или из параметров генерации (ручной ввод)
             bool orderIsService = order.IsService || agentInfo is not null || p.IsService;
@@ -84,7 +85,7 @@ public static class CheckGeneratorService
                         Quantity      = 1,
                         Sum           = amount,
                         PaymentMethod = isService ? "full_prepayment" : "advance",
-                        PaymentObject = "payment",
+                        PaymentObject = isService ? "service" : "payment",
                         VatType       = isService ? serviceVatType : "vat122",
                         VatSum        = isService ? CalcServiceVat(amount, serviceVatType) : CalcVat122(amount),
                         IsService     = isService,

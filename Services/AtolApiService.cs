@@ -75,6 +75,7 @@ public class AtolError
 public class AtolPunchResult
 {
     public bool   Success         { get; set; }
+    public bool   AlreadyProcessed { get; set; }
     public string Uuid            { get; set; } = string.Empty;
     public string Error           { get; set; } = string.Empty;
     public string Status          { get; set; } = string.Empty;
@@ -88,6 +89,18 @@ public class AtolPunchResult
 
 public static class AtolApiService
 {
+    private sealed class PunchHistoryEntry
+    {
+        [JsonPropertyName("operation")] public string Operation { get; set; } = string.Empty;
+        [JsonPropertyName("order_num")] public string OrderNumber { get; set; } = string.Empty;
+        [JsonPropertyName("amount")] public double Amount { get; set; }
+        [JsonPropertyName("uuid")] public string Uuid { get; set; } = string.Empty;
+        [JsonPropertyName("fiscal_doc")] public long? FiscalDocNumber { get; set; }
+        [JsonPropertyName("fiscal_sign")] public long? FiscalSign { get; set; }
+        [JsonPropertyName("receipt_dt")] public string ReceiptDateTime { get; set; } = string.Empty;
+        [JsonPropertyName("ofd_url")] public string OfdReceiptUrl { get; set; } = string.Empty;
+    }
+
     private static readonly HttpClient Http = new()
     {
         BaseAddress = new Uri("https://online.atol.ru/possystem/v4/"),
@@ -183,7 +196,59 @@ public static class AtolApiService
         catch (Exception ex) { Log($"LogPunch error: {ex.Message}"); }
     }
 
-    private static object BuildAgentInfo() => new { type = "commission_agent" };
+    public static AtolPunchResult? FindExistingPunch(
+        string operation, string orderNumber, double amount, string? historyPath = null)
+    {
+        var path = string.IsNullOrWhiteSpace(historyPath) ? PunchedJsonPath : historyPath;
+        if (string.IsNullOrWhiteSpace(orderNumber) || !File.Exists(path)) return null;
+
+        try
+        {
+            foreach (var line in File.ReadLines(path).Reverse())
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                PunchHistoryEntry? entry;
+                try
+                {
+                    entry = JsonSerializer.Deserialize<PunchHistoryEntry>(line, JsonOpts);
+                }
+                catch (JsonException)
+                {
+                    continue;
+                }
+
+                if (entry is null ||
+                    !string.Equals(entry.Operation, operation, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(entry.OrderNumber, orderNumber, StringComparison.OrdinalIgnoreCase) ||
+                    Math.Abs(entry.Amount - amount) > 0.009)
+                    continue;
+
+                return new AtolPunchResult
+                {
+                    Success = true,
+                    AlreadyProcessed = true,
+                    Status = "duplicate",
+                    Uuid = entry.Uuid,
+                    FiscalDocNumber = entry.FiscalDocNumber,
+                    FiscalSign = entry.FiscalSign,
+                    ReceiptDateTime = entry.ReceiptDateTime,
+                    OfdReceiptUrl = entry.OfdReceiptUrl,
+                };
+            }
+        }
+        catch (IOException ex)
+        {
+            Log($"Duplicate check error: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    private static object BuildAgentInfo(ServiceProvider agent) => new
+    {
+        type = AgentTypeCatalog.Normalize(agent.AgentType),
+    };
 
     private static object? BuildSupplierInfo(ServiceProvider? agent) =>
         agent is null
@@ -227,6 +292,12 @@ public static class AtolApiService
         return (vatType, VatRateCatalog.CalculateFiscalSum(amount, vatType));
     }
 
+    internal static string GetPaymentMethod(string tab, bool isService) =>
+        tab == "payment" ? (isService ? "full_prepayment" : "advance") : "full_payment";
+
+    internal static string GetPaymentObject(string tab, bool isService) =>
+        tab == "payment" ? (isService ? "service" : "payment") : (isService ? "service" : "commodity");
+
     private static object BuildReceiptItem(
         string name, double quantity, double sum, string paymentMethod,
         string paymentObject, string vatType, double vatSum, ServiceProvider? agent)
@@ -242,7 +313,7 @@ public static class AtolApiService
             sum,
             payment_method = paymentMethod,
             payment_object = paymentObject,
-            agent_info = agent is not null ? BuildAgentInfo() : null,
+            agent_info = agent is not null ? BuildAgentInfo(agent) : null,
             supplier_info = BuildSupplierInfo(agent),
             vat = new { type = vatType, sum = vatSum },
         };
@@ -251,13 +322,9 @@ public static class AtolApiService
     private static List<object> BuildReceiptItems(OrderEntry order, string checkType, string tab)
     {
         var items = new List<object>();
-        var paymentMethod = tab == "payment"
-            ? (order.IsService ? "full_prepayment" : "advance")
-            : "full_payment";
-        var paymentObject = tab == "payment"
-            ? "payment"
-            : (order.IsService ? "service" : "commodity");
-        var itemAgent = order.IsService ? order.AgentInfo : null;
+        var paymentMethod = GetPaymentMethod(tab, order.IsService);
+        var paymentObject = GetPaymentObject(tab, order.IsService);
+        var itemAgent = order.IsService && !order.IsOwnService ? order.AgentInfo : null;
 
         if (tab == "realization" && order.Items.Count > 0)
         {
@@ -318,6 +385,13 @@ public static class AtolApiService
     public static async Task<AtolPunchResult> PunchCorrectionAsync(
         AtolCredentials creds, OneCRealization r, string cashierName = "")
     {
+        var existingPunch = FindExistingPunch("sell_refund", r.DocNumber, r.Amount);
+        if (existingPunch is not null)
+        {
+            Log($"PunchRefund [{r.DocNumber}]: skipped duplicate, UUID={existingPunch.Uuid}");
+            return existingPunch;
+        }
+
         var (token, tokenErr) = await GetTokenAsync(creds);
         if (token is null)
             return new AtolPunchResult { Error = $"Нет токена: {tokenErr}" };
@@ -427,18 +501,36 @@ public static class AtolApiService
         AtolCredentials creds, OrderEntry order, string checkType, string paymentType,
         string tab = "payment", string cashierName = "")
     {
-        var (token, tokenErr) = await GetTokenAsync(creds);
-        if (token is null)
-            return new AtolPunchResult { Error = $"Нет токена: {tokenErr}" };
-
         if (string.IsNullOrWhiteSpace(cashierName))
             cashierName = AppConstants.CashierName;
 
-        if (order.IsService && order.AgentInfo is null && !order.IsOwnService)
-            return new AtolPunchResult
-            {
-                Error = $"Для услуги {order.OrderNum} не найден агент/поставщик. Проверьте подразделение и номенклатуру в 1С."
-            };
+        var existingPunch = FindExistingPunch(checkType, order.OrderNum, order.Amount);
+        if (existingPunch is not null)
+        {
+            Log($"PunchOrder [{checkType}] {order.OrderNum}: skipped duplicate, UUID={existingPunch.Uuid}");
+            return existingPunch;
+        }
+
+        if (order.IsService && !order.IsOwnService)
+        {
+            if (order.AgentInfo is null)
+                return new AtolPunchResult
+                {
+                    Error = $"Для услуги {order.OrderNum} не найден агент/поставщик. Проверьте подразделение и номенклатуру в 1С."
+                };
+
+            if (string.IsNullOrWhiteSpace(order.AgentInfo.Name) ||
+                string.IsNullOrWhiteSpace(order.AgentInfo.Inn) ||
+                string.IsNullOrWhiteSpace(order.AgentInfo.Phone))
+                return new AtolPunchResult
+                {
+                    Error = $"Для услуги {order.OrderNum} не заполнены реквизиты агента/поставщика. Проверьте правило в настройках."
+                };
+        }
+
+        var (token, tokenErr) = await GetTokenAsync(creds);
+        if (token is null)
+            return new AtolPunchResult { Error = $"Нет токена: {tokenErr}" };
 
         var realizationNum = GetRealizationNumber(order, tab, checkType);
         var receiptItems = BuildReceiptItems(order, checkType, tab);
@@ -534,6 +626,19 @@ public static class AtolApiService
 
         try
         {
+            if (order.IsService)
+            {
+                var agentType = order.AgentInfo is null
+                    ? "не требуется"
+                    : AgentTypeCatalog.Normalize(order.AgentInfo.AgentType);
+                var innSuffix = order.AgentInfo?.Inn is { Length: >= 4 } inn
+                    ? $"***{inn[^4..]}"
+                    : "не указан";
+                Log($"PunchOrder [{checkType}] {order.OrderNum}: service item, " +
+                    $"payment_method={GetPaymentMethod(tab, true)}, payment_object=service, " +
+                    $"agent_type={agentType}, supplier_inn={innSuffix}, vat={vatType}");
+            }
+
             var json    = JsonSerializer.Serialize(requestBody, JsonOmitNullOpts);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
             var resp    = await Http.PostAsync($"{creds.GroupCode}/{endpoint}?token={token}", content);

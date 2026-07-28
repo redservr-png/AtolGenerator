@@ -215,7 +215,7 @@ public static class CorrectionGeneratorService
             PaymentType          = paymentType,
             CheckVatType         = vatType,
             Items                = items,
-            Agent                = o.AgentInfo,
+            Agent                = o.IsOwnService ? null : o.AgentInfo,
             IsService            = isService,
             CashierName          = p.Cashier.FullName,
             CashierShort         = p.Cashier.ShortName,
@@ -259,7 +259,7 @@ public static class CorrectionGeneratorService
             PaymentType          = paymentType,
             CheckVatType         = vatType,
             Items                = new List<CheckItem>(),   // коррекция без табличной части
-            Agent                = o.AgentInfo,
+            Agent                = o.IsOwnService ? null : o.AgentInfo,
             IsService            = isService,
             CorrectionBaseDate   = baseDate,
             CorrectionBaseNumber = baseNumber,
@@ -300,7 +300,7 @@ public static class CorrectionGeneratorService
             ? isService ? "full_prepayment" : "advance"
             : "full_payment";
         var paymentObject = tab == "payment"
-            ? "payment"
+            ? isService ? "service" : "payment"
             : isService ? "service" : "commodity";
 
         foreach (var raw in sourceItems.Where(i => !string.IsNullOrWhiteSpace(i.Name) && i.Sum > 0))
@@ -344,7 +344,7 @@ public static class CorrectionGeneratorService
             : "full_payment";
 
         string obj = tab == "payment"
-            ? "payment"
+            ? (isService ? "service" : "payment")
             : (isService ? "service" : "commodity");
 
         string vatType = VatRateCatalog.Normalize(fallbackVatType, "none");

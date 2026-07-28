@@ -46,6 +46,15 @@ public static class OrderParserService
 
     private static readonly Regex RxNonDigit = new(@"[^\d.]", RegexOptions.Compiled);
 
+    // Сообщения бухгалтера часто начинаются с «пробей чек на возврат».
+    // Это намерение относится ко всему пакету, а не к отдельной строке заказа.
+    private static readonly Regex RxRefundIntent = new(
+        @"\b(?:возврат\w*|вернут\w*)\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    public static bool HasRefundIntent(string? text) =>
+        !string.IsNullOrWhiteSpace(text) && RxRefundIntent.IsMatch(text);
+
     public static List<OrderEntry> Parse(string text)
     {
         var results = new List<OrderEntry>();

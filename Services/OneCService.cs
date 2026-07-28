@@ -128,7 +128,7 @@ public static class OneCService
         var skipped    = 0;
 
         Log($"=== LoadRealizations start: {from:dd.MM.yyyy} – {to:dd.MM.yyyy} ===");
-        Log($"Строка подключения: {s.ConnectionString}");
+        Log($"Подключение: сервер={s.Server}, база={s.Database}, пользователь={s.User}");
 
         try
         {

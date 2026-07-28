@@ -73,6 +73,12 @@ public static class ApplicationSettingsStore
         if (settings.Agents.Count == 0)
             settings.Agents = AppConstants.CreateDefaultServiceProviders();
 
+        foreach (var agent in settings.Agents)
+        {
+            agent.VatType = VatRateCatalog.Normalize(agent.VatType, "none");
+            agent.AgentType = AgentTypeCatalog.Normalize(agent.AgentType);
+        }
+
         if (string.IsNullOrWhiteSpace(settings.SelectedCashierShortName) ||
             settings.Cashiers.All(c => !string.Equals(
                 c.ShortName, settings.SelectedCashierShortName, StringComparison.OrdinalIgnoreCase)))

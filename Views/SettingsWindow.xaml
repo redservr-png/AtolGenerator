@@ -13,6 +13,7 @@
     <cv:BoolToVisibilityConverter x:Key="BoolVis"/>
     <cv:StringEqualConverter x:Key="StrEq"/>
     <cv:VatRateLabelConverter x:Key="VatLabel"/>
+    <cv:AgentTypeLabelConverter x:Key="AgentTypeLabel"/>
 
     <Style x:Key="SettingsNav" TargetType="ToggleButton">
       <Setter Property="Background" Value="Transparent"/>
@@ -332,6 +333,21 @@
             <DataGridTextColumn Header="Агент / поставщик" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Width="2*"/>
             <DataGridTextColumn Header="ИНН" Binding="{Binding Inn, UpdateSourceTrigger=PropertyChanged}" Width="125"/>
             <DataGridTextColumn Header="Телефон" Binding="{Binding Phone, UpdateSourceTrigger=PropertyChanged}" Width="130"/>
+            <DataGridTemplateColumn Header="Тип агента" Width="210">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding AgentType, Converter={StaticResource AgentTypeLabel}}"
+                             VerticalAlignment="Center"/>
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+              <DataGridTemplateColumn.CellEditingTemplate>
+                <DataTemplate>
+                  <ComboBox ItemsSource="{Binding DataContext.AgentTypes, RelativeSource={RelativeSource AncestorType=Window}}"
+                            DisplayMemberPath="Label" SelectedValuePath="Code"
+                            SelectedValue="{Binding AgentType, UpdateSourceTrigger=PropertyChanged}"/>
+                </DataTemplate>
+              </DataGridTemplateColumn.CellEditingTemplate>
+            </DataGridTemplateColumn>
             <DataGridTemplateColumn Header="НДС" Width="145">
               <DataGridTemplateColumn.CellTemplate>
                 <DataTemplate>
