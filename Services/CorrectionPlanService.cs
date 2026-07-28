@@ -93,12 +93,12 @@ public static class CorrectionPlanService
             return plan;
         }
 
-        plan.Checks.Add(Check(2, originalOperation, CorrectTitle(originalOperation), correctAmount,
+        var correctionOperation = ToCorrectionOperation(originalOperation);
+        plan.Checks.Add(Check(2, correctionOperation, CorrectTitle(correctionOperation), correctAmount,
             ResolveCorrectPaymentType(order, paymentType), correctVatType,
-            requiresItems: true, usesFp: true));
-        plan.Message = "ФФД 1.05: исходный чек отменяется обычным обратным чеком, затем создаётся " +
-                       "правильный обычный чек. В обоих чеках указывается ФП исходного чека в теге 1192.";
-
+            requiresItems: false, usesFp: false));
+        plan.Message = "ФФД 1.05: исходный чек отменяется обычным обратным чеком с ФП в теге 1192, затем формируется " +
+                       "чек коррекции. XSD XML не допускает тег 1192 в чеке коррекции: основание передаётся в correction_info.";
         return plan;
     }
 
@@ -107,6 +107,15 @@ public static class CorrectionPlanService
         var text = $"{receipt.Document} {receipt.Operation}";
         return text.Contains("коррек", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Преобразует исходную фискальную операцию в соответствующую операцию коррекции.
+    /// Возврат прихода корректируется как расход, приход и возврат расхода - как приход.
+    /// </summary>
+    public static string ToCorrectionOperation(string originalOperation) =>
+        originalOperation.Trim().ToLowerInvariant() is "sell_refund" or "buy"
+            ? "buy_correction"
+            : "sell_correction";
 
     private static CorrectionPlan Stop(CorrectionPlanStatus status, string message) => new()
     {

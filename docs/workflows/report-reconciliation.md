@@ -27,9 +27,8 @@
 ## Операции
 
 - одиночный `sell_correction` - режим `update_fields`;
-- официальная исправительная пара ФФД 1.05 `sell_refund + sell` - обе строки
-  `comment_only`;
-- старая пара `sell_refund + sell_correction` читается для обратной совместимости;
+- исправительная пара `sell_refund + sell_correction` - обе строки `comment_only`;
+- старая пара `sell_refund + sell` читается для обратной совместимости;
 - одиночный `sell` или `sell_refund` не экспортируется как коррекция реализации.
 
 ## CSV для 1С

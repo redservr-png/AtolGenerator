@@ -418,6 +418,7 @@ public static class CheckGeneratorService
                 "Исправьте табличную часть отмены перед формированием XML.");
 
         var hasCorrectOrdinaryReceipt = !string.IsNullOrWhiteSpace(order.PlannedCorrectOperation) &&
+                                        string.IsNullOrWhiteSpace(order.PlannedReverseOperation) &&
                                         !order.PlannedCorrectOperation.EndsWith(
                                             "_correction", StringComparison.OrdinalIgnoreCase);
         if (!hasCorrectOrdinaryReceipt)

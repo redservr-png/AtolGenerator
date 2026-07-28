@@ -326,7 +326,7 @@
                                         <TextBlock Style="{StaticResource MutedText}" Margin="0,3,0,12">
                                             <Run Text="Операция: "/>
                                             <Run Text="{Binding PlannedCorrectOperation, Mode=OneWay}" FontWeight="SemiBold"/>
-                                            <Run Text=". Если исправляется уже пробитый чек, это обычный чек с тем же тегом 1192."/>
+                                            <Run Text=". Для пары исправления правильная сторона формируется как чек коррекции; тег 1192 остаётся в отмене исходного чека."/>
                                         </TextBlock>
 
                                         <TextBlock Text="Исправленная сумма, ₽" Style="{StaticResource FieldLabel}"/>

@@ -53,13 +53,19 @@ public static class CorrectionGeneratorService
         if (!string.IsNullOrWhiteSpace(o.PlannedCorrectOperation))
         {
             var amount = o.CorrectAmount ?? o.Amount;
-            if (o.PlannedCorrectOperation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase))
+            // Планы до 2.2.5 хранили второй документ как обычный чек. Для пары
+            // исправления он всегда формируется как чек коррекции, включая старые планы.
+            var correctOperation = !string.IsNullOrWhiteSpace(o.PlannedReverseOperation) &&
+                                   !o.PlannedCorrectOperation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase)
+                ? CorrectionPlanService.ToCorrectionOperation(o.PlannedCorrectOperation)
+                : o.PlannedCorrectOperation;
+            if (correctOperation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase))
             {
                 result.Add(MakeCorrectionCheckData(
                     o,
                     p,
                     amount,
-                    isExpense: o.PlannedCorrectOperation == "buy_correction",
+                    isExpense: correctOperation == "buy_correction",
                     paymentIsCashOverride: o.CorrectPaymentIsCash));
             }
             else
@@ -67,7 +73,7 @@ public static class CorrectionGeneratorService
                 result.Add(MakeReceiptCheckData(
                     o,
                     p,
-                    o.PlannedCorrectOperation,
+                    correctOperation,
                     amount,
                     includeOriginalFp: !string.IsNullOrWhiteSpace(o.PlannedReverseOperation),
                     paymentIsCashOverride: o.CorrectPaymentIsCash,
@@ -96,7 +102,7 @@ public static class CorrectionGeneratorService
     /// <summary>
     /// 2) Чек большей суммой / меньшей суммой → пара чеков.
     /// Логика одинаковая для обоих: чек УЖЕ пробит с ошибочной суммой, поэтому:
-    ///   обычный обратный чек + правильный обычный чек; оба с тегом 1192.
+    ///   обычный обратный чек с тегом 1192 + правильный чек коррекции.
     /// </summary>
     private static List<CheckData> BuildRefundPlusCorrection(OrderEntry o, GenerationParams p)
     {
@@ -107,9 +113,9 @@ public static class CorrectionGeneratorService
         var reverse = MakeReceiptCheckData(o, p, ReverseOperation(originalOperation), wrong,
             includeOriginalFp: true, paymentIsCashOverride: o.OriginalPaymentWasCash,
             useOriginalItems: true);
-        var corrected = MakeReceiptCheckData(o, p, originalOperation, correct,
-            includeOriginalFp: true, paymentIsCashOverride: o.CorrectPaymentIsCash,
-            useOriginalItems: false);
+        var corrected = MakeCorrectionCheckData(o, p, correct,
+            isExpense: CorrectionPlanService.ToCorrectionOperation(originalOperation) == "buy_correction",
+            paymentIsCashOverride: o.CorrectPaymentIsCash);
         return new List<CheckData> { reverse, corrected };
     }
 
@@ -124,7 +130,7 @@ public static class CorrectionGeneratorService
         return new List<CheckData> { corr };
     }
 
-    /// <summary>4) Перепутали способ оплаты → два обычных чека с тегом 1192.</summary>
+    /// <summary>4) Перепутали способ оплаты → отмена с 1192 + чек коррекции.</summary>
     private static List<CheckData> BuildWrongPaymentType(OrderEntry o, GenerationParams p)
     {
         return BuildOfficialRepairPair(o, p,
@@ -132,7 +138,7 @@ public static class CorrectionGeneratorService
             correctPaymentIsCash: o.CorrectPaymentIsCash);
     }
 
-    /// <summary>5) Перепутали номенклатуру → два обычных чека с разными табличными частями.</summary>
+    /// <summary>5) Перепутали номенклатуру → отмена с 1192 + чек коррекции.</summary>
     private static List<CheckData> BuildWrongNomenclature(OrderEntry o, GenerationParams p)
     {
         return BuildOfficialRepairPair(o, p);
@@ -174,10 +180,9 @@ public static class CorrectionGeneratorService
             includeOriginalFp: true,
             paymentIsCashOverride: originalPaymentIsCash ?? o.OriginalPaymentWasCash,
             useOriginalItems: true);
-        var corrected = MakeReceiptCheckData(o, p, originalOperation, correctAmount,
-            includeOriginalFp: true,
-            paymentIsCashOverride: correctPaymentIsCash ?? o.CorrectPaymentIsCash,
-            useOriginalItems: false);
+        var corrected = MakeCorrectionCheckData(o, p, correctAmount,
+            isExpense: CorrectionPlanService.ToCorrectionOperation(originalOperation) == "buy_correction",
+            paymentIsCashOverride: correctPaymentIsCash ?? o.CorrectPaymentIsCash);
         return new List<CheckData> { reverse, corrected };
     }
 

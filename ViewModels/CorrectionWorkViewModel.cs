@@ -100,6 +100,7 @@ public sealed class CorrectionWorkItemViewModel : BaseViewModel
     {
         Steps.Clear();
         var hasReverse = !string.IsNullOrWhiteSpace(Entry.PlannedReverseOperation);
+        var correctOperation = ResolveCorrectOperation(hasReverse);
         if (hasReverse)
         {
             Steps.Add(BuildStep(
@@ -113,18 +114,17 @@ public sealed class CorrectionWorkItemViewModel : BaseViewModel
                 items: Entry.OriginalItems.Count > 0 ? Entry.OriginalItems : Entry.Items));
         }
 
-        if (!string.IsNullOrWhiteSpace(Entry.PlannedCorrectOperation))
+        if (!string.IsNullOrWhiteSpace(correctOperation))
         {
             Steps.Add(BuildStep(
                 Steps.Count + 1,
-                Entry.PlannedCorrectOperation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase)
+                correctOperation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase)
                     ? "Чек коррекции"
                     : "Правильный чек",
-                Entry.PlannedCorrectOperation,
+                correctOperation,
                 Entry.CorrectAmount ?? Entry.Amount,
                 ResolvePayment(Entry.CorrectPaymentIsCash),
-                usesTag1192: hasReverse &&
-                             !Entry.PlannedCorrectOperation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase),
+                usesTag1192: false,
                 vatType: VatRateCatalog.Normalize(Entry.CorrectVatType, Entry.PlannedVatType),
                 items: Entry.Items));
         }
@@ -213,8 +213,9 @@ public sealed class CorrectionWorkItemViewModel : BaseViewModel
             }
         }
 
-        var hasCorrectReceipt = !string.IsNullOrWhiteSpace(Entry.PlannedCorrectOperation) &&
-                                !Entry.PlannedCorrectOperation.EndsWith(
+        var correctOperation = ResolveCorrectOperation(hasReverse);
+        var hasCorrectReceipt = !string.IsNullOrWhiteSpace(correctOperation) &&
+                                !correctOperation.EndsWith(
                                     "_correction", StringComparison.OrdinalIgnoreCase);
         if (hasCorrectReceipt && (Entry.CorrectAmount ?? Entry.Amount) <= 0)
         {
@@ -240,6 +241,16 @@ public sealed class CorrectionWorkItemViewModel : BaseViewModel
         : Entry.DocumentType is SourceDocumentType.CashPayment or SourceDocumentType.CashExpense
             ? "cash"
             : "card";
+
+    private string ResolveCorrectOperation(bool hasReverse)
+    {
+        if (string.IsNullOrWhiteSpace(Entry.PlannedCorrectOperation))
+            return string.Empty;
+
+        return hasReverse && !Entry.PlannedCorrectOperation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase)
+            ? CorrectionPlanService.ToCorrectionOperation(Entry.PlannedCorrectOperation)
+            : Entry.PlannedCorrectOperation;
+    }
 
     private static bool ItemsMatch(IReadOnlyCollection<OrderItem> items, double amount) =>
         items.Count > 0 && Math.Abs(items.Sum(x => x.Sum) - amount) <= 0.01;

@@ -397,6 +397,7 @@ public partial class CorrectionEditorWindow : Window
 
     private bool HasCorrectOrdinaryReceipt() =>
         !string.IsNullOrWhiteSpace(Entry.PlannedCorrectOperation) &&
+        string.IsNullOrWhiteSpace(Entry.PlannedReverseOperation) &&
         !Entry.PlannedCorrectOperation.EndsWith("_correction", StringComparison.OrdinalIgnoreCase);
 
     private string DefaultItemName()
