@@ -89,35 +89,40 @@
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="refunds">
-            <TextBlock Text="↩   Возвраты по заказам"/>
+            <TextBlock Text="↩   Возвраты по заказам"
+                       Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="realizationCorrections">
-            <TextBlock Text="⇄   Коррекции реализаций 1С"/>
+            <TextBlock Text="⇄   Коррекции реализаций 1С"
+                       Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="obsidian">
-            <TextBlock Text="▧   Исправление чеков"/>
+            <TextBlock Text="▧   Исправление чеков"
+                       Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="correctionWork">
-            <TextBlock Text="▦   Пробитие исправлений"/>
+            <TextBlock Text="▦   Пробитие исправлений"
+                       Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,22"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="reports">
-            <TextBlock Text="▤   Отчёты"/>
+            <TextBlock Text="▤   Отчёты"
+                       Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
 
           <TextBlock Text="СЕРВИС" FontSize="11" FontWeight="SemiBold"
@@ -127,13 +132,15 @@
                   Margin="0,0,0,8"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="payment">
-            <TextBlock Text="＋   Оплаты / приход"/>
+            <TextBlock Text="＋   Оплаты / приход"
+                       Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,22"
                   Command="{Binding OpenSettingsCommand}">
-            <TextBlock Text="⚙   Настройки"/>
+            <TextBlock Text="⚙   Настройки"
+                       Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
         </StackPanel>
 
