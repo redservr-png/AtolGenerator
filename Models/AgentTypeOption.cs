@@ -4,7 +4,7 @@ public sealed record AgentTypeOption(string Code, string Label);
 
 public static class AgentTypeCatalog
 {
-    public const string DefaultCode = "commission_agent";
+    public const string DefaultCode = "another";
 
     public static IReadOnlyList<AgentTypeOption> All { get; } = new[]
     {
@@ -26,5 +26,5 @@ public static class AgentTypeCatalog
 
     public static string LabelFor(string? code) =>
         All.FirstOrDefault(option => string.Equals(
-            option.Code, code?.Trim(), StringComparison.OrdinalIgnoreCase))?.Label ?? "Комиссионер";
+            option.Code, code?.Trim(), StringComparison.OrdinalIgnoreCase))?.Label ?? "Другой тип агента";
 }
