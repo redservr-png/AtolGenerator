@@ -8,10 +8,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>AtolGenerator</RootNamespace>
     <AssemblyName>AtolGenerator</AssemblyName>
-    <Version>2.2.6</Version>
-    <AssemblyVersion>2.2.6.0</AssemblyVersion>
-    <FileVersion>2.2.6.0</FileVersion>
-    <InformationalVersion>2.2.6</InformationalVersion>
+    <Version>2.2.6.1</Version>
+    <AssemblyVersion>2.2.6.1</AssemblyVersion>
+    <FileVersion>2.2.6.1</FileVersion>
+    <InformationalVersion>2.2.6.1</InformationalVersion>
     <ApplicationIcon>Resources\app.ico</ApplicationIcon>
     <InvariantGlobalization>false</InvariantGlobalization>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
@@ -35,5 +35,22 @@
   <ItemGroup>
     <Resource Include="Resources\app.ico" />
   </ItemGroup>
+
+  <!--
+    WebView2Loader.dll не грузится, если он зашит внутрь single-file exe:
+    SDK WebView2 ищет его рядом с исполняемым файлом обычным LoadLibrary,
+    а не в папке самораспаковки .NET. Поэтому оставляем эту библиотеку
+    отдельным файлом рядом с exe вместо упаковки внутрь.
+  -->
+  <Target Name="ExcludeWebView2LoaderFromSingleFile"
+          AfterTargets="ComputeResolvedFilesToPublishList"
+          BeforeTargets="_ComputeFilesToBundle">
+    <ItemGroup>
+      <ResolvedFileToPublish Update="@(ResolvedFileToPublish)" Condition="'%(FileName)%(Extension)' == 'WebView2Loader.dll'">
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 
 </Project>
