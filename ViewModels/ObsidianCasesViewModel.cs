@@ -447,28 +447,25 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
     public void RecordGenerated(IEnumerable<GenerationResult> results)
     {
         var changed = false;
-        foreach (var result in results.Where(x => !string.IsNullOrWhiteSpace(x.ObsidianCaseId)))
+        foreach (var group in results
+                     .Where(x => !string.IsNullOrWhiteSpace(x.ObsidianCaseId))
+                     .GroupBy(x => x.ObsidianCaseId, StringComparer.OrdinalIgnoreCase))
         {
-            var state = GetState(result.ObsidianCaseId);
+            var generated = group.ToList();
+            var state = GetState(group.Key);
             state.SentToWork = true;
-            if (!string.IsNullOrWhiteSpace(result.DocxPath)) state.ServiceNotePath = result.DocxPath;
-            if (!string.IsNullOrWhiteSpace(result.ExternalId) &&
-                state.ExpectedChecks.All(x => !x.ExternalId.Equals(result.ExternalId, StringComparison.OrdinalIgnoreCase)))
-            {
-                state.ExpectedChecks.Add(new ObsidianExpectedCheck
-                {
-                    ExternalId = result.ExternalId,
-                    Operation = result.CheckData?.OperationType ?? string.Empty,
-                    Amount = result.Amount,
-                    GeneratedAt = DateTime.Now,
-                });
-            }
+            var serviceNotePath = generated.LastOrDefault(x => !string.IsNullOrWhiteSpace(x.DocxPath))?.DocxPath;
+            if (!string.IsNullOrWhiteSpace(serviceNotePath)) state.ServiceNotePath = serviceNotePath;
+            ObsidianExpectedCheckService.ReplaceFromGeneration(state, generated);
             state.LastMessage = "Документы сформированы, ожидается подтверждение отчётом";
             state.UpdatedAt = DateTime.Now;
             changed = true;
 
             if (ApplicationSettingsStore.Current.AutoValidateServiceNotes)
-                ValidateMemo(state, result.OrderNum, result.Amount);
+            {
+                var last = generated[^1];
+                ValidateMemo(state, last.OrderNum, last.Amount);
+            }
         }
 
         if (!changed) return;
@@ -912,17 +909,58 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         try
         {
             var selected = SelectedActive().ToList();
+            var restored = RestoreExpectedChecksFromXmlIfNeeded(selected, dialog.FileName);
             var confirmed = dialog.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)
                 ? ConfirmByAtol(selected, ReportImportService.ReadAtolJournal(dialog.FileName))
                 : ConfirmByOfd(selected, ReportImportService.ReadOfdReport(dialog.FileName));
             SaveStates();
             TryCompleteSelected(selected);
-            Status = $"По отчёту подтверждено: {confirmed} из {selected.Count}";
+            Status = $"По отчёту подтверждено: {confirmed} из {selected.Count}" +
+                     (restored > 0 ? $" · связь с XML восстановлена: {restored}" : string.Empty);
         }
         catch (Exception ex)
         {
             Status = $"Ошибка проверки отчёта: {ex.Message}";
         }
+    }
+
+    private int RestoreExpectedChecksFromXmlIfNeeded(
+        IReadOnlyList<ObsidianCaseItemViewModel> selected,
+        string reportPath)
+    {
+        if (selected.Count == 0) return 0;
+
+        var reportExternalIds = reportPath.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)
+            ? ReportImportService.ReadAtolJournal(reportPath)
+                .Select(x => x.ExternalId)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var needsXml = selected.Any(item =>
+            item.State.ExpectedChecks.Count == 0 ||
+            (reportExternalIds.Count > 0 && item.State.ExpectedChecks.Any(check =>
+                !reportExternalIds.Contains(check.ExternalId))));
+        if (!needsXml) return 0;
+
+        var xmlDialog = new OpenFileDialog
+        {
+            Title = "Выберите XML, который был загружен в АТОЛ Online",
+            Filter = "XML АТОЛ (*.xml)|*.xml|Все файлы|*.*",
+        };
+        if (xmlDialog.ShowDialog() != true) return 0;
+
+        var xmlChecks = ReportImportService.ReadXmlChecks(xmlDialog.FileName);
+        var restored = 0;
+        foreach (var item in selected)
+        {
+            if (ObsidianExpectedCheckService.ReplaceFromXml(item.Record, item.State, xmlChecks) == 0)
+                continue;
+            restored++;
+            item.Refresh();
+        }
+
+        return restored;
     }
 
     private int ConfirmByAtol(IReadOnlyList<ObsidianCaseItemViewModel> selected, IReadOnlyList<AtolJournalReportRow> rows)
