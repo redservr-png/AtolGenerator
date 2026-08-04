@@ -52,17 +52,34 @@ jobs:
           Rename-Item publish/x86/AtolGenerator.exe AtolGenerator-x86.exe
         shell: pwsh
 
+      - name: Упаковать exe и WebView2Loader.dll в ZIP
+        # WebView2Loader.dll намеренно исключён из single-file exe (см. AtolGenerator.csproj) —
+        # SDK WebView2 не находит его внутри самораспаковки .NET. В архив включаются только
+        # исполняемый файл и соответствующая архитектуре библиотека загрузчика.
+        run: |
+          $x64Files = @(
+            'publish/x64/AtolGenerator-x64.exe'
+            'publish/x64/WebView2Loader.dll'
+          )
+          $x86Files = @(
+            'publish/x86/AtolGenerator-x86.exe'
+            'publish/x86/WebView2Loader.dll'
+          )
+          Compress-Archive -LiteralPath $x64Files -DestinationPath AtolGenerator-x64.zip
+          Compress-Archive -LiteralPath $x86Files -DestinationPath AtolGenerator-x86.zip
+        shell: pwsh
+
       - name: Upload artifact x64
         uses: actions/upload-artifact@v4
         with:
           name: AtolGenerator-x64
-          path: publish/x64/AtolGenerator-x64.exe
+          path: AtolGenerator-x64.zip
 
       - name: Upload artifact x86
         uses: actions/upload-artifact@v4
         with:
           name: AtolGenerator-x86
-          path: publish/x86/AtolGenerator-x86.exe
+          path: AtolGenerator-x86.zip
 
       - name: Create Release (только при теге v*)
         if: startsWith(github.ref, 'refs/tags/')
@@ -70,8 +87,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           files: |
-            publish/x64/AtolGenerator-x64.exe
-            publish/x86/AtolGenerator-x86.exe
+            AtolGenerator-x64.zip
+            AtolGenerator-x86.zip
           name: АТОЛ Чек-генератор ${{ github.ref_name }}
           generate_release_notes: true
           body: |
@@ -79,10 +96,12 @@ jobs:
 
             | Файл | Когда использовать |
             |---|---|
-            | `AtolGenerator-x64.exe` | Windows 10/11 **64-bit** (большинство компьютеров) |
-            | `AtolGenerator-x86.exe` | Windows **32-bit** или если 1С-коннектор 32-bit |
+            | `AtolGenerator-x64.zip` | Windows 10/11 **64-bit** (большинство компьютеров) |
+            | `AtolGenerator-x86.zip` | Windows **32-bit** или если 1С-коннектор 32-bit |
 
-            > Установка не нужна — просто запустите exe.
+            Распакуйте архив целиком в отдельную папку и запустите находящийся
+            внутри `AtolGenerator-*.exe`. Не переносите exe отдельно:
+            `WebView2Loader.dll` должна оставаться рядом с программой.
 
             ### Подключение к 1С
             Для загрузки реализаций из 1С требуется зарегистрированный `comcntr.dll`.

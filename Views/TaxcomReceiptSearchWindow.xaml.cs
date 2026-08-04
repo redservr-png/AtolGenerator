@@ -474,6 +474,7 @@ public partial class TaxcomReceiptSearchWindow : Window
     {
         var script = ExtractReceiptScript.Replace(
             "__FISCAL_SIGN__", JsonSerializer.Serialize(fiscalSign.ToString()));
+        DomReceiptResult? lastNotFound = null;
         for (var attempt = 0; attempt < 30; attempt++)
         {
             await Task.Delay(500);
@@ -481,12 +482,16 @@ public partial class TaxcomReceiptSearchWindow : Window
             if (result is not null &&
                 string.Equals(result.State, "found", StringComparison.OrdinalIgnoreCase))
                 return result;
-            if (attempt >= 3 && result is not null &&
+            // Такском какое-то время показывает "ничего не найдено" как временную
+            // заглушку, пока сам ещё выполняет запрос — доверять этому статусу
+            // раньше полного тайм-аута нельзя, иначе реально существующий чек
+            // будет ошибочно помечен как не найденный.
+            if (result is not null &&
                 string.Equals(result.State, "not_found", StringComparison.OrdinalIgnoreCase))
-                return result;
+                lastNotFound = result;
         }
 
-        return new DomReceiptResult
+        return lastNotFound ?? new DomReceiptResult
         {
             State = "not_found",
             Message = "Такском не показал карточку чека за 15 секунд",

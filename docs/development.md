@@ -44,9 +44,9 @@ COM-коннектор 1С.
 Workflow `.github/workflows/release.yml`:
 
 1. собирает self-contained x64 и x86;
-2. сохраняет оба exe как artifacts;
+2. упаковывает для каждой архитектуры exe и `WebView2Loader.dll` в ZIP;
 3. при теге `v*` создаёт GitHub Release;
-4. прикладывает `AtolGenerator-x64.exe` и `AtolGenerator-x86.exe`.
+4. прикладывает `AtolGenerator-x64.zip` и `AtolGenerator-x86.zip`.
 
 ## Проверки перед выпуском
 
