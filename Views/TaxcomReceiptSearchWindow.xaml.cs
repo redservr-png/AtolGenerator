@@ -299,20 +299,22 @@ public partial class TaxcomReceiptSearchWindow : Window
         TaxcomReceiptSearchRequest request,
         bool skipPeriodValidation)
     {
-        var script = FillAndSubmitScript
-            .Replace("__FISCAL_SIGN__", JsonSerializer.Serialize(request.FiscalSign.ToString()))
+        var script = PrepareFiscalSignInputScript
             .Replace("__DATE_FROM__", JsonSerializer.Serialize($"{request.PeriodFrom:dd.MM.yyyy}"))
             .Replace("__DATE_TO__", JsonSerializer.Serialize($"{request.PeriodTo:dd.MM.yyyy}"))
             .Replace("__SKIP_PERIOD_VALIDATION__", skipPeriodValidation ? "true" : "false");
         var result = await ExecuteAsync<DomActionResult>(script);
-        if (result is { Ok: false }) return result;
-
-        // Taxcom's React form may replace its DOM while handling the input event.
-        // In that case WebView2 can return JSON null although the FP field was filled.
-        // ActivateSearchButtonAsync independently verifies the current field value.
+        if (result?.Ok != true)
+        {
+            return result ?? new DomActionResult
+            {
+                Message = "Страница Такскома не подготовила поле ФПД для ввода",
+            };
+        }
 
         try
         {
+            await TypeFiscalSignWithDevToolsAsync(request.FiscalSign);
             return await ActivateSearchButtonAsync(request.FiscalSign);
         }
         catch (Exception ex)
@@ -333,7 +335,7 @@ public partial class TaxcomReceiptSearchWindow : Window
         DomActionResult? ready = null;
         var readyScript = SearchButtonReadyScript.Replace(
             "__FISCAL_SIGN__", JsonSerializer.Serialize(fiscalSign.ToString()));
-        for (var attempt = 0; attempt < 20; attempt++)
+        for (var attempt = 0; attempt < 50; attempt++)
         {
             ready = await ExecuteAsync<DomActionResult>(readyScript);
             if (ready?.Ready == true) break;
@@ -497,6 +499,38 @@ public partial class TaxcomReceiptSearchWindow : Window
         await ExecuteAsync<DomPeriodResult>(FocusPeriodScript);
         await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
             "Input.insertText", JsonSerializer.Serialize(new { text = period }));
+        const int tabKeyCode = 9;
+        await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+            "Input.dispatchKeyEvent",
+            JsonSerializer.Serialize(new
+            {
+                type = "keyDown",
+                key = "Tab",
+                code = "Tab",
+                windowsVirtualKeyCode = tabKeyCode,
+                nativeVirtualKeyCode = tabKeyCode,
+            }));
+        await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+            "Input.dispatchKeyEvent",
+            JsonSerializer.Serialize(new
+            {
+                type = "keyUp",
+                key = "Tab",
+                code = "Tab",
+                windowsVirtualKeyCode = tabKeyCode,
+                nativeVirtualKeyCode = tabKeyCode,
+            }));
+    }
+
+    private async Task TypeFiscalSignWithDevToolsAsync(long fiscalSign)
+    {
+        if (Browser.CoreWebView2 is null) return;
+
+        await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+            "Input.insertText",
+            JsonSerializer.Serialize(new { text = fiscalSign.ToString() }));
+        await Task.Delay(150);
+
         const int tabKeyCode = 9;
         await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
             "Input.dispatchKeyEvent",
@@ -911,31 +945,12 @@ public partial class TaxcomReceiptSearchWindow : Window
         })()
         """;
 
-    private const string FillAndSubmitScript = """
+    private const string PrepareFiscalSignInputScript = """
         (() => {
           try {
-          const fiscalSign = __FISCAL_SIGN__;
           const dateFrom = __DATE_FROM__;
           const dateTo = __DATE_TO__;
           const skipPeriodValidation = __SKIP_PERIOD_VALIDATION__;
-          const findReceiptSearch = element => {
-            if (!element) return null;
-            const key = Object.getOwnPropertyNames(element).find(name =>
-              name.startsWith('__reactFiber$') ||
-              name.startsWith('__reactInternalInstance$'));
-            let fiber = key ? element[key] : null;
-            while (fiber) {
-              const instance = fiber.stateNode;
-              if (instance &&
-                  typeof instance._submitRequest === 'function' &&
-                  instance.state &&
-                  Object.prototype.hasOwnProperty.call(instance.state, 'fiscalSign')) {
-                return instance;
-              }
-              fiber = fiber.return;
-            }
-            return null;
-          };
           const inputs = Array.from(document.querySelectorAll('input'));
           const periodControl = document.querySelector('[data-atol-period-control="true"]') ||
             document.querySelector('.receiptsSearch__filter .date-picker-area') ||
@@ -949,50 +964,20 @@ public partial class TaxcomReceiptSearchWindow : Window
               (!periodValue.includes(dateFrom) || !periodValue.includes(dateTo))) {
             return { ok: false, message: 'Период поиска не подтверждён на странице Такскома' };
           }
-          const setValue = (input, value) => {
-            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-            setter.call(input, value);
-            for (const name of ['input', 'keyup', 'change', 'blur']) {
-              try {
-                input.dispatchEvent(new Event(name, { bubbles: true, cancelable: true }));
-              } catch (_) {}
-            }
-            try {
-              if (window.jQuery) window.jQuery(input).val(value).trigger('input').trigger('keyup').trigger('change').trigger('blur');
-            } catch (_) {}
-          };
           const fpInput = inputs.find(x => (x.placeholder || '').toUpperCase().includes('ФПД'));
           if (!fpInput) return { ok: false, message: 'На странице не найдено поле ФПД' };
-          setValue(fpInput, fiscalSign);
           const controls = Array.from(document.querySelectorAll('button, input[type="submit"], a'));
           const searchButton = controls.find(x => ((x.textContent || x.value || '').trim().toUpperCase() === 'ПОИСК ЧЕКА'));
           if (!searchButton) return { ok: false, message: 'На странице не найдена кнопка поиска' };
-          const receiptSearch = window.__atolGeneratorReceiptSearch ||
-            findReceiptSearch(fpInput) ||
-            findReceiptSearch(searchButton) ||
-            findReceiptSearch(periodControl);
-          if (receiptSearch && typeof receiptSearch.setState === 'function') {
-            window.__atolGeneratorReceiptSearch = receiptSearch;
-            try {
-              receiptSearch.setState({ fiscalSign });
-            } catch (_) {
-              // Some Taxcom pages expose a legacy Sys.* component here. The visible
-              // input remains authoritative and the real button click will submit it.
-            }
-          }
-          searchButton.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-          const rect = searchButton.getBoundingClientRect();
-          if (rect.width <= 0 || rect.height <= 0) {
-            return { ok: false, message: 'Кнопка поиска не отображается на странице' };
-          }
-          return {
-            ok: true,
-            message: ''
-          };
+          fpInput.readOnly = false;
+          fpInput.disabled = false;
+          fpInput.focus();
+          fpInput.select();
+          return { ok: true, message: '' };
           } catch (error) {
             return {
               ok: false,
-              message: 'Ошибка заполнения формы Такскома: ' +
+              message: 'Ошибка подготовки поля ФПД: ' +
                 (error && error.message ? error.message : String(error))
             };
           }
