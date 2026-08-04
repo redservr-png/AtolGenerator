@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using AtolGenerator.Helpers;
 using AtolGenerator.Models;
 using AtolGenerator.Services;
 using Microsoft.Web.WebView2.Core;
@@ -56,7 +57,7 @@ public partial class TaxcomReceiptSearchWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Не удалось открыть встроенный браузер: {ex.Message}";
+            StatusText.Text = WebView2ErrorHelper.GetStartupMessage(ex);
             SearchButton.IsEnabled = false;
         }
     }

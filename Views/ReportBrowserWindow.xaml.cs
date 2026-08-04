@@ -55,7 +55,7 @@ public partial class ReportBrowserWindow : Window
             LoadingPanel.Visibility = Visibility.Collapsed;
             StatusText.Text = $"Не удалось запустить браузер: {ex.Message}";
             MessageBox.Show(
-                "Не удалось открыть встроенный браузер. Установите Microsoft Edge WebView2 Runtime и повторите попытку.\n\n" + ex.Message,
+                WebView2ErrorHelper.GetStartupMessage(ex),
                 _options.DisplayName, MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

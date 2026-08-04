@@ -106,8 +106,8 @@ public static partial class ReportImportService
                 Status = Field("Статус чека"),
                 Source = Field("Источник данных"),
                 Amount = ParseDouble(Field("Сумма чека, руб.")),
-                FiscalDocument = ParseInt64(Field("Номер ФД")) ?? jsonInfo.FiscalDocument,
-                FiscalSign = ParseInt64(Field("ФПД")) ?? jsonInfo.FiscalSign,
+                FiscalDocument = PositiveOrNull(ParseInt64(Field("Номер ФД")) ?? jsonInfo.FiscalDocument),
+                FiscalSign = PositiveOrNull(ParseInt64(Field("ФПД")) ?? jsonInfo.FiscalSign),
                 FiscalDriveNumber = Field("Номер ФН"),
                 Uuid = Field("UUID чека"),
                 ExternalId = Field("External Id"),
@@ -316,7 +316,9 @@ public static partial class ReportImportService
                 using var incoming = JsonDocument.Parse(incomingJson);
                 var root = incoming.RootElement;
                 info.DocumentType = GetString(root, "document_type");
-                if (root.TryGetProperty("correction", out var correction) &&
+                if (root.ValueKind == JsonValueKind.Object &&
+                    root.TryGetProperty("correction", out var correction) &&
+                    correction.ValueKind == JsonValueKind.Object &&
                     correction.TryGetProperty("correction_info", out var correctionInfo))
                 {
                     info.BaseNumber = GetString(correctionInfo, "base_number");
@@ -335,7 +337,9 @@ public static partial class ReportImportService
             {
                 using var response = JsonDocument.Parse(resultJson);
                 var root = response.RootElement;
-                if (root.TryGetProperty("payload", out var payload))
+                if (root.ValueKind == JsonValueKind.Object &&
+                    root.TryGetProperty("payload", out var payload) &&
+                    payload.ValueKind == JsonValueKind.Object)
                 {
                     info.FiscalDocument = GetInt64(payload, "fiscal_document_number");
                     info.FiscalSign = GetInt64(payload, "fiscal_document_attribute");
@@ -537,22 +541,30 @@ public static partial class ReportImportService
         return null;
     }
 
+    private static long? PositiveOrNull(long? value) => value is > 0 ? value : null;
+
     private static string GetString(JsonElement root, string name)
     {
+        if (root.ValueKind != JsonValueKind.Object) return string.Empty;
         if (!root.TryGetProperty(name, out var value)) return string.Empty;
+        if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return string.Empty;
         return value.ValueKind == JsonValueKind.String ? value.GetString() ?? string.Empty : value.ToString();
     }
 
     private static long? GetInt64(JsonElement root, string name)
     {
+        if (root.ValueKind != JsonValueKind.Object) return null;
         if (!root.TryGetProperty(name, out var value)) return null;
+        if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return null;
         if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var integer)) return integer;
         return ParseInt64(value.ToString());
     }
 
     private static double GetDouble(JsonElement root, string name)
     {
+        if (root.ValueKind != JsonValueKind.Object) return 0;
         if (!root.TryGetProperty(name, out var value)) return 0;
+        if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return 0;
         if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var number)) return number;
         return ParseDouble(value.ToString());
     }
