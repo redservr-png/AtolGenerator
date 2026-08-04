@@ -592,7 +592,6 @@ public partial class TaxcomReceiptSearchWindow : Window
     {
         _nextRequestIndex = index;
         StatusText.Text = $"Поиск ФП {request.FiscalSign} не был запущен: {message}";
-        ResultList.Items.Add($"Не запущен · ФП {request.FiscalSign} · повторите поиск");
         SearchButton.Content = "Повторить поиск этого чека";
         SearchButton.IsEnabled = true;
     }
@@ -659,24 +658,17 @@ public partial class TaxcomReceiptSearchWindow : Window
             ((x.textContent || x.value || '').trim().toUpperCase() === 'ПОИСК ЧЕКА'));
           if (!fpInput) return { ok: false, ready: false, message: 'На странице не найдено поле ФПД' };
           if (!button) return { ok: false, ready: false, message: 'Кнопка поиска не найдена' };
-          const receiptSearch = window.__atolGeneratorReceiptSearch;
-          const stateValue = receiptSearch && receiptSearch.state
-            ? String(receiptSearch.state.fiscalSign || '')
-            : fiscalSign;
           const rect = button.getBoundingClientRect();
           return {
             ok: true,
             ready: String(fpInput.value || '') === fiscalSign &&
-              stateValue === fiscalSign &&
               !button.disabled &&
               rect.width > 0 && rect.height > 0,
             clickX: rect.left + rect.width / 2,
             clickY: rect.top + rect.height / 2,
             message: String(fpInput.value || '') !== fiscalSign
               ? 'Поле ФПД ещё не приняло значение'
-              : stateValue !== fiscalSign
-                ? 'Taxcom ещё обрабатывает введённый ФПД'
-                : button.disabled
+              : button.disabled
                   ? 'Кнопка поиска пока недоступна'
                   : ''
           };
@@ -961,7 +953,9 @@ public partial class TaxcomReceiptSearchWindow : Window
             const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
             setter.call(input, value);
             for (const name of ['input', 'keyup', 'change', 'blur']) {
-              input.dispatchEvent(new Event(name, { bubbles: true, cancelable: true }));
+              try {
+                input.dispatchEvent(new Event(name, { bubbles: true, cancelable: true }));
+              } catch (_) {}
             }
             try {
               if (window.jQuery) window.jQuery(input).val(value).trigger('input').trigger('keyup').trigger('change').trigger('blur');
@@ -979,7 +973,12 @@ public partial class TaxcomReceiptSearchWindow : Window
             findReceiptSearch(periodControl);
           if (receiptSearch && typeof receiptSearch.setState === 'function') {
             window.__atolGeneratorReceiptSearch = receiptSearch;
-            receiptSearch.setState({ fiscalSign });
+            try {
+              receiptSearch.setState({ fiscalSign });
+            } catch (_) {
+              // Some Taxcom pages expose a legacy Sys.* component here. The visible
+              // input remains authoritative and the real button click will submit it.
+            }
           }
           searchButton.scrollIntoView({ block: 'nearest', inline: 'nearest' });
           const rect = searchButton.getBoundingClientRect();
