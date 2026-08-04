@@ -191,9 +191,8 @@ public partial class TaxcomReceiptSearchWindow : Window
                     }
 
                     _manualPeriodRequestIndex = null;
-                    AddFailure(request, action.Message);
-                    _nextRequestIndex = index + 1;
-                    continue;
+                    PauseCurrentRequestForRetry(index, request, action.Message);
+                    return;
                 }
 
                 _manualPeriodRequestIndex = null;
@@ -305,11 +304,12 @@ public partial class TaxcomReceiptSearchWindow : Window
             .Replace("__DATE_FROM__", JsonSerializer.Serialize($"{request.PeriodFrom:dd.MM.yyyy}"))
             .Replace("__DATE_TO__", JsonSerializer.Serialize($"{request.PeriodTo:dd.MM.yyyy}"))
             .Replace("__SKIP_PERIOD_VALIDATION__", skipPeriodValidation ? "true" : "false");
-        var result = await ExecuteAsync<DomActionResult>(script) ?? new DomActionResult
-        {
-            Message = "Страница поиска не вернула результат заполнения",
-        };
-        if (!result.Ok) return result;
+        var result = await ExecuteAsync<DomActionResult>(script);
+        if (result is { Ok: false }) return result;
+
+        // Taxcom's React form may replace its DOM while handling the input event.
+        // In that case WebView2 can return JSON null although the FP field was filled.
+        // ActivateSearchButtonAsync independently verifies the current field value.
 
         try
         {
@@ -361,20 +361,70 @@ public partial class TaxcomReceiptSearchWindow : Window
             };
         }
 
-        await DispatchEnterAsync();
-        await Task.Delay(250);
+        var mouseClickSent = await DispatchMouseClickAsync(ready.ClickX, ready.ClickY);
+        await Task.Delay(350);
         if (await WasSearchClickObservedAsync())
             return new DomActionResult { Ok = true, ClickObserved = true };
 
         var fallbackSent = await ClickSearchButtonWithUserGestureAsync();
-        await Task.Delay(150);
+        await Task.Delay(250);
         if (fallbackSent && await WasSearchClickObservedAsync())
+            return new DomActionResult { Ok = true, ClickObserved = true };
+
+        // A successful CDP mouse sequence is a real browser input. React may replace
+        // the search form immediately, removing the temporary DOM click marker.
+        if (mouseClickSent)
             return new DomActionResult { Ok = true, ClickObserved = true };
 
         return new DomActionResult
         {
             Message = "Такском не подтвердил нажатие кнопки «Поиск чека». Поиск этого ФПД не был запущен.",
         };
+    }
+
+    private async Task<bool> DispatchMouseClickAsync(double x, double y)
+    {
+        if (Browser.CoreWebView2 is null || x <= 0 || y <= 0) return false;
+
+        try
+        {
+            await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+                "Input.dispatchMouseEvent",
+                JsonSerializer.Serialize(new
+                {
+                    type = "mouseMoved",
+                    x,
+                    y,
+                    button = "none",
+                }));
+            await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+                "Input.dispatchMouseEvent",
+                JsonSerializer.Serialize(new
+                {
+                    type = "mousePressed",
+                    x,
+                    y,
+                    button = "left",
+                    buttons = 1,
+                    clickCount = 1,
+                }));
+            await Browser.CoreWebView2.CallDevToolsProtocolMethodAsync(
+                "Input.dispatchMouseEvent",
+                JsonSerializer.Serialize(new
+                {
+                    type = "mouseReleased",
+                    x,
+                    y,
+                    button = "left",
+                    buttons = 0,
+                    clickCount = 1,
+                }));
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task DispatchEnterAsync()
@@ -535,6 +585,18 @@ public partial class TaxcomReceiptSearchWindow : Window
         ResultList.Items.Add($"Не найден · ФП {request.FiscalSign} · {message}");
     }
 
+    private void PauseCurrentRequestForRetry(
+        int index,
+        TaxcomReceiptSearchRequest request,
+        string message)
+    {
+        _nextRequestIndex = index;
+        StatusText.Text = $"Поиск ФП {request.FiscalSign} не был запущен: {message}";
+        ResultList.Items.Add($"Не запущен · ФП {request.FiscalSign} · повторите поиск");
+        SearchButton.Content = "Повторить поиск этого чека";
+        SearchButton.IsEnabled = true;
+    }
+
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
         DialogResult = FoundRows.Count > 0;
@@ -608,6 +670,8 @@ public partial class TaxcomReceiptSearchWindow : Window
               stateValue === fiscalSign &&
               !button.disabled &&
               rect.width > 0 && rect.height > 0,
+            clickX: rect.left + rect.width / 2,
+            clickY: rect.top + rect.height / 2,
             message: String(fpInput.value || '') !== fiscalSign
               ? 'Поле ФПД ещё не приняло значение'
               : stateValue !== fiscalSign
@@ -857,6 +921,7 @@ public partial class TaxcomReceiptSearchWindow : Window
 
     private const string FillAndSubmitScript = """
         (() => {
+          try {
           const fiscalSign = __FISCAL_SIGN__;
           const dateFrom = __DATE_FROM__;
           const dateTo = __DATE_TO__;
@@ -925,6 +990,13 @@ public partial class TaxcomReceiptSearchWindow : Window
             ok: true,
             message: ''
           };
+          } catch (error) {
+            return {
+              ok: false,
+              message: 'Ошибка заполнения формы Такскома: ' +
+                (error && error.message ? error.message : String(error))
+            };
+          }
         })()
         """;
 
@@ -956,6 +1028,8 @@ public partial class TaxcomReceiptSearchWindow : Window
         public bool Ready { get; init; }
         public bool Focused { get; init; }
         public bool ClickObserved { get; init; }
+        public double ClickX { get; init; }
+        public double ClickY { get; init; }
         public string Message { get; init; } = string.Empty;
     }
 
