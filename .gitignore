@@ -32,8 +32,6 @@ packages/
 Thumbs.db
 .DS_Store
 
-# Claude
-.claude/settings.local.json
 publish_out/
 gh_release.py
 github_script.py

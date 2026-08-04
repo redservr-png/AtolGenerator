@@ -54,7 +54,7 @@ public sealed class SettingsViewModel : BaseViewModel
             },
             new()
             {
-                Key = "warm", Name = "Тёплая", Description = "Мягкая палитра в стиле Claude",
+                Key = "warm", Name = "Тёплая", Description = "Мягкая тёплая палитра",
                 Background = "#F7F5F2", Surface = "#FFFFFF", Accent = "#C55232",
             },
         };
