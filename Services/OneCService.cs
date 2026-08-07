@@ -368,7 +368,7 @@ public static class OneCService
         dynamic? connection = null;
         try
         {
-            Log($"=== EnrichRealizationsForReceipt: {realizations.Count} агентских реализаций ===");
+            Log($"=== EnrichRealizationsForReceipt: {realizations.Count} реализаций ===");
             connector = CreateConnector();
             connection = connector.Connect(settings.ConnectionString);
 

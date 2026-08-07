@@ -144,7 +144,10 @@ public static class CorrectionGeneratorService
         return BuildOfficialRepairPair(o, p);
     }
 
-    /// <summary>7) Чек пробит другой датой → sell_correction с правильной base_date.</summary>
+    /// <summary>
+    /// 7) Чек пробит другой датой: отмена исходного обычным обратным чеком
+    /// с тегом 1192, затем sell_correction с датой реализации в основании.
+    /// </summary>
     private static List<CheckData> BuildWrongDate(OrderEntry o, GenerationParams p)
     {
         if (o.DocumentType == SourceDocumentType.Realization &&

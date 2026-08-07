@@ -134,7 +134,7 @@ public static class CorrectionScenarioExtensions
         CorrectionScenario.FullCancel         => OrderKind.SingleRefund,
         CorrectionScenario.RealRefund         => OrderKind.SingleRefund,
         CorrectionScenario.CheckNotPunched    => OrderKind.SingleCorrection,
-        CorrectionScenario.WrongDate          => OrderKind.SingleCorrection,
+        CorrectionScenario.WrongDate          => OrderKind.RefundCorrectionPair,
         CorrectionScenario.ExpenseCorrection  => OrderKind.SingleCorrection,
         CorrectionScenario.CheckLargerAmount  => OrderKind.RefundCorrectionPair,
         CorrectionScenario.CheckSmallerAmount => OrderKind.RefundCorrectionPair,

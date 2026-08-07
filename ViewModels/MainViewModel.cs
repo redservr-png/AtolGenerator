@@ -1424,12 +1424,17 @@ public class MainViewModel : BaseViewModel
         return await Task.Run(() =>
         {
             var errors = new List<string>();
-            var serviceRows = rows.Where(row => row.Source.IsService).ToList();
+            // Агентским реализациям номенклатура нужна для определения услуги/НДС.
+            // Реализациям с уже пробитым чеком она нужна для обратного обычного чека:
+            // в ФФД 1.05 sell_refund обязан содержать табличную часть.
+            var enrichmentRows = rows
+                .Where(row => row.Source.IsService || row.Source.HasCheck)
+                .ToList();
             List<OneCRealizationEnrichmentError> enrichmentErrors;
             try
             {
                 enrichmentErrors = OneCService.EnrichRealizationsForReceipt(
-                    settings, serviceRows.Select(row => row.Source).ToList());
+                    settings, enrichmentRows.Select(row => row.Source).ToList());
             }
             catch (Exception ex)
             {
@@ -1450,7 +1455,7 @@ public class MainViewModel : BaseViewModel
                            $"{documents}{suffix} ({group.Key})");
             }
 
-            foreach (var row in serviceRows)
+            foreach (var row in rows.Where(row => row.Source.IsService))
             {
                 if (failedDocuments.Contains(row.DocNumber)) continue;
 
