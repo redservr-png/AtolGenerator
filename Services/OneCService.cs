@@ -64,6 +64,12 @@ public class OneCRealization
     public ServiceProvider? AgentInfo { get; set; }
 }
 
+public sealed class OneCRealizationEnrichmentError
+{
+    public string DocumentNumber { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+}
+
 public static class OneCService
 {
     public static bool IsAvailable()
@@ -124,6 +130,9 @@ public static class OneCService
     {
         dynamic? conn = null;
         dynamic? connector = null;
+        dynamic? query = null;
+        dynamic? queryResult = null;
+        dynamic? selection = null;
         var result     = new List<OneCRealization>();
         var skipped    = 0;
 
@@ -139,14 +148,14 @@ public static class OneCService
             conn = connector.Connect(s.ConnectionString);
 
             Log("Создаём запрос...");
-            var query = conn.NewObject("Запрос");
+            query = conn.NewObject("Запрос");
             query.Текст = BuildQuery();
             query.УстановитьПараметр("НачалоПериода", from.Date);
             query.УстановитьПараметр("КонецПериода",  to.Date.AddDays(1).AddSeconds(-1));
 
             Log("Выполняем запрос...");
-            var queryResult = query.Выполнить();
-            var selection   = queryResult.Выбрать();
+            queryResult = query.Выполнить();
+            selection   = queryResult.Выбрать();
             Log("Запрос выполнен, читаем строки...");
 
             int row = 0;
@@ -216,8 +225,11 @@ public static class OneCService
         }
         finally
         {
-            if (conn      is not null) Marshal.ReleaseComObject(conn);
-            if (connector is not null) Marshal.ReleaseComObject(connector);
+            ReleaseComObject(selection);
+            ReleaseComObject(queryResult);
+            ReleaseComObject(query);
+            ReleaseComObject(conn);
+            ReleaseComObject(connector);
         }
 
         return result;
@@ -227,20 +239,31 @@ public static class OneCService
     /// Загружает табличную часть (Товары или Услуги) документа реализации по номеру документа.
     /// </summary>
     public static List<OneCRealizationItem> LoadRealizationItems(
-        OneCConnectionSettings s, string docNumber, DateTime docDate, bool isService)
+        OneCConnectionSettings s, string docNumber, DateTime docDate, bool isService,
+        object? existingConnection = null)
     {
-        dynamic? conn = null;
+        var ownsConnection = existingConnection is null;
+        dynamic? conn = existingConnection;
         dynamic? connector = null;
+        dynamic? query = null;
+        dynamic? queryResult = null;
+        dynamic? selection = null;
         var result = new List<OneCRealizationItem>();
 
         Log($"=== LoadRealizationItems: docNumber={docNumber}, docDate={docDate:dd.MM.yyyy}, isService={isService} ===");
 
         try
         {
-            connector = CreateConnector();
-            conn      = connector.Connect(s.ConnectionString);
+            if (ownsConnection)
+            {
+                connector = CreateConnector();
+                conn = connector.Connect(s.ConnectionString);
+            }
 
-            var query = conn.NewObject("Запрос");
+            if (conn is null)
+                throw new InvalidOperationException("1С вернула пустое COM-соединение.");
+
+            query = conn.NewObject("Запрос");
             query.Текст = """
                 ВЫБРАТЬ
                     Строки.Номенклатура.Наименование КАК Наименование,
@@ -270,8 +293,8 @@ public static class OneCService
             query.УстановитьПараметр("НачалоДня", docDate.Date);
             query.УстановитьПараметр("КонецДня", docDate.Date.AddDays(1));
 
-            var queryResult = query.Выполнить();
-            var selection   = queryResult.Выбрать();
+            queryResult = query.Выполнить();
+            selection   = queryResult.Выбрать();
 
             while ((bool)selection.Следующий())
             {
@@ -292,8 +315,14 @@ public static class OneCService
         }
         finally
         {
-            if (conn      is not null) Marshal.ReleaseComObject(conn);
-            if (connector is not null) Marshal.ReleaseComObject(connector);
+            ReleaseComObject(selection);
+            ReleaseComObject(queryResult);
+            ReleaseComObject(query);
+            if (ownsConnection)
+            {
+                ReleaseComObject(conn);
+                ReleaseComObject(connector);
+            }
         }
 
         return result;
@@ -301,6 +330,10 @@ public static class OneCService
 
     public static void EnrichRealizationForReceipt(
         OneCConnectionSettings s, OneCRealization realization)
+        => EnrichRealizationForReceipt(s, realization, null);
+
+    private static void EnrichRealizationForReceipt(
+        OneCConnectionSettings s, OneCRealization realization, object? existingConnection)
     {
         if (realization.Items.Count == 0 && !string.IsNullOrWhiteSpace(realization.DocNumber))
         {
@@ -311,7 +344,7 @@ public static class OneCService
                     $"{realization.DocNumber}: не определена дата реализации для загрузки табличной части.");
 
             realization.Items = LoadRealizationItems(
-                s, realization.DocNumber, docDate, realization.IsService);
+                s, realization.DocNumber, docDate, realization.IsService, existingConnection);
         }
 
         if (string.IsNullOrWhiteSpace(realization.ServiceType))
@@ -322,6 +355,49 @@ public static class OneCService
 
         if (realization.IsService && realization.AgentInfo is null)
             realization.AgentInfo = ResolveServiceProvider(realization.City, realization.ServiceType);
+    }
+
+    public static List<OneCRealizationEnrichmentError> EnrichRealizationsForReceipt(
+        OneCConnectionSettings settings,
+        IReadOnlyCollection<OneCRealization> realizations)
+    {
+        var errors = new List<OneCRealizationEnrichmentError>();
+        if (realizations.Count == 0) return errors;
+
+        dynamic? connector = null;
+        dynamic? connection = null;
+        try
+        {
+            Log($"=== EnrichRealizationsForReceipt: {realizations.Count} агентских реализаций ===");
+            connector = CreateConnector();
+            connection = connector.Connect(settings.ConnectionString);
+
+            foreach (var realization in realizations)
+            {
+                try
+                {
+                    EnrichRealizationForReceipt(settings, realization, (object)connection);
+                }
+                catch (Exception ex)
+                {
+                    var message = FormatComError(ex);
+                    errors.Add(new OneCRealizationEnrichmentError
+                    {
+                        DocumentNumber = realization.DocNumber,
+                        Message = message,
+                    });
+                    Log($"  {realization.DocNumber}: ошибка загрузки номенклатуры — {message}");
+                }
+            }
+        }
+        finally
+        {
+            ReleaseComObject(connection);
+            ReleaseComObject(connector);
+        }
+
+        Log($"EnrichRealizationsForReceipt done: ошибок {errors.Count}");
+        return errors;
     }
 
     public static ServiceProvider? ResolveServiceProvider(string city, string serviceType)
@@ -1114,6 +1190,24 @@ public static class OneCService
     }
 
     // Безопасные приведения COM-значений
+    private static void ReleaseComObject(object? value)
+    {
+        if (value is null || !Marshal.IsComObject(value)) return;
+        try { Marshal.ReleaseComObject(value); }
+        catch { /* освобождение COM-объекта не должно прерывать основную операцию */ }
+    }
+
+    private static string FormatComError(Exception exception)
+    {
+        var error = exception;
+        while (error.InnerException is not null)
+            error = error.InnerException;
+
+        return error is COMException com
+            ? $"COM 0x{com.HResult:X8}: {com.Message}"
+            : error.Message;
+    }
+
     private static string Str(dynamic? v)
     {
         try { return v?.ToString() ?? string.Empty; }

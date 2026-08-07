@@ -1424,19 +1424,35 @@ public class MainViewModel : BaseViewModel
         return await Task.Run(() =>
         {
             var errors = new List<string>();
-            foreach (var row in rows)
+            var serviceRows = rows.Where(row => row.Source.IsService).ToList();
+            List<OneCRealizationEnrichmentError> enrichmentErrors;
+            try
             {
-                try
+                enrichmentErrors = OneCService.EnrichRealizationsForReceipt(
+                    settings, serviceRows.Select(row => row.Source).ToList());
+            }
+            catch (Exception ex)
+            {
+                return new List<string>
                 {
-                    OneCService.EnrichRealizationForReceipt(settings, row.Source);
-                }
-                catch (Exception ex)
-                {
-                    errors.Add($"{row.DocNumber}: не удалось загрузить номенклатуру из 1С ({ex.Message})");
-                    continue;
-                }
+                    $"Не удалось открыть соединение с 1С для загрузки номенклатуры ({ex.Message})",
+                };
+            }
 
-                if (!row.Source.IsService) continue;
+            var failedDocuments = enrichmentErrors
+                .Select(error => error.DocumentNumber)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var group in enrichmentErrors.GroupBy(error => error.Message))
+            {
+                var documents = string.Join(", ", group.Take(5).Select(error => error.DocumentNumber));
+                var suffix = group.Count() > 5 ? $" и ещё {group.Count() - 5}" : string.Empty;
+                errors.Add($"Не удалось загрузить номенклатуру для {group.Count()} реализаций: " +
+                           $"{documents}{suffix} ({group.Key})");
+            }
+
+            foreach (var row in serviceRows)
+            {
+                if (failedDocuments.Contains(row.DocNumber)) continue;
 
                 if (string.IsNullOrWhiteSpace(row.Source.ServiceType))
                 {
