@@ -610,9 +610,10 @@
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
               </ComboBox>
-              <CheckBox Content="Объединить все чеки в 1 XML-файл"
+              <CheckBox Content="Объединить однотипные чеки в XML"
                         IsChecked="{Binding MergeXml}"
-                        Margin="0,0,0,10" FontSize="13"/>
+                        Margin="0,0,0,10" FontSize="13"
+                        ToolTip="Возвраты и коррекции всё равно будут в разных файлах: АТОЛ из смешанного XML регистрирует только коррекцию."/>
               <Button Style="{StaticResource BtnGenerate}"
                       Command="{Binding GenerateCommand}"
                       Content="Сформировать документы"

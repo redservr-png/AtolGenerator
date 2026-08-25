@@ -1,0 +1,109 @@
+<Window x:Class="AtolGenerator.Views.XmlUploadWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="Загрузка чеков коррекции — АТОЛ Online"
+        Icon="/AtolGenerator;component/Resources/app.ico"
+        Width="1440" Height="900"
+        MinWidth="1080" MinHeight="700"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BrushBg}"
+        Loaded="OnLoaded">
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="52"/>
+    </Grid.RowDefinitions>
+
+    <Border Grid.Row="0"
+            Background="{DynamicResource BrushSurface1}"
+            BorderBrush="{DynamicResource BrushBorder}"
+            BorderThickness="0,0,0,1">
+      <Grid Margin="20,12">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="16"/>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <Button x:Name="BackButton" Content="←" ToolTip="Назад"
+                  Style="{StaticResource BtnSecondary}" Width="40" Height="40"
+                  Padding="0" Click="BackButton_Click"/>
+          <Button Content="→" ToolTip="Вперёд" x:Name="ForwardButton"
+                  Style="{StaticResource BtnSecondary}" Width="40" Height="40"
+                  Padding="0" Margin="6,0,0,0" Click="ForwardButton_Click"/>
+          <Button Content="↻" ToolTip="Обновить"
+                  Style="{StaticResource BtnSecondary}" Width="40" Height="40"
+                  Padding="0" Margin="6,0,0,0" Click="ReloadButton_Click"/>
+          <Button Content="⌂" ToolTip="Главная страница кабинета"
+                  Style="{StaticResource BtnSecondary}" Width="40" Height="40"
+                  Padding="0" Margin="6,0,0,0" Click="HomeButton_Click"/>
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+          <TextBlock Text="Загрузка XML чеков коррекции" FontSize="16" FontWeight="SemiBold"
+                     Foreground="{DynamicResource BrushText}"/>
+          <TextBlock x:Name="FileSummaryText"
+                     Foreground="{DynamicResource BrushText2}" FontSize="12"
+                     TextWrapping="Wrap" Margin="0,4,0,0"/>
+          <TextBlock x:Name="AddressText"
+                     Foreground="{DynamicResource BrushText3}" FontSize="11"
+                     TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+          <TextBlock x:Name="WarningText"
+                     Foreground="{DynamicResource BrushOrange}" FontSize="12"
+                     TextWrapping="Wrap" Margin="0,6,0,0"
+                     Visibility="Collapsed"/>
+        </StackPanel>
+
+        <StackPanel Grid.Column="3" VerticalAlignment="Center">
+          <Button Content="Копировать путь XML"
+                  Style="{StaticResource BtnPrimary}" Padding="16,8"
+                  Click="CopyPathButton_Click"/>
+          <Button Content="Открыть папку XML"
+                  Style="{StaticResource BtnSecondary}" Padding="16,8"
+                  Margin="0,8,0,0"
+                  Click="OpenFolderButton_Click"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1">
+      <wv2:WebView2 x:Name="Browser" DefaultBackgroundColor="White"/>
+      <Border x:Name="LoadingPanel" Background="{DynamicResource BrushSurface1}">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+          <ProgressBar IsIndeterminate="True" Width="240" Height="4"/>
+          <TextBlock x:Name="LoadingText" Text="Открываем кабинет АТОЛ Online..."
+                     Foreground="{DynamicResource BrushText2}"
+                     FontSize="13" Margin="0,14,0,0"
+                     HorizontalAlignment="Center"/>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="2"
+            Background="{DynamicResource BrushSurface1}"
+            BorderBrush="{DynamicResource BrushBorder}"
+            BorderThickness="0,1,0,0">
+      <Grid Margin="20,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="10"/>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <Ellipse Width="9" Height="9"
+                 Fill="{DynamicResource BrushAccent}" VerticalAlignment="Center"/>
+        <TextBlock x:Name="StatusText" Grid.Column="2"
+                   Text="Откройте «Загрузка чеков из файлов XML (1.05/1.2)»"
+                   Foreground="{DynamicResource BrushText2}" FontSize="13"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        <Button Grid.Column="3" Content="Закрыть"
+                Style="{StaticResource BtnSecondary}" Padding="16,8"
+                Click="CloseButton_Click"/>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

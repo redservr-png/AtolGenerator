@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Input;
 using AtolGenerator.Constants;
 using AtolGenerator.Helpers;
@@ -87,7 +88,7 @@ public sealed class CorrectionWorkItemViewModel : BaseViewModel
         ? "Не заполнен"
         : Entry.OriginalFiscalNumber;
     public string Notes => Entry.Notes;
-    public string StateLabel => IsGenerated ? "XML сформирован" : IsReady ? "Готов" : "Нужна проверка";
+    public string StateLabel => IsGenerated ? "Сформирован" : IsReady ? "Готов" : "Нужна проверка";
     public bool IsReady { get; private set; }
     public string ReadinessMessage { get; private set; } = string.Empty;
     public string CheckCountText => Steps.Count switch
@@ -230,9 +231,9 @@ public sealed class CorrectionWorkItemViewModel : BaseViewModel
             return false;
         }
 
-        message = hasReverse
-            ? "Официальный комплект ФФД 1.05 готов к формированию XML."
-            : "Чек готов к формированию XML.";
+            message = hasReverse
+                ? "Готов: возврат через API, коррекция через XML."
+                : "Готов к пробитию чека коррекции через XML.";
         return true;
     }
 
@@ -260,10 +261,12 @@ public sealed class CorrectionWorkViewModel : BaseViewModel
 {
     private CorrectionWorkItemViewModel? _selectedItem;
     private CashierInfo _selectedCashier = AppConstants.DefaultCashier;
-    private bool _mergeXml = true;
+    private bool _mergeXml;
     private bool _isBusy;
     private string _statusText = "Добавьте подготовленные случаи из раздела «Исправление чеков».";
     private string _lastXmlPath = string.Empty;
+    private CorrectionPunchPlan? _lastPunchPlan;
+    private bool _allowCorrectionXml;
 
     public CorrectionWorkViewModel()
     {
@@ -276,6 +279,7 @@ public sealed class CorrectionWorkViewModel : BaseViewModel
         ClearCommand = new RelayCommand(Clear);
         BackCommand = new RelayCommand(() => BackRequested?.Invoke());
         OpenFolderCommand = new RelayCommand(() => FileHelper.OpenFolder(FileHelper.OutputDir));
+        OpenXmlUploadCommand = new RelayCommand(OpenLastXmlUpload, () => HasCorrectionXml);
         SelectAllCommand = new RelayCommand(() => SetAllSelected(true));
         DeselectAllCommand = new RelayCommand(() => SetAllSelected(false));
     }
@@ -338,6 +342,7 @@ public sealed class CorrectionWorkViewModel : BaseViewModel
     public bool CanGenerate => !IsBusy && SelectedCount > 0 &&
                                Items.Where(x => x.IsSelected).All(x => x.IsReady);
     public bool HasGeneratedFiles => !string.IsNullOrWhiteSpace(LastXmlPath);
+    public bool HasCorrectionXml => _lastPunchPlan?.HasCorrectionXml == true;
 
     public ICommand GenerateCommand { get; }
     public ICommand EditCommand { get; }
@@ -345,6 +350,7 @@ public sealed class CorrectionWorkViewModel : BaseViewModel
     public ICommand ClearCommand { get; }
     public ICommand BackCommand { get; }
     public ICommand OpenFolderCommand { get; }
+    public ICommand OpenXmlUploadCommand { get; }
     public ICommand SelectAllCommand { get; }
     public ICommand DeselectAllCommand { get; }
 
@@ -420,7 +426,7 @@ public sealed class CorrectionWorkViewModel : BaseViewModel
         }
 
         IsBusy = true;
-        StatusText = $"Формирование XML: {selected.Count} исправлений, {selected.Sum(x => x.Steps.Count)} чеков...";
+        StatusText = $"Формирование чеков: {selected.Count} исправлений, {selected.Sum(x => x.Steps.Count)} чеков...";
         try
         {
             var parameters = new GenerationParams
@@ -439,15 +445,32 @@ public sealed class CorrectionWorkViewModel : BaseViewModel
                     item.Entry.ObsidianCaseId, StringComparison.OrdinalIgnoreCase));
 
             LastXmlPath = results.FirstOrDefault()?.XmlPath ?? string.Empty;
+            _lastPunchPlan = CorrectionPunchPlanner.FromResults(results);
+            OnPropertyChanged(nameof(HasCorrectionXml));
+            CommandManager.InvalidateRequerySuggested();
+            var xmlFiles = results
+                .Select(x => x.XmlPath)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
             StatusText = results.Count == 0
-                ? "XML не сформирован: в выбранных случаях нет готовых чеков."
-                : $"Готово: {results.Count} чеков и {selected.Count} служебных записок. Файлы сохранены в atol_output.";
+                ? "Чеки не сформированы: в выбранных случаях нет готовых документов."
+                : $"Сформировано {results.Count} чеков, XML-файлов: {xmlFiles.Count}. Возвраты — API, коррекции — отдельный XML.";
             if (results.Count > 0)
+            {
                 Generated?.Invoke(results);
+                var outcome = await CorrectionPunchCoordinator.AfterGenerateAsync(
+                    results,
+                    AtolCredentials.Load(),
+                    CorrectionPunchCoordinator.FindOwner(),
+                    text => StatusText = text);
+                _allowCorrectionXml = outcome.AllowCorrectionXml;
+                StatusText = outcome.StatusText;
+            }
         }
         catch (Exception ex)
         {
-            StatusText = $"Ошибка формирования XML: {ex.Message}";
+            StatusText = $"Ошибка формирования: {ex.Message}";
         }
         finally
         {
@@ -472,6 +495,10 @@ public sealed class CorrectionWorkViewModel : BaseViewModel
         Items.Clear();
         SelectedItem = null;
         LastXmlPath = string.Empty;
+        _lastPunchPlan = null;
+        _allowCorrectionXml = false;
+        OnPropertyChanged(nameof(HasCorrectionXml));
+        CommandManager.InvalidateRequerySuggested();
         StatusText = "Список подготовки очищен.";
         RefreshCounters();
     }
@@ -481,6 +508,32 @@ public sealed class CorrectionWorkViewModel : BaseViewModel
         foreach (var item in Items)
             item.IsSelected = selected;
         RefreshCounters();
+    }
+
+    private void OpenLastXmlUpload()
+    {
+        if (_lastPunchPlan is not { HasCorrectionXml: true })
+        {
+            StatusText = "Сначала сформируйте чеки коррекции.";
+            return;
+        }
+
+        if (!_allowCorrectionXml && _lastPunchPlan.HasApiReceipts)
+        {
+            var go = MessageBox.Show(
+                CorrectionPunchCoordinator.FindOwner(),
+                "Возвраты этой пачки не подтверждены через API.\n" +
+                "Загрузка XML коррекций оставит в журнале коррекцию без отмены исходного чека.\n\n" +
+                "Открыть кабинет всё равно?",
+                "XML коррекций",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No) == MessageBoxResult.Yes;
+            if (!go) return;
+        }
+
+        CorrectionPunchCoordinator.OpenXmlUploadWindow(
+            _lastPunchPlan, CorrectionPunchCoordinator.FindOwner());
     }
 
     private void RefreshCounters()

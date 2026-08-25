@@ -668,6 +668,155 @@ public static class AtolApiService
         }
     }
 
+    /// <summary>
+    /// Пробивает уже собранный обычный чек (<c>receipt</c>) из генератора.
+    /// Чеки <c>*_correction</c> через API не отправляются: АТОЛ отвечает ошибкой 31,
+    /// для них нужна загрузка XML в кабинете.
+    /// </summary>
+    public static async Task<AtolPunchResult> PunchCheckDataAsync(
+        AtolCredentials creds, CheckData check, string orderNum)
+    {
+        if (check.IsCorrection ||
+            check.OperationType.EndsWith("_correction", StringComparison.OrdinalIgnoreCase))
+        {
+            return new AtolPunchResult
+            {
+                Error = "Чеки коррекции через API не отправляются. Загрузите XML в кабинете АТОЛ Online.",
+            };
+        }
+
+        if (check.Items.Count == 0)
+        {
+            return new AtolPunchResult
+            {
+                Error = $"У чека {orderNum} ({check.OperationType}) нет позиций для API.",
+            };
+        }
+
+        var cashierName = string.IsNullOrWhiteSpace(check.CashierName)
+            ? AppConstants.CashierName
+            : check.CashierName;
+        var existingPunch = FindExistingPunch(check.OperationType, orderNum, check.Amount);
+        if (existingPunch is not null)
+        {
+            Log($"PunchCheckData [{check.OperationType}] {orderNum}: skipped duplicate, UUID={existingPunch.Uuid}");
+            return existingPunch;
+        }
+
+        var (token, tokenErr) = await GetTokenAsync(creds);
+        if (token is null)
+            return new AtolPunchResult { Error = $"Нет токена: {tokenErr}" };
+
+        if (string.IsNullOrWhiteSpace(check.ExternalId))
+            check.ExternalId = Guid.NewGuid().ToString("N");
+
+        var payType = check.Tab == "realization"
+            ? 2
+            : check.PaymentType == "cash" ? 0 : 1;
+
+        var vatGroups = check.Items
+            .GroupBy(item => VatRateCatalog.Normalize(item.VatType, check.CheckVatType),
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => new { type = group.Key, sum = group.Sum(item => item.VatSum) })
+            .ToList();
+        if (vatGroups.Count == 0)
+        {
+            var fallbackType = VatRateCatalog.Normalize(check.CheckVatType, "none");
+            vatGroups.Add(new
+            {
+                type = fallbackType,
+                sum = VatRateCatalog.CalculateFiscalSum(check.Amount, fallbackType),
+            });
+        }
+
+        var requestBody = new
+        {
+            timestamp = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss"),
+            external_id = check.ExternalId,
+            receipt = new
+            {
+                client = new { email = AppConstants.EmailOrg },
+                company = new
+                {
+                    email = AppConstants.EmailOrg,
+                    sno = AppConstants.Sno,
+                    inn = AppConstants.InnOrg,
+                    payment_address = AppConstants.PaymentAddress,
+                },
+                items = BuildReceiptItemsFromCheck(check),
+                payments = new[] { new { type = payType, sum = check.Amount } },
+                vats = vatGroups,
+                total = check.Amount,
+                cashier = cashierName,
+                additional_check_props = string.IsNullOrWhiteSpace(check.AdditionalCheckProps)
+                    ? null
+                    : check.AdditionalCheckProps.Trim(),
+                additional_user_props = string.IsNullOrWhiteSpace(check.UserAttributeValue)
+                    ? null
+                    : new
+                    {
+                        name = string.IsNullOrWhiteSpace(check.UserAttributeName)
+                            ? "Номер реализации"
+                            : check.UserAttributeName,
+                        value = check.UserAttributeValue,
+                    },
+            },
+        };
+
+        try
+        {
+            var json = JsonSerializer.Serialize(requestBody, JsonOmitNullOpts);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var resp = await Http.PostAsync($"{creds.GroupCode}/{check.OperationType}?token={token}", content);
+            var body = await resp.Content.ReadAsStringAsync();
+            Log($"PunchCheckData [{check.OperationType}] {orderNum}: HTTP {(int)resp.StatusCode} → {(body.Length > 400 ? body[..400] + "…" : body)}");
+
+            var result = JsonSerializer.Deserialize<AtolReceiptResponse>(body, JsonOpts);
+            if (result?.Error is { Code: not 0 } err)
+            {
+                if (err.Code is 3 or 4) InvalidateToken();
+                return new AtolPunchResult { Error = $"АТОЛ {err.Code}: {err.Text}" };
+            }
+
+            if (string.IsNullOrEmpty(result?.Uuid))
+                return new AtolPunchResult { Error = $"UUID не получен. Ответ: {body}" };
+
+            var poll = await PollStatusAsync(creds.GroupCode, check.OperationType, result.Uuid, token,
+                $"{check.OperationType}/{orderNum}");
+            LogPunch(check.OperationType, orderNum, check.UserAttributeValue, check.Amount, poll, cashierName);
+            return poll;
+        }
+        catch (Exception ex)
+        {
+            Log($"PunchCheckData [{check.OperationType}] {orderNum}: Exception: {ex.Message}");
+            return new AtolPunchResult { Error = ex.Message };
+        }
+    }
+
+    private static List<object> BuildReceiptItemsFromCheck(CheckData check)
+    {
+        var items = new List<object>();
+        foreach (var item in check.Items)
+        {
+            var qty = item.Quantity > 0 ? item.Quantity : 1.0;
+            var agent = item.IsService ? check.Agent : null;
+            items.Add(new
+            {
+                name = item.Name,
+                price = item.Price,
+                quantity = qty,
+                sum = item.Sum,
+                payment_method = item.PaymentMethod,
+                payment_object = item.PaymentObject,
+                agent_info = agent is not null ? BuildAgentInfo(agent) : null,
+                supplier_info = BuildSupplierInfo(agent),
+                vat = new { type = item.VatType, sum = item.VatSum },
+            });
+        }
+
+        return items;
+    }
+
     // ── Опрос статуса ─────────────────────────────────────────────────────────
     private static async Task<AtolPunchResult> PollStatusAsync(
         string groupCode, string operation, string uuid, string token,

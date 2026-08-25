@@ -146,7 +146,10 @@ public static class CorrectionScenarioExtensions
         _ => OrderKind.Regular,
     };
 
-    /// <summary>Требует ли сценарий отдельного XML-процесса без отправки через API.</summary>
+    /// <summary>
+    /// Сценарий даёт чек <c>*_correction</c>. Через API эти чеки не отправляются
+    /// (ошибка 31). Обратный чек пары и полная отмена идут обычным <c>receipt</c> через API.
+    /// </summary>
     public static bool RequiresXmlOnly(this CorrectionScenario s) =>
-        s is not CorrectionScenario.Unknown and not CorrectionScenario.RealRefund;
+        s.ToOrderKind() is OrderKind.SingleCorrection or OrderKind.RefundCorrectionPair;
 }

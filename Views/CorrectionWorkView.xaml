@@ -76,11 +76,11 @@
                     <TextBlock Text="Пробитие исправлений" Style="{StaticResource PageTitle}"/>
                     <Border Background="{DynamicResource BrushSurface3}" CornerRadius="5"
                             Padding="8,4" Margin="10,2,0,0" VerticalAlignment="Top">
-                        <TextBlock Text="ФФД 1.05 · XML" FontSize="12" FontWeight="SemiBold"
+                        <TextBlock Text="ФФД 1.05 · API + XML" FontSize="12" FontWeight="SemiBold"
                                    Foreground="{DynamicResource BrushAccent2}"/>
                     </Border>
                 </StackPanel>
-                <TextBlock Text="Официальная схема АТОЛ: отмена ошибочного чека и правильный чек готовятся отдельно."
+                <TextBlock Text="Возвраты и приходы уходят через API. Для чеков коррекции открывается одно окно кабинета АТОЛ."
                            FontSize="13" Foreground="{DynamicResource BrushText2}" Margin="0,4,0,0"/>
             </StackPanel>
             <StackPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
@@ -88,7 +88,7 @@
                     <Run Text="В списке: "/><Run Text="{Binding ItemCount, Mode=OneWay}" FontWeight="Bold"/>
                     <Run Text="  ·  готово: "/><Run Text="{Binding ReadyCount, Mode=OneWay}" FontWeight="Bold"/>
                 </TextBlock>
-                <TextBlock Text="Через API эти чеки не отправляются"
+                <TextBlock Text="Чеки коррекции — только XML"
                            Foreground="{DynamicResource BrushOrange}" FontSize="12" Margin="0,3,0,0"/>
             </StackPanel>
         </Grid>
@@ -107,6 +107,9 @@
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="Открыть папку" Style="{StaticResource BtnSecondary}"
                             Command="{Binding OpenFolderCommand}" Margin="0,0,8,0"/>
+                    <Button Content="Загрузка XML" Style="{StaticResource BtnSecondary}"
+                            Command="{Binding OpenXmlUploadCommand}" Margin="0,0,8,0"
+                            ToolTip="Открыть кабинет АТОЛ для загрузки XML коррекций"/>
                     <Button Content="Очистить список" Style="{StaticResource BtnSecondary}"
                             Command="{Binding ClearCommand}"/>
                 </StackPanel>
@@ -141,7 +144,7 @@
                                     </Grid.ColumnDefinitions>
                                     <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                               VerticalAlignment="Top" Margin="0,2,10,0"
-                                              ToolTip="Включить исправление в XML"/>
+                                              ToolTip="Включить исправление в пачку"/>
                                     <StackPanel Grid.Column="1">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
@@ -345,14 +348,16 @@
                                   SelectedItem="{Binding SelectedCashier, Mode=TwoWay}"
                                   MinHeight="36"/>
                     </StackPanel>
-                    <CheckBox Grid.Column="2" Content="Один XML" IsChecked="{Binding MergeXml}"
-                              VerticalAlignment="Bottom" Margin="0,0,14,8"/>
-                    <Button Grid.Column="4" Content="Сформировать XML и служебки"
+                    <CheckBox Grid.Column="2" Content="Объединить однотипные"
+                              IsChecked="{Binding MergeXml}"
+                              VerticalAlignment="Bottom" Margin="0,0,14,8"
+                              ToolTip="Даже при включении возврат и коррекция не попадут в один файл. АТОЛ из смешанного XML регистрирует только коррекцию."/>
+                    <Button Grid.Column="4" Content="Сформировать и пробить"
                             Style="{StaticResource BtnPrimary}" Padding="18,11"
                             VerticalAlignment="Bottom"
                             Command="{Binding GenerateCommand}"
                             IsEnabled="{Binding CanGenerate}"
-                            ToolTip="Формирует только XML-файлы для ручной загрузки в АТОЛ Online"/>
+                            ToolTip="Возвраты и приходы отправляются через API. Для чеков коррекции откроется кабинет АТОЛ с путём к XML."/>
                 </Grid>
             </Grid>
         </Border>

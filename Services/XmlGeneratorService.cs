@@ -10,9 +10,10 @@ public static class XmlGeneratorService
 {
     public static void GenerateFile(IEnumerable<CheckData> checks, string filepath)
     {
-        // АТОЛ при загрузке XML молча оставляет один чек, если в файле
-        // несколько документов с одним timestamp и одной суммой: пара
-        // возврат+коррекция на ту же сумму пропадала без вкладки ошибок.
+        // Соседние чеки в одном файле получают +1 секунду: иначе АТОЛ
+        // при одинаковых timestamp и сумме оставляет один документ.
+        // Пару возврат+коррекция всё равно нельзя класть в один XML —
+        // см. CheckGeneratorService, раздел MergeXml.
         var stamp = DateTime.Now;
         var nodes = checks.Select((c, i) => BuildCheckXml(c, stamp.AddSeconds(i)));
         var main = new XElement("main", nodes);

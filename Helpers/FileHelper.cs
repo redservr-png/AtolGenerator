@@ -20,6 +20,24 @@ public static class FileHelper
         });
     }
 
+    public static void RevealInExplorer(string path)
+    {
+        if (File.Exists(path))
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"/select,\"{path}\"",
+                UseShellExecute = true,
+            });
+            return;
+        }
+
+        var directory = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+            OpenFolder(directory);
+    }
+
     public static string OutputDir =>
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "atol_output");
 

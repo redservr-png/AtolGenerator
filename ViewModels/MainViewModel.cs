@@ -89,32 +89,33 @@ public class MainViewModel : BaseViewModel
     public bool IsCorrection         => CheckType is "sell_correction" or "buy_correction";
     public bool ShowCorrectionBox    => IsCorrection;
 
-    /// <summary>В списке есть исправления, которые разрешено формировать только через XML.</summary>
+    /// <summary>В списке есть исправления: возвраты после формирования идут в API, коррекции — в XML.</summary>
     public bool HasXmlOnlyCorrection =>
-        Orders.Any(IsXmlOnlyOrder);
+        Orders.Any(IsCorrectionKit);
 
-    /// <summary>Количество таких «XML-только» коррекций в списке.</summary>
+    /// <summary>Количество исправительных комплектов в списке.</summary>
     public int XmlOnlyCorrectionCount =>
-        Orders.Count(IsXmlOnlyOrder);
+        Orders.Count(IsCorrectionKit);
 
-    // Пробитие через API: коррекции не поддерживаются (ошибка 31)
+    // Кнопка API на главной бьёт только обычные заказы. Исправления идут через «Сформировать».
     public bool CanPunchOrdersViaAtol =>
-        OrderCount > 0 && !IsCorrection && !HasXmlOnlyCorrection;
+        Orders.Any(order => !IsCorrectionKit(order)) && !IsCorrection;
 
-    private static bool IsXmlOnlyOrder(OrderEntry order) =>
+    private static bool IsCorrectionKit(OrderEntry order) =>
         order.IsCorrection ||
         !string.IsNullOrWhiteSpace(order.ObsidianCaseId) ||
-        order.CorrectionScenario.RequiresXmlOnly();
+        order.CorrectionScenario is not CorrectionScenario.Unknown
+            and not CorrectionScenario.RealRefund;
 
     public string CorrectionPunchHint
     {
         get
         {
             if (IsCorrection)
-                return "Коррекция не поддерживается через АТОЛ API.\nИспользуйте сформированный XML-файл.";
+                return "Чеки коррекции через API не проходят.\nСформируйте документы — откроется окно загрузки XML.";
             if (HasXmlOnlyCorrection)
-                return $"В списке есть {XmlOnlyCorrectionCount} коррекций, требующих XML.\n" +
-                       "Пробитие через API недоступно — используйте «Сформировать XML».";
+                return $"В списке {XmlOnlyCorrectionCount} исправлений: после «Сформировать» возвраты уйдут в API,\n" +
+                       "коррекции — в одно окно загрузки XML. Кнопка «Пробить» бьёт только обычные заказы.";
             return string.Empty;
         }
     }
@@ -427,7 +428,6 @@ public class MainViewModel : BaseViewModel
         {
             ObsidianCases.RecordGenerated(results);
             StatusText = $"Сформировано исправительных чеков: {results.Count}";
-            ShowToast($"XML готов: {results.Count} чеков", false);
         };
 
         // Любое изменение списка заказов автоматически обновляет
@@ -1751,9 +1751,10 @@ public class MainViewModel : BaseViewModel
         if (Orders.Count == 0)
         { ShowToast("Нет заказов для пробития", true); return; }
 
-        if (Orders.Any(IsXmlOnlyOrder))
+        var orders = Orders.Where(order => !IsCorrectionKit(order)).ToList();
+        if (orders.Count == 0)
         {
-            ShowToast("Исправления из Obsidian формируются только в XML на отдельном экране", true);
+            ShowToast("В списке только исправления. Нажмите «Сформировать документы»: возвраты уйдут в API, коррекции — в окно XML.", true);
             return;
         }
 
@@ -1766,8 +1767,6 @@ public class MainViewModel : BaseViewModel
             Password  = AtolPassword,
             GroupCode = AtolGroupCode.Trim(),
         };
-
-        var orders = Orders.ToList();
         if (!ConfirmPunchOrders(orders))
         {
             AtolStatus = "Отправка в АТОЛ отменена оператором";
@@ -2074,6 +2073,26 @@ public class MainViewModel : BaseViewModel
         }
 
         ShowGenerationResults(results);
+
+        if (!CorrectionPunchPlanner.IsRepairBatch(results))
+            return;
+
+        var creds = new AtolCredentials
+        {
+            Login = AtolLogin.Trim(),
+            Password = AtolPassword,
+            GroupCode = AtolGroupCode.Trim(),
+        };
+        var outcome = await CorrectionPunchCoordinator.AfterGenerateAsync(
+            results,
+            creds,
+            Application.Current?.MainWindow,
+            text => StatusText = text);
+        StatusText = outcome.StatusText;
+        var isError = !outcome.OpenedXmlWindow &&
+                      results.Any(result => result.CheckData is { IsCorrection: true }) &&
+                      !outcome.AllowCorrectionXml;
+        ShowToast(outcome.StatusText, isError);
     }
 
     private void AddObsidianCasesToWork(IReadOnlyList<OrderEntry> entries)
@@ -2108,6 +2127,9 @@ public class MainViewModel : BaseViewModel
 
         if (AllResultEntries.Count > 0)
             SelectedEntry = AllResultEntries[0];
+
+        if (CorrectionPunchPlanner.IsRepairBatch(results))
+            return;
 
         var xmlCount  = Results.Select(r => r.XmlPath).Where(p => !string.IsNullOrEmpty(p)).Distinct().Count();
         var docxCount = Results.Select(r => r.DocxPath)

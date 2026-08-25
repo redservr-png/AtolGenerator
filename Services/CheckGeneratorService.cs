@@ -259,17 +259,28 @@ public static class CheckGeneratorService
         // ── Запись XML ──
         if (p.MergeXml && results.Count > 0)
         {
-            // Один файл для всех чеков
-            var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")[..17];
-            var operations = results
-                .Select(r => r.CheckData?.OperationType)
-                .Where(operation => !string.IsNullOrWhiteSpace(operation))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            var operationLabel = operations.Count == 1 ? operations[0]! : "mixed";
-            var xmlPath = Path.Combine(p.OutputDir, $"{ts}_{results.Count}чеков_{operationLabel}.xml");
-            XmlGeneratorService.GenerateFile(results.Select(r => r.CheckData!), xmlPath);
-            foreach (var r in results) r.XmlPath = xmlPath;
+            // АТОЛ для пары возврат+коррекция на одну сумму регистрирует
+            // только коррекцию: возврат либо молча пропадает, либо даёт
+            // «ошибку фискализации» без строки в журнале. Даже разный
+            // timestamp это не лечит — типы в один файл не смешиваем.
+            var stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")[..17];
+            foreach (var group in results
+                         .Where(r => r.CheckData is not null)
+                         .GroupBy(r => r.CheckData!.IsCorrection))
+            {
+                var batch = group.ToList();
+                var operations = batch
+                    .Select(r => r.CheckData!.OperationType)
+                    .Where(operation => !string.IsNullOrWhiteSpace(operation))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var operationLabel = operations.Count == 1
+                    ? operations[0]!
+                    : (group.Key ? "corrections" : "receipts");
+                var xmlPath = Path.Combine(p.OutputDir, $"{stamp}_{batch.Count}чеков_{operationLabel}.xml");
+                XmlGeneratorService.GenerateFile(batch.Select(r => r.CheckData!), xmlPath);
+                foreach (var r in batch) r.XmlPath = xmlPath;
+            }
         }
         else
         {

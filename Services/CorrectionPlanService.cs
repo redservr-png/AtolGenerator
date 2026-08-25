@@ -141,7 +141,7 @@ public static class CorrectionPlanService
         VatType = vatType,
         RequiresItems = requiresItems,
         UsesOriginalFiscalSign = usesFp,
-        XmlOnly = true,
+        XmlOnly = IsCorrection(operation),
     };
 
     private static string ResolveCorrectOperation(OrderEntry order, bool sameDay)
