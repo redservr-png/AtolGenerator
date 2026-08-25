@@ -4,8 +4,8 @@
         xmlns:views="clr-namespace:AtolGenerator.Views"
         Title="Пробитие исправлений — АТОЛ"
         Icon="/AtolGenerator;component/Resources/app.ico"
-        Width="1500" Height="860"
-        MinWidth="1120" MinHeight="700"
+        Width="1440" Height="760"
+        MinWidth="1040" MinHeight="600"
         Background="{DynamicResource BrushBg}"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="True">

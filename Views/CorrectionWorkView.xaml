@@ -46,7 +46,6 @@
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
-                                <Setter TargetName="ItemBorder" Property="BorderThickness" Value="2"/>
                                 <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource BrushSurface2}"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
@@ -97,8 +96,9 @@
         <Border Grid.Row="1" Style="{StaticResource Toolbar}" Margin="0,0,0,14">
             <Grid>
                 <StackPanel Orientation="Horizontal">
-                    <Button Content="← К списку ошибок" Style="{StaticResource BtnSecondary}"
-                            Command="{Binding BackCommand}" Margin="0,0,8,0"/>
+                    <Button Content="← Назад" Style="{StaticResource BtnSecondary}"
+                            Command="{Binding BackCommand}" Margin="0,0,8,0"
+                            ToolTip="Закрыть окно и вернуться к предыдущему экрану"/>
                     <Button Content="Выбрать все" Style="{StaticResource BtnSecondary}"
                             Command="{Binding SelectAllCommand}" Margin="0,0,8,0"/>
                     <Button Content="Снять выбор" Style="{StaticResource BtnSecondary}"
@@ -115,9 +115,9 @@
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="400"/>
-                <ColumnDefinition Width="18"/>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*" MinWidth="280"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="2*"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Style="{StaticResource Panel}" Padding="12">
@@ -318,10 +318,10 @@
                 BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
                 CornerRadius="8" Padding="14" Margin="0,12,0,0">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
                 <StackPanel>
                     <TextBlock FontSize="13">
                         <Run Text="Выбрано: "/><Run Text="{Binding SelectedCount, Mode=OneWay}" FontWeight="Bold"/>
@@ -331,21 +331,29 @@
                     <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource BrushText2}"
                                FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"/>
                 </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <StackPanel Width="360" Margin="0,0,12,0">
+                <Grid Grid.Row="1" Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="360"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
                         <TextBlock Text="Кассир" Style="{StaticResource MetaLabel}"/>
                         <ComboBox ItemsSource="{Binding AvailableCashiers}"
                                   SelectedItem="{Binding SelectedCashier, Mode=TwoWay}"
                                   MinHeight="36"/>
                     </StackPanel>
-                    <CheckBox Content="Один XML" IsChecked="{Binding MergeXml}"
-                              VerticalAlignment="Center" Margin="0,0,14,0"/>
-                    <Button Content="Сформировать XML и служебки"
+                    <CheckBox Grid.Column="2" Content="Один XML" IsChecked="{Binding MergeXml}"
+                              VerticalAlignment="Bottom" Margin="0,0,14,8"/>
+                    <Button Grid.Column="4" Content="Сформировать XML и служебки"
                             Style="{StaticResource BtnPrimary}" Padding="18,11"
+                            VerticalAlignment="Bottom"
                             Command="{Binding GenerateCommand}"
                             IsEnabled="{Binding CanGenerate}"
                             ToolTip="Формирует только XML-файлы для ручной загрузки в АТОЛ Online"/>
-                </StackPanel>
+                </Grid>
             </Grid>
         </Border>
     </Grid>

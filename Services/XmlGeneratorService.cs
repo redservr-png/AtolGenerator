@@ -10,7 +10,12 @@ public static class XmlGeneratorService
 {
     public static void GenerateFile(IEnumerable<CheckData> checks, string filepath)
     {
-        var main = new XElement("main", checks.Select(BuildCheckXml));
+        // АТОЛ при загрузке XML молча оставляет один чек, если в файле
+        // несколько документов с одним timestamp и одной суммой: пара
+        // возврат+коррекция на ту же сумму пропадала без вкладки ошибок.
+        var stamp = DateTime.Now;
+        var nodes = checks.Select((c, i) => BuildCheckXml(c, stamp.AddSeconds(i)));
+        var main = new XElement("main", nodes);
         var settings = new XmlWriterSettings
         {
             Indent             = true,
@@ -22,13 +27,13 @@ public static class XmlGeneratorService
         main.Save(writer);
     }
 
-    private static XElement BuildCheckXml(CheckData c)
+    private static XElement BuildCheckXml(CheckData c, DateTime timestamp)
     {
         if (string.IsNullOrWhiteSpace(c.ExternalId))
             c.ExternalId = Guid.NewGuid().ToString("N");
 
         var chk = new XElement("check",
-            new XElement("timestamp",   DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss")),
+            new XElement("timestamp",   timestamp.ToString("dd.MM.yyyy HH:mm:ss")),
             new XElement("external_id", c.ExternalId),
             new XElement("is_bso",      "false")
         );

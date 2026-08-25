@@ -13,6 +13,8 @@ namespace AtolGenerator.ViewModels;
 public class MainViewModel : BaseViewModel
 {
     private string _activeWorkspace = "main";
+    private string _activeNav = "refunds";
+    private string _navBeforeCorrectionWork = "obsidian";
     private bool _startupInitialized;
     private Views.CorrectionWorkWindow? _correctionWorkWindow;
 
@@ -22,6 +24,27 @@ public class MainViewModel : BaseViewModel
     public bool ShowMainWorkspace => _activeWorkspace == "main";
     public bool ShowReportsWorkspace => _activeWorkspace == "reports";
     public bool ShowObsidianWorkspace => _activeWorkspace == "obsidian";
+    public string ActiveNav => _activeNav;
+    public string HeaderTitle => HeaderNav switch
+    {
+        "reports" => "Отчёты",
+        "obsidian" => "Исправление чеков",
+        "refunds" => "Возвраты по заказам",
+        "realizationCorrections" => "Коррекции реализаций 1С",
+        "payment" => "Оплаты / приход",
+        _ => "Рабочее место кассира",
+    };
+    public string HeaderSubtitle => HeaderNav switch
+    {
+        "reports" => "Журнал АТОЛ, ОФД и сверка с XML",
+        "obsidian" => "Очередь расхождений 1С и фискальных данных",
+        "refunds" => "Обычный возврат прихода без тега 1192",
+        "realizationCorrections" => "Исправительные XML по реализациям 1С",
+        "payment" => "Редкий приход через АТОЛ API",
+        _ => "Чеки, исправления и сверка фискальных данных",
+    };
+    private string HeaderNav =>
+        _activeNav == "correctionWork" ? _navBeforeCorrectionWork : _activeNav;
 
     // ── Tab ──────────────────────────────────────────────────────────────────
     private string _tab = "payment";
@@ -528,6 +551,7 @@ public class MainViewModel : BaseViewModel
     {
         if (target is "reports" or "ofd")
         {
+            SetNav("reports");
             SetWorkspace("reports");
             ShowOfdToolsPanel = false;
             StatusText = "Работа с отчётами";
@@ -536,6 +560,7 @@ public class MainViewModel : BaseViewModel
 
         if (target == "obsidian")
         {
+            SetNav("obsidian");
             SetWorkspace("obsidian");
             ShowOfdToolsPanel = false;
             ObsidianCases.Activate();
@@ -545,6 +570,9 @@ public class MainViewModel : BaseViewModel
 
         if (target == "correctionWork")
         {
+            if (_activeNav != "correctionWork")
+                _navBeforeCorrectionWork = string.IsNullOrWhiteSpace(_activeNav) ? "obsidian" : _activeNav;
+            SetNav("correctionWork");
             OpenCorrectionWorkWindow();
             return;
         }
@@ -555,6 +583,7 @@ public class MainViewModel : BaseViewModel
         switch (target)
         {
             case "refunds":
+                SetNav("refunds");
                 Tab = "payment";
                 CheckType = "sell_refund";
                 ShowOneCPanel = false;
@@ -563,6 +592,7 @@ public class MainViewModel : BaseViewModel
                 break;
 
             case "realizationCorrections":
+                SetNav("realizationCorrections");
                 Tab = "realization";
                 CheckType = "sell_correction";
                 ShowOneCPanel = true;
@@ -576,6 +606,7 @@ public class MainViewModel : BaseViewModel
                 break;
 
             case "payment":
+                SetNav("payment");
                 Tab = "payment";
                 CheckType = "sell";
                 ShowOneCPanel = false;
@@ -595,11 +626,27 @@ public class MainViewModel : BaseViewModel
 
     private void SetWorkspace(string workspace)
     {
-        if (string.Equals(_activeWorkspace, workspace, StringComparison.Ordinal)) return;
+        if (string.Equals(_activeWorkspace, workspace, StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(HeaderTitle));
+            OnPropertyChanged(nameof(HeaderSubtitle));
+            return;
+        }
         _activeWorkspace = workspace;
         OnPropertyChanged(nameof(ShowMainWorkspace));
         OnPropertyChanged(nameof(ShowReportsWorkspace));
         OnPropertyChanged(nameof(ShowObsidianWorkspace));
+        OnPropertyChanged(nameof(HeaderTitle));
+        OnPropertyChanged(nameof(HeaderSubtitle));
+    }
+
+    private void SetNav(string nav)
+    {
+        if (string.Equals(_activeNav, nav, StringComparison.Ordinal)) return;
+        _activeNav = nav;
+        OnPropertyChanged(nameof(ActiveNav));
+        OnPropertyChanged(nameof(HeaderTitle));
+        OnPropertyChanged(nameof(HeaderSubtitle));
     }
 
     private void OpenCorrectionWorkWindow()
@@ -617,7 +664,12 @@ public class MainViewModel : BaseViewModel
         var window = new Views.CorrectionWorkWindow { DataContext = CorrectionWork };
         if (owner is not null && !ReferenceEquals(owner, window))
             window.Owner = owner;
-        window.Closed += (_, _) => _correctionWorkWindow = null;
+        window.Closed += (_, _) =>
+        {
+            if (_correctionWorkWindow is null) return;
+            _correctionWorkWindow = null;
+            RestoreNavAfterCorrectionWork();
+        };
         _correctionWorkWindow = window;
         window.Show();
         StatusText = "Открыто отдельное окно пробития исправлений";
@@ -628,10 +680,39 @@ public class MainViewModel : BaseViewModel
         var window = _correctionWorkWindow;
         _correctionWorkWindow = null;
         window?.Close();
-        SetWorkspace("obsidian");
-        ObsidianCases.Activate();
-        StatusText = "Исправление чеков";
+        RestoreNavAfterCorrectionWork();
         Application.Current?.MainWindow?.Activate();
+    }
+
+    private void RestoreNavAfterCorrectionWork()
+    {
+        var previous = string.IsNullOrWhiteSpace(_navBeforeCorrectionWork) ||
+                       _navBeforeCorrectionWork == "correctionWork"
+            ? "obsidian"
+            : _navBeforeCorrectionWork;
+        SetNav(previous);
+        switch (previous)
+        {
+            case "reports":
+                SetWorkspace("reports");
+                StatusText = "Работа с отчётами";
+                break;
+            case "obsidian":
+                SetWorkspace("obsidian");
+                ObsidianCases.Activate();
+                StatusText = "Исправление чеков";
+                break;
+            default:
+                SetWorkspace("main");
+                StatusText = previous switch
+                {
+                    "refunds" => "Возвраты по заказам",
+                    "realizationCorrections" => "Коррекции реализаций 1С",
+                    "payment" => "Оплаты",
+                    _ => "Рабочее место кассира",
+                };
+                break;
+        }
     }
 
     private void OpenSettings()
@@ -1603,6 +1684,13 @@ public class MainViewModel : BaseViewModel
             return;
         }
 
+        if (!ConfirmPunchRealizations(rows))
+        {
+            AtolStatus = "Отправка в АТОЛ отменена оператором";
+            StatusText = "Готов к работе";
+            return;
+        }
+
         var creds = new AtolCredentials
         {
             Login     = AtolLogin.Trim(),
@@ -1612,6 +1700,7 @@ public class MainViewModel : BaseViewModel
 
         AtolStatus = $"Пробиваем приходы по реализациям 0 из {rows.Count}...";
         var errorsText = new System.Text.StringBuilder();
+        var pending = new List<string>();
         int ok = 0, fail = 0;
 
         for (int i = 0; i < rows.Count; i++)
@@ -1642,6 +1731,9 @@ public class MainViewModel : BaseViewModel
                 row.PunchFail = true;
                 row.PunchStatus = $"❌ {result.Error}";
                 errorsText.AppendLine($"❌ {row.DocNumber}: {result.Error}");
+                if (string.Equals(result.Status, "wait", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(result.Uuid))
+                    pending.Add($"{row.DocNumber}: {result.Uuid}");
             }
         }
 
@@ -1650,6 +1742,7 @@ public class MainViewModel : BaseViewModel
         StatusText = "Готов к работе";
         ShowToast($"АТОЛ Online: пробито {ok} из {rows.Count}" + (fail > 0 ? $", ошибок {fail}" : ""),
             fail > 0 && ok == 0);
+        ShowPendingUuidWarning(pending);
     }
 
     // ── Пробить заказы из основного списка ───────────────────────────────────
@@ -1687,6 +1780,7 @@ public class MainViewModel : BaseViewModel
 
         var errors = new System.Text.StringBuilder();
         var completed = new List<OrderEntry>();
+        var pending = new List<string>();
         int ok = 0, alreadyProcessed = 0, fail = 0;
 
         for (int i = 0; i < orders.Count; i++)
@@ -1711,6 +1805,9 @@ public class MainViewModel : BaseViewModel
                 fail++;
                 var uuidHint = !string.IsNullOrEmpty(result.Uuid) ? $" [UUID: {result.Uuid}]" : "";
                 errors.AppendLine($"❌ {order.OrderNum}: {result.Error}{uuidHint}");
+                if (string.Equals(result.Status, "wait", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(result.Uuid))
+                    pending.Add($"{order.OrderNum}: {result.Uuid}");
             }
         }
 
@@ -1725,6 +1822,7 @@ public class MainViewModel : BaseViewModel
         ShowToast(
             $"АТОЛ Online: новых {ok}, уже в журнале {alreadyProcessed}, ошибок {fail}",
             fail > 0 && ok + alreadyProcessed == 0);
+        ShowPendingUuidWarning(pending);
     }
 
     private bool ConfirmPunchOrders(IReadOnlyList<OrderEntry> orders)
@@ -1758,6 +1856,46 @@ public class MainViewModel : BaseViewModel
 
         return MessageBox.Show(message, "Подтверждение пробития", MessageBoxButton.YesNo,
             MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+    }
+
+    private bool ConfirmPunchRealizations(IReadOnlyList<OneCRealizationViewModel> rows)
+    {
+        var preview = string.Join(Environment.NewLine, rows.Take(5)
+            .Select(row => $"• {row.DocNumber}: {row.Amount:N2} ₽"));
+        if (rows.Count > 5)
+            preview += Environment.NewLine + $"• и ещё {rows.Count - 5}";
+
+        var message =
+            "Будут отправлены фискальные чеки прихода в АТОЛ Online.\n\n" +
+            "Операция: Приход (sell)\n" +
+            "Оплата: аванс (тип 2)\n" +
+            $"Кассир: {SelectedCashier?.ShortName ?? AppConstants.CashierName}\n" +
+            $"Количество: {rows.Count}\n\n" +
+            $"Реализации без чека:\n{preview}\n\n" +
+            "Это не коррекция. Проверьте, что дата документа — сегодня и чека ещё нет.\n" +
+            "Проверьте операцию и подтвердите отправку.";
+
+        return MessageBox.Show(message, "Подтверждение пробития реализаций", MessageBoxButton.YesNo,
+            MessageBoxImage.Warning, MessageBoxResult.No) == MessageBoxResult.Yes;
+    }
+
+    private static void ShowPendingUuidWarning(IReadOnlyList<string> pending)
+    {
+        if (pending.Count == 0) return;
+
+        var list = string.Join(Environment.NewLine, pending.Take(10));
+        if (pending.Count > 10)
+            list += Environment.NewLine + $"• и ещё {pending.Count - 10}";
+
+        MessageBox.Show(
+            "АТОЛ принял документ, но статус за 20 секунд не пришёл.\n" +
+            "Чек мог уже фискализироваться. Не нажимайте «Пробить» повторно.\n\n" +
+            "Проверьте журнал АТОЛ Online по UUID:\n" +
+            list + "\n\n" +
+            $"Подробности: {AtolApiService.LogPath}",
+            "Статус чека не получен",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
     }
 
     private OneCConnectionSettings BuildOneCSettings() => new()

@@ -50,6 +50,9 @@ public sealed class OfdReportRow
     public string KktName { get; init; } = string.Empty;
     public string ReceiptUrl { get; init; } = string.Empty;
     public string SourceFile { get; init; } = string.Empty;
+    public string AdditionalCheckProps { get; init; } = string.Empty;
+    public string AdditionalUserPropName { get; init; } = string.Empty;
+    public string AdditionalUserPropValue { get; init; } = string.Empty;
 }
 
 public sealed class OfdReportReadResult

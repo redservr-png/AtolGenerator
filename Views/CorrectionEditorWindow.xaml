@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
         Title="Редактирование коррекции"
-        Width="1380" Height="900" MinWidth="1120" MinHeight="740"
+        Width="1380" Height="780" MinWidth="1040" MinHeight="600"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize" ShowInTaskbar="False"
         Background="{DynamicResource BrushBg}"
@@ -37,7 +37,7 @@
         </Style>
 
         <Style x:Key="PanelBorder" TargetType="Border" BasedOn="{StaticResource Panel}">
-            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Padding" Value="16,18"/>
         </Style>
 
         <Style x:Key="SoftPanelBorder" TargetType="Border" BasedOn="{StaticResource PanelBorder}">
@@ -95,8 +95,24 @@
         </Style>
 
         <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
-            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Padding" Value="8,0"/>
             <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridCell">
+                        <Border Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}">
+                            <ContentPresenter VerticalAlignment="Center"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="EditorCellText" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="2,0"/>
         </Style>
     </Window.Resources>
 
@@ -266,36 +282,41 @@
                                             </StackPanel>
                                         </Grid>
 
-                                        <DockPanel Margin="0,2,0,6">
-                                            <TextBlock Text="Табличная часть отмены"
-                                                       Style="{StaticResource FieldLabel}"
-                                                       DockPanel.Dock="Left"/>
+                                        <DockPanel LastChildFill="False" Margin="0,2,0,8">
                                             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
                                                 <Button Content="Добавить позицию" Style="{StaticResource EditorGhost}"
-                                                        Padding="10,5" Margin="0,0,6,0"
+                                                        Padding="10,5" Margin="12,0,6,0"
                                                         Click="AddOriginalItem_Click"/>
                                                 <Button Content="Удалить" Style="{StaticResource EditorGhost}"
                                                         Padding="10,5"
                                                         Click="DeleteOriginalItem_Click"/>
                                             </StackPanel>
+                                            <TextBlock Text="Табличная часть отмены"
+                                                       Style="{StaticResource FieldLabel}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0"/>
                                         </DockPanel>
 
                                         <DataGrid x:Name="OriginalItemsGrid"
                                                   ItemsSource="{Binding OriginalItems}"
                                                   Height="190"
+                                                  RowHeight="36"
                                                   CanUserAddRows="False"
                                                   CanUserDeleteRows="False"
                                                   CurrentCellChanged="ItemsGrid_CurrentCellChanged">
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn Header="Номенклатура"
                                                                     Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
-                                                                    Width="*"/>
+                                                                    Width="*"
+                                                                    ElementStyle="{StaticResource EditorCellText}"/>
                                                 <DataGridTextColumn Header="Кол-во"
                                                                     Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}"
-                                                                    Width="90"/>
+                                                                    Width="90"
+                                                                    ElementStyle="{StaticResource EditorCellText}"/>
                                                 <DataGridTextColumn Header="Сумма, ₽"
                                                                     Binding="{Binding Sum, UpdateSourceTrigger=PropertyChanged}"
-                                                                    Width="110"/>
+                                                                    Width="110"
+                                                                    ElementStyle="{StaticResource EditorCellText}"/>
                                                 <DataGridTemplateColumn Header="НДС" Width="145">
                                                     <DataGridTemplateColumn.CellTemplate>
                                                         <DataTemplate>
@@ -354,36 +375,41 @@
                                         </Grid>
 
                                         <StackPanel x:Name="CorrectItemsPanel" Margin="0,12,0,0">
-                                            <DockPanel Margin="0,0,0,6">
-                                                <TextBlock Text="Табличная часть правильного чека"
-                                                           Style="{StaticResource FieldLabel}"
-                                                           DockPanel.Dock="Left"/>
+                                            <DockPanel LastChildFill="False" Margin="0,0,0,8">
                                                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
                                                     <Button Content="Добавить позицию" Style="{StaticResource EditorGhost}"
-                                                            Padding="10,5" Margin="0,0,6,0"
+                                                            Padding="10,5" Margin="12,0,6,0"
                                                             Click="AddCorrectItem_Click"/>
                                                     <Button Content="Удалить" Style="{StaticResource EditorGhost}"
                                                             Padding="10,5"
                                                             Click="DeleteCorrectItem_Click"/>
                                                 </StackPanel>
+                                                <TextBlock Text="Табличная часть правильного чека"
+                                                           Style="{StaticResource FieldLabel}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="0"/>
                                             </DockPanel>
 
                                             <DataGrid x:Name="CorrectItemsGrid"
                                                       ItemsSource="{Binding Items}"
                                                       Height="190"
+                                                      RowHeight="36"
                                                       CanUserAddRows="False"
                                                       CanUserDeleteRows="False"
                                                       CurrentCellChanged="ItemsGrid_CurrentCellChanged">
                                                 <DataGrid.Columns>
                                                     <DataGridTextColumn Header="Номенклатура"
                                                                         Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}"
-                                                                        Width="*"/>
+                                                                        Width="*"
+                                                                        ElementStyle="{StaticResource EditorCellText}"/>
                                                     <DataGridTextColumn Header="Кол-во"
                                                                         Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}"
-                                                                        Width="90"/>
+                                                                        Width="90"
+                                                                        ElementStyle="{StaticResource EditorCellText}"/>
                                                     <DataGridTextColumn Header="Сумма, ₽"
                                                                         Binding="{Binding Sum, UpdateSourceTrigger=PropertyChanged}"
-                                                                        Width="110"/>
+                                                                        Width="110"
+                                                                        ElementStyle="{StaticResource EditorCellText}"/>
                                                     <DataGridTemplateColumn Header="НДС" Width="145">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>

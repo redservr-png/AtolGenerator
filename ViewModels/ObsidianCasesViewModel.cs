@@ -1011,11 +1011,12 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
             }
 
             var allFound = true;
+            var documentNumbers = DocumentNumbers(item);
             foreach (var check in expected)
             {
                 OfdReportRow? match = check.FiscalSign is not null
                     ? rows.FirstOrDefault(x => x.FiscalSign == check.FiscalSign)
-                    : FindUniqueOfdMatch(rows, check);
+                    : FindOfdMatch(rows, check, documentNumbers, item.State.OriginalFiscalNumber);
                 if (match is null)
                 {
                     allFound = false;
@@ -1033,26 +1034,113 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         return confirmed;
     }
 
-    private static OfdReportRow? FindUniqueOfdMatch(IEnumerable<OfdReportRow> rows, ObsidianExpectedCheck check)
+    private static OfdReportRow? FindOfdMatch(
+        IReadOnlyList<OfdReportRow> rows,
+        ObsidianExpectedCheck check,
+        IReadOnlySet<string> fallbackDocuments,
+        string fallbackOriginalFiscalSign)
     {
-        var candidates = rows.Where(x =>
+        var typed = rows.Where(x =>
                 Math.Abs(Math.Abs(x.Amount) - Math.Abs(check.Amount)) < 0.01 &&
-                x.RegisteredAt >= check.GeneratedAt.AddMinutes(-5) &&
-                OperationMatches(x.Operation, check.Operation))
-            .Take(2)
+                OperationMatches(x, check.Operation))
             .ToList();
-        return candidates.Count == 1 ? candidates[0] : null;
+
+        var documents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var realization = ReportImportService.NormalizeRealizationNumber(check.RealizationNumber);
+        if (!string.IsNullOrWhiteSpace(realization))
+            documents.Add(realization);
+        else
+            documents.UnionWith(fallbackDocuments);
+
+        if (documents.Count > 0)
+        {
+            var byDocument = typed
+                .Where(x => documents.Contains(x.AdditionalUserPropValue))
+                .ToList();
+            var picked = PickUniqueOfdRow(byDocument, check.GeneratedAt);
+            if (picked is not null) return picked;
+        }
+
+        var originalFp = string.IsNullOrWhiteSpace(check.OriginalFiscalSign)
+            ? fallbackOriginalFiscalSign
+            : check.OriginalFiscalSign;
+        if (!string.IsNullOrWhiteSpace(originalFp))
+        {
+            var byOriginal = typed
+                .Where(x => SameFiscalToken(x.AdditionalCheckProps, originalFp))
+                .ToList();
+            var picked = PickUniqueOfdRow(byOriginal, check.GeneratedAt);
+            if (picked is not null) return picked;
+        }
+
+        return PickUniqueOfdRow(
+            typed.Where(x => x.RegisteredAt >= check.GeneratedAt.AddMinutes(-5)).ToList(),
+            check.GeneratedAt,
+            requireAfterGeneration: true);
     }
 
-    private static bool OperationMatches(string reportOperation, string expectedOperation)
+    private static OfdReportRow? PickUniqueOfdRow(
+        IReadOnlyList<OfdReportRow> hits,
+        DateTime generatedAt,
+        bool requireAfterGeneration = false)
+    {
+        if (hits.Count == 0) return null;
+        if (!requireAfterGeneration && hits.Count == 1) return hits[0];
+
+        var after = hits.Where(x => x.RegisteredAt >= generatedAt.AddMinutes(-5)).ToList();
+        return after.Count == 1 ? after[0] : null;
+    }
+
+    private static HashSet<string> DocumentNumbers(ObsidianCaseItemViewModel item)
+    {
+        var numbers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Add(string value)
+        {
+            var normalized = ReportImportService.NormalizeRealizationNumber(value);
+            if (!string.IsNullOrWhiteSpace(normalized)) numbers.Add(normalized);
+        }
+
+        Add(item.Record.PrimaryDocument.OrderNum);
+        Add(item.Record.PrimaryDocument.CorrectionNumber);
+        foreach (var related in item.Record.RelatedDocuments)
+        {
+            Add(related.OrderNum);
+            Add(related.CorrectionNumber);
+        }
+
+        return numbers;
+    }
+
+    private static bool SameFiscalToken(string left, string right)
+    {
+        static string Digits(string value) =>
+            new(value.Where(char.IsDigit).ToArray());
+
+        var a = Digits(left);
+        var b = Digits(right);
+        return a.Length > 0 && a == b;
+    }
+
+    private static bool OperationMatches(OfdReportRow row, string expectedOperation)
     {
         if (string.IsNullOrWhiteSpace(expectedOperation)) return true;
-        var value = reportOperation.Trim().ToLowerInvariant();
-        if (value.Contains("возврат") && value.Contains("приход")) return expectedOperation == "sell_refund";
-        if (value.Contains("коррек") && value.Contains("приход")) return expectedOperation == "sell_correction";
-        if (value.Contains("коррек") && value.Contains("расход")) return expectedOperation == "buy_correction";
-        if (value == "приход") return expectedOperation == "sell";
-        return true;
+
+        var operation = row.Operation.Trim().ToLowerInvariant();
+        var document = row.Document.Trim().ToLowerInvariant();
+        var isCorrection = operation.Contains("коррек") || document.Contains("коррек");
+        var isRefund = operation.Contains("возврат") && operation.Contains("приход");
+        var isIncome = operation.Contains("приход") && !operation.Contains("возврат");
+        var isExpense = operation.Contains("расход");
+
+        return expectedOperation switch
+        {
+            "sell_refund" => isRefund && !isCorrection,
+            "sell_correction" => isCorrection && isIncome,
+            "buy_correction" => isCorrection && isExpense,
+            "sell" => isIncome && !isCorrection,
+            "buy" => isExpense && !isCorrection,
+            _ => false,
+        };
     }
 
     private void MarkOneCRecorded()

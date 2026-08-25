@@ -315,7 +315,7 @@ public static class CorrectionGeneratorService
         {
             var qty = raw.Quantity > 0 ? raw.Quantity : 1;
             var sum = raw.Sum;
-            var vatType = VatRateCatalog.Normalize(raw.VatType, fallbackVatType);
+            var vatType = VatRateCatalog.AlignLineWithCheck(raw.VatType, fallbackVatType);
             result.Add(new CheckItem
             {
                 Name          = raw.Name.Trim(),

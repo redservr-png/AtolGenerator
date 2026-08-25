@@ -4,8 +4,8 @@
         xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
         Title="Настройки"
         Icon="/Resources/app.ico"
-        Width="1280" Height="820"
-        MinWidth="1040" MinHeight="720"
+        Width="1280" Height="720"
+        MinWidth="980" MinHeight="600"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource BrushBg}">
 

@@ -493,7 +493,8 @@ public sealed class ReportsViewModel : BaseViewModel
         return MatchesSearch(OfdSearchText,
             row.Document, row.Operation, row.CalculationMethod, row.TradingPoint, row.KktName,
             row.KktRegistrationNumber, row.FiscalDriveNumber, row.SourceFile,
-            row.FiscalDocument?.ToString(), row.FiscalSign?.ToString(), row.ReceiptUrl);
+            row.FiscalDocument?.ToString(), row.FiscalSign?.ToString(), row.ReceiptUrl,
+            row.AdditionalUserPropValue, row.AdditionalCheckProps);
     }
 
     private void RefreshAtolOptions()

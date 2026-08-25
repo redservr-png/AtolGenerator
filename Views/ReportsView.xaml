@@ -46,7 +46,7 @@
           <ControlTemplate TargetType="TabControl">
             <Grid KeyboardNavigation.TabNavigation="Local">
               <Grid.RowDefinitions>
-                <RowDefinition Height="50"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
               </Grid.RowDefinitions>
               <Border Grid.Row="0"
@@ -144,18 +144,13 @@
     </Style>
     <Style x:Key="ReportDatePicker" TargetType="DatePicker"
            BasedOn="{StaticResource {x:Type DatePicker}}">
-      <Setter Property="Width" Value="140"/>
+      <Setter Property="Width" Value="148"/>
       <Setter Property="Height" Value="40"/>
+      <Setter Property="MinHeight" Value="40"/>
       <Setter Property="FontSize" Value="13"/>
       <Setter Property="SelectedDateFormat" Value="Short"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
-    </Style>
-    <Style x:Key="FilterSelectionText" TargetType="TextBlock">
-      <Setter Property="Margin" Value="11,0,30,0"/>
-      <Setter Property="VerticalAlignment" Value="Center"/>
-      <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
-      <Setter Property="IsHitTestVisible" Value="False"/>
-      <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+      <Setter Property="Margin" Value="0,2"/>
     </Style>
   </UserControl.Resources>
 
@@ -280,7 +275,7 @@
           </Grid>
           <Border Grid.Row="2" Background="{DynamicResource BrushSurface2}"
                   BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
-                  CornerRadius="6" Padding="10,8">
+                  CornerRadius="6" Padding="12,12,12,4">
             <DockPanel LastChildFill="True">
               <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center"
                          Foreground="{DynamicResource BrushText3}" FontSize="11" Margin="14,0,0,0">
@@ -288,7 +283,7 @@
                 <Run Text=" из "/><Run Text="{Binding AtolChecks.Count, Mode=OneWay}"/>
               </TextBlock>
               <WrapPanel VerticalAlignment="Center">
-                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,10">
                   <TextBlock Text="Период" Style="{StaticResource FilterLabel}"/>
                   <DatePicker SelectedDate="{Binding AtolDateFrom, UpdateSourceTrigger=PropertyChanged}"
                               Style="{StaticResource ReportDatePicker}"/>
@@ -296,31 +291,25 @@
                   <DatePicker SelectedDate="{Binding AtolDateTo, UpdateSourceTrigger=PropertyChanged}"
                               Style="{StaticResource ReportDatePicker}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,10">
                   <TextBlock Text="Тип" Style="{StaticResource FilterLabel}"/>
-                  <Grid Width="150">
-                    <ComboBox ItemsSource="{Binding AtolTypeOptions}"
-                              SelectedIndex="{Binding AtolTypeFilterIndex, Mode=TwoWay}"/>
-                    <TextBlock Text="{Binding AtolTypeFilter}" Style="{StaticResource FilterSelectionText}"/>
-                  </Grid>
+                  <ComboBox Width="150"
+                            ItemsSource="{Binding AtolTypeOptions}"
+                            SelectedIndex="{Binding AtolTypeFilterIndex, Mode=TwoWay}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,10">
                   <TextBlock Text="Источник" Style="{StaticResource FilterLabel}"/>
-                  <Grid Width="115">
-                    <ComboBox ItemsSource="{Binding AtolSourceOptions}"
-                              SelectedIndex="{Binding AtolSourceFilterIndex, Mode=TwoWay}"/>
-                    <TextBlock Text="{Binding AtolSourceFilter}" Style="{StaticResource FilterSelectionText}"/>
-                  </Grid>
+                  <ComboBox Width="115"
+                            ItemsSource="{Binding AtolSourceOptions}"
+                            SelectedIndex="{Binding AtolSourceFilterIndex, Mode=TwoWay}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,10">
                   <TextBlock Text="Статус" Style="{StaticResource FilterLabel}"/>
-                  <Grid Width="130">
-                    <ComboBox ItemsSource="{Binding AtolStatusOptions}"
-                              SelectedIndex="{Binding AtolStatusFilterIndex, Mode=TwoWay}"/>
-                    <TextBlock Text="{Binding AtolStatusFilter}" Style="{StaticResource FilterSelectionText}"/>
-                  </Grid>
+                  <ComboBox Width="130"
+                            ItemsSource="{Binding AtolStatusOptions}"
+                            SelectedIndex="{Binding AtolStatusFilterIndex, Mode=TwoWay}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                   <TextBlock Text="Поиск" Style="{StaticResource FilterLabel}"/>
                   <TextBox Text="{Binding AtolSearchText, UpdateSourceTrigger=PropertyChanged}" Width="170"/>
                   <Button Content="Сбросить" Style="{StaticResource BtnSecondary}" Padding="10,5"
@@ -391,7 +380,7 @@
           </Grid>
           <Border Grid.Row="2" Background="{DynamicResource BrushSurface2}"
                   BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
-                  CornerRadius="6" Padding="10,8">
+                  CornerRadius="6" Padding="12,12,12,4">
             <DockPanel LastChildFill="True">
               <TextBlock DockPanel.Dock="Right" VerticalAlignment="Center"
                          Foreground="{DynamicResource BrushText3}" FontSize="11" Margin="14,0,0,0">
@@ -399,7 +388,7 @@
                 <Run Text=" из "/><Run Text="{Binding OfdChecks.Count, Mode=OneWay}"/>
               </TextBlock>
               <WrapPanel VerticalAlignment="Center">
-                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,10">
                   <TextBlock Text="Период" Style="{StaticResource FilterLabel}"/>
                   <DatePicker SelectedDate="{Binding OfdDateFrom, UpdateSourceTrigger=PropertyChanged}"
                               Style="{StaticResource ReportDatePicker}"/>
@@ -407,39 +396,31 @@
                   <DatePicker SelectedDate="{Binding OfdDateTo, UpdateSourceTrigger=PropertyChanged}"
                               Style="{StaticResource ReportDatePicker}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,10">
                   <TextBlock Text="Операция" Style="{StaticResource FilterLabel}"/>
-                  <Grid Width="135">
-                    <ComboBox ItemsSource="{Binding OfdOperationOptions}"
-                              SelectedIndex="{Binding OfdOperationFilterIndex, Mode=TwoWay}"/>
-                    <TextBlock Text="{Binding OfdOperationFilter}" Style="{StaticResource FilterSelectionText}"/>
-                  </Grid>
+                  <ComboBox Width="135"
+                            ItemsSource="{Binding OfdOperationOptions}"
+                            SelectedIndex="{Binding OfdOperationFilterIndex, Mode=TwoWay}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,10">
                   <TextBlock Text="Расчёт" Style="{StaticResource FilterLabel}"/>
-                  <Grid Width="155">
-                    <ComboBox ItemsSource="{Binding OfdCalculationMethodOptions}"
-                              SelectedIndex="{Binding OfdCalculationMethodFilterIndex, Mode=TwoWay}"/>
-                    <TextBlock Text="{Binding OfdCalculationMethodFilter}" Style="{StaticResource FilterSelectionText}"/>
-                  </Grid>
+                  <ComboBox Width="155"
+                            ItemsSource="{Binding OfdCalculationMethodOptions}"
+                            SelectedIndex="{Binding OfdCalculationMethodFilterIndex, Mode=TwoWay}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,10">
                   <TextBlock Text="Торговая точка" Style="{StaticResource FilterLabel}"/>
-                  <Grid Width="155">
-                    <ComboBox ItemsSource="{Binding OfdTradingPointOptions}"
-                              SelectedIndex="{Binding OfdTradingPointFilterIndex, Mode=TwoWay}"/>
-                    <TextBlock Text="{Binding OfdTradingPointFilter}" Style="{StaticResource FilterSelectionText}"/>
-                  </Grid>
+                  <ComboBox Width="155"
+                            ItemsSource="{Binding OfdTradingPointOptions}"
+                            SelectedIndex="{Binding OfdTradingPointFilterIndex, Mode=TwoWay}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,10">
                   <TextBlock Text="ККТ" Style="{StaticResource FilterLabel}"/>
-                  <Grid Width="145">
-                    <ComboBox ItemsSource="{Binding OfdKktOptions}"
-                              SelectedIndex="{Binding OfdKktFilterIndex, Mode=TwoWay}"/>
-                    <TextBlock Text="{Binding OfdKktFilter}" Style="{StaticResource FilterSelectionText}"/>
-                  </Grid>
+                  <ComboBox Width="145"
+                            ItemsSource="{Binding OfdKktOptions}"
+                            SelectedIndex="{Binding OfdKktFilterIndex, Mode=TwoWay}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                   <TextBlock Text="Поиск" Style="{StaticResource FilterLabel}"/>
                   <TextBox Text="{Binding OfdSearchText, UpdateSourceTrigger=PropertyChanged}" Width="170"/>
                   <Button Content="Сбросить" Style="{StaticResource BtnSecondary}" Padding="10,5"
@@ -463,6 +444,8 @@
               <DataGridTextColumn Header="Сумма" Binding="{Binding Amount, StringFormat={}{0:N2}}" Width="110"/>
               <DataGridTextColumn Header="ФД" Binding="{Binding FiscalDocument}" Width="100"/>
               <DataGridTextColumn Header="ФПД" Binding="{Binding FiscalSign}" Width="130"/>
+              <DataGridTextColumn Header="Реализация" Binding="{Binding AdditionalUserPropValue}" Width="140"/>
+              <DataGridTextColumn Header="1192" Binding="{Binding AdditionalCheckProps}" Width="120"/>
               <DataGridTextColumn Header="Файл-источник" Binding="{Binding SourceFile}" Width="240"/>
               <DataGridTextColumn Header="Ссылка на чек" Binding="{Binding ReceiptUrl}" Width="340"/>
             </DataGrid.Columns>

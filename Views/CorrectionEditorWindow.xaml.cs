@@ -197,7 +197,7 @@ public partial class CorrectionEditorWindow : Window
     private static void FillMissingVat(IEnumerable<OrderItem> items, string fallback)
     {
         foreach (var item in items)
-            item.VatType = VatRateCatalog.Normalize(item.VatType, fallback);
+            item.VatType = VatRateCatalog.AlignLineWithCheck(item.VatType, fallback);
     }
 
     private static void ApplyVatToItems(IEnumerable<OrderItem> items, string vatType)

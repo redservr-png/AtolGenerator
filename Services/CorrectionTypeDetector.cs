@@ -25,12 +25,10 @@ public static class CorrectionTypeDetector
         {
             e.CorrectionScenario = CorrectionScenario.CheckSmallerAmount;
         }
-        // ── 2. «Не пробит» / «Не вышел» — нужно доплатить базу (без refund — чека и так нет) ──
+        // ── 2. «Не пробит» / «Не вышел» — чека нет, refund не нужен ──
         else if (n.Contains("не пробит") || n.Contains("не вышел")
               || n.Contains("чек не пробит") || n.Contains("чека не было")
-              || n.Contains("чека нет")
-              || n.Contains("не день в день") || n.Contains("следующий день")
-              || n.Contains("на следующий"))
+              || n.Contains("чека нет"))
         {
             e.CorrectionScenario = CorrectionScenario.CheckNotPunched;
         }
@@ -54,9 +52,11 @@ public static class CorrectionTypeDetector
         {
             e.CorrectionScenario = CorrectionScenario.WrongNomenclature;
         }
-        // ── 5. Другая дата ────────────────────────────────────────────────────────
+        // ── 5. Чек есть, но не в день документа (пара: возврат с 1192 + коррекция) ──
         else if (n.Contains("другой датой") || n.Contains("чек другой дат")
-              || n.Contains("не день в день") || n.Contains("дата другая"))
+              || n.Contains("не день в день") || n.Contains("дата другая")
+              || n.Contains("следующий день") || n.Contains("на следующий")
+              || n.Contains("не в день"))
         {
             e.CorrectionScenario = CorrectionScenario.WrongDate;
         }

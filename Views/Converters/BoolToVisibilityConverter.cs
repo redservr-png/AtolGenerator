@@ -63,3 +63,13 @@ public class StringEqualConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => value is true ? parameter?.ToString() ?? string.Empty : Binding.DoNothing;
 }
+
+public sealed class NavMatchConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+        => values is { Length: 2 } &&
+           string.Equals(values[0]?.ToString(), values[1]?.ToString(), StringComparison.Ordinal);
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}

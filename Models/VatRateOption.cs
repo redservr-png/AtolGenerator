@@ -32,6 +32,19 @@ public static class VatRateCatalog
     public static string Normalize(string? code, string fallback = "none") =>
         IsKnown(code) ? code!.Trim().ToLowerInvariant() : fallback;
 
+    /// <summary>
+    /// Если в шапке чека 22/122, а в строке из 1С осталось 20/120 — берём шапку.
+    /// Возврат прошлого года задаётся ставкой шапки 20/120, тогда строка не меняется.
+    /// </summary>
+    public static string AlignLineWithCheck(string? lineVat, string? checkVat)
+    {
+        var line = Normalize(lineVat, checkVat ?? "none");
+        var check = Normalize(checkVat, line);
+        if (line is "vat20" && check is "vat22") return "vat22";
+        if (line is "vat120" && check is "vat122") return "vat122";
+        return line;
+    }
+
     public static string LabelFor(string? code) =>
         !string.IsNullOrWhiteSpace(code) && ByCode.TryGetValue(code.Trim(), out var option)
             ? option.Label

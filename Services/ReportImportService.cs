@@ -195,7 +195,16 @@ public static partial class ReportImportService
         RequireColumns(columns, "Дата и время", "Документ", "Сумма", "№ ФД", "ФПД");
 
         var result = new List<OfdReportRow>();
-        var lastRow = sheet.LastRowUsed()?.RowNumber() ?? headerRow;
+        var lastRow = LastContentRow(sheet, headerRow, columns["ФПД"], columns["№ ФД"]);
+        var additionalCheckColumn = FindColumn(columns,
+            "Дополнительный реквизит чека (БСО)", "Дополнительный реквизит чека");
+        var additionalNameColumn = FindColumn(columns,
+            "Наименование дополнительного реквизита пользователя",
+            "Наименование дополнительного реквизита");
+        var additionalValueColumn = FindColumn(columns,
+            "Значение дополнительного реквизита пользователя",
+            "Значение дополнительного реквизита");
+
         for (var row = headerRow + 1; row <= lastRow; row++)
         {
             var fiscalSign = ReadLong(sheet.Cell(row, columns["ФПД"]));
@@ -225,6 +234,10 @@ public static partial class ReportImportService
                     ? ReadText(sheet.Cell(row, urlColumn))
                     : string.Empty,
                 SourceFile = Path.GetFileName(path),
+                AdditionalCheckProps = ReadIdentifier(sheet, row, additionalCheckColumn),
+                AdditionalUserPropName = ReadIdentifier(sheet, row, additionalNameColumn),
+                AdditionalUserPropValue = NormalizeRealizationNumber(
+                    ReadIdentifier(sheet, row, additionalValueColumn)),
             });
         }
 
@@ -393,8 +406,8 @@ public static partial class ReportImportService
 
     private static int FindHeaderRow(IXLWorksheet sheet, string marker)
     {
-        var maxRow = Math.Min(sheet.LastRowUsed()?.RowNumber() ?? 0, 40);
-        var maxColumn = Math.Min(sheet.LastColumnUsed()?.ColumnNumber() ?? 0, 60);
+        var maxRow = Math.Max(sheet.LastRowUsed()?.RowNumber() ?? 0, 40);
+        var maxColumn = Math.Max(sheet.LastColumnUsed()?.ColumnNumber() ?? 0, 60);
         for (var row = 1; row <= maxRow; row++)
         for (var column = 1; column <= maxColumn; column++)
         {
@@ -402,6 +415,61 @@ public static partial class ReportImportService
                 return row;
         }
         return 0;
+    }
+
+    private static int LastContentRow(IXLWorksheet sheet, int headerRow, int fiscalSignColumn, int fiscalDocColumn)
+    {
+        var lastUsed = Math.Max(sheet.LastRowUsed()?.RowNumber() ?? headerRow, headerRow);
+        var last = headerRow;
+        for (var row = headerRow + 1; row <= lastUsed; row++)
+        {
+            if (ReadLong(sheet.Cell(row, fiscalSignColumn)) is not null ||
+                ReadLong(sheet.Cell(row, fiscalDocColumn)) is not null)
+                last = row;
+        }
+
+        var empty = 0;
+        for (var row = lastUsed + 1; empty < 30 && row <= lastUsed + 100000; row++)
+        {
+            if (ReadLong(sheet.Cell(row, fiscalSignColumn)) is not null ||
+                ReadLong(sheet.Cell(row, fiscalDocColumn)) is not null)
+            {
+                last = row;
+                empty = 0;
+            }
+            else
+            {
+                empty++;
+            }
+        }
+
+        return last;
+    }
+
+    private static int? FindColumn(IReadOnlyDictionary<string, int> columns, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (columns.TryGetValue(name, out var index)) return index;
+        }
+
+        foreach (var name in names)
+        {
+            var match = columns.Keys.FirstOrDefault(key =>
+                key.StartsWith(name, StringComparison.OrdinalIgnoreCase));
+            if (match is not null) return columns[match];
+        }
+
+        return null;
+    }
+
+    private static string ReadIdentifier(IXLWorksheet sheet, int row, int? column)
+    {
+        if (column is null) return string.Empty;
+        var cell = sheet.Cell(row, column.Value);
+        if (cell.DataType == XLDataType.Number)
+            return Convert.ToInt64(Math.Round(cell.GetDouble())).ToString(CultureInfo.InvariantCulture);
+        return ReadText(cell);
     }
 
     private static bool IsTruncatedOfdReport(IXLWorksheet sheet, int headerRow, int receiptCount)

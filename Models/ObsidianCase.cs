@@ -20,6 +20,8 @@ public sealed class ObsidianExpectedCheck
     public DateTime GeneratedAt { get; set; }
     public long? FiscalSign { get; set; }
     public long? FiscalDocument { get; set; }
+    public string RealizationNumber { get; set; } = string.Empty;
+    public string OriginalFiscalSign { get; set; } = string.Empty;
 }
 
 public sealed class ObsidianOriginalReceipt

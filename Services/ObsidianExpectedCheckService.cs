@@ -18,6 +18,9 @@ public static class ObsidianExpectedCheckService
                 Operation = result.CheckData?.OperationType ?? string.Empty,
                 Amount = result.Amount,
                 GeneratedAt = DateTime.Now,
+                RealizationNumber = ReportImportService.NormalizeRealizationNumber(
+                    result.CheckData?.UserAttributeValue ?? result.OrderNum),
+                OriginalFiscalSign = result.CheckData?.AdditionalCheckProps ?? string.Empty,
             })
             .ToList();
 
@@ -50,6 +53,8 @@ public static class ObsidianExpectedCheckService
                 Operation = check.Operation,
                 Amount = check.Amount,
                 GeneratedAt = check.GeneratedAt ?? DateTime.Now,
+                RealizationNumber = check.RealizationNumber,
+                OriginalFiscalSign = check.OriginalFiscalSign,
             })
             .ToList();
 

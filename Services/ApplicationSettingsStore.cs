@@ -77,6 +77,10 @@ public static class ApplicationSettingsStore
         {
             agent.VatType = VatRateCatalog.Normalize(agent.VatType, "none");
             agent.AgentType = AgentTypeCatalog.Normalize(agent.AgentType);
+            // В кабинете АТОЛ у подрядчиков признак «Агент», не «Комиссионер».
+            // Старые app_settings.json сохраняли commission_agent и давали ошибку 167.
+            if (string.Equals(agent.AgentType, "commission_agent", StringComparison.OrdinalIgnoreCase))
+                agent.AgentType = AgentTypeCatalog.DefaultCode;
         }
 
         if (string.IsNullOrWhiteSpace(settings.SelectedCashierShortName) ||
