@@ -4,6 +4,7 @@ using System.Windows;
 using AtolGenerator.Helpers;
 using AtolGenerator.Services;
 using Microsoft.Web.WebView2.Core;
+using Shape = System.Windows.Shapes.Shape;
 
 namespace AtolGenerator.Views;
 
@@ -13,6 +14,7 @@ public partial class XmlUploadWindow : Window
     private static readonly string[] TrustedDomains = { "atol.ru", "atol.online" };
 
     private readonly CorrectionPunchPlan _plan;
+    private bool _uploadDone;
 
     public XmlUploadWindow(CorrectionPunchPlan plan)
     {
@@ -23,8 +25,7 @@ public partial class XmlUploadWindow : Window
         {
             WarningText.Visibility = Visibility.Visible;
             WarningText.Text =
-                "Не загружайте XML возвратов/приходов — они уже уходят через API. " +
-                "В кабинет кладите только файл(ы) *_correction / *corrections*.";
+                "В кабинет кладите только файл(ы) коррекций. XML возвратов/приходов уже ушли через API.";
         }
     }
 
@@ -50,7 +51,7 @@ public partial class XmlUploadWindow : Window
         catch (Exception ex)
         {
             LoadingPanel.Visibility = Visibility.Collapsed;
-            StatusText.Text = $"Не удалось запустить браузер: {ex.Message}";
+            SetStatus($"Не удалось запустить браузер: {ex.Message}", isError: true);
             MessageBox.Show(
                 WebView2ErrorHelper.GetStartupMessage(ex),
                 "Загрузка XML", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -59,7 +60,8 @@ public partial class XmlUploadWindow : Window
 
     private void Browser_NavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
     {
-        StatusText.Text = "Загружаем страницу...";
+        if (!_uploadDone)
+            SetStatus("Загружаем страницу...");
         AddressText.Text = GetDisplayAddress(e.Uri);
     }
 
@@ -68,9 +70,12 @@ public partial class XmlUploadWindow : Window
         LoadingPanel.Visibility = Visibility.Collapsed;
         UpdateNavigationButtons();
         AddressText.Text = GetDisplayAddress(Browser.Source?.AbsoluteUri);
-        StatusText.Text = e.IsSuccess
+        if (_uploadDone) return;
+
+        SetStatus(e.IsSuccess
             ? "Откройте «Загрузка чеков из файлов XML (1.05/1.2)» и укажите файл коррекции."
-            : "Страница не загрузилась";
+            : "Страница не загрузилась",
+            isError: !e.IsSuccess);
     }
 
     private void Browser_NewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
@@ -89,7 +94,7 @@ public partial class XmlUploadWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Не удалось открыть ссылку: {ex.Message}";
+            SetStatus($"Не удалось открыть ссылку: {ex.Message}", isError: true);
         }
     }
 
@@ -116,14 +121,14 @@ public partial class XmlUploadWindow : Window
         var path = _plan.CorrectionXmlPaths.FirstOrDefault();
         if (string.IsNullOrWhiteSpace(path))
         {
-            StatusText.Text = "Нет пути к XML коррекции";
+            SetStatus("Нет пути к XML коррекции", isError: true);
             return;
         }
 
         Clipboard.SetText(path);
-        StatusText.Text = _plan.CorrectionXmlPaths.Count == 1
+        SetStatus(_plan.CorrectionXmlPaths.Count == 1
             ? "Путь к XML скопирован"
-            : $"Скопирован первый из {_plan.CorrectionXmlPaths.Count} файлов. Остальные в той же папке.";
+            : $"Скопирован первый из {_plan.CorrectionXmlPaths.Count} файлов. Остальные в той же папке.");
     }
 
     private void OpenFolderButton_Click(object sender, RoutedEventArgs e)
@@ -135,7 +140,37 @@ public partial class XmlUploadWindow : Window
             FileHelper.OpenFolder(FileHelper.OutputDir);
     }
 
+    private void MarkDoneButton_Click(object sender, RoutedEventArgs e)
+    {
+        _uploadDone = true;
+        WarningText.Visibility = Visibility.Collapsed;
+        MarkDoneButton.IsEnabled = false;
+        MarkDoneButton.Content = "Готово";
+        SetStatus("XML принят АТОЛ. Можно закрыть окно и перейти к сверке / записи в 1С.", isSuccess: true);
+    }
+
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void SetStatus(string text, bool isError = false, bool isSuccess = false)
+    {
+        StatusText.Text = text;
+        if (isSuccess)
+        {
+            StatusText.SetResourceReference(ForegroundProperty, "BrushGreen");
+            StatusIndicator.SetResourceReference(Shape.FillProperty, "BrushGreen");
+            return;
+        }
+
+        if (isError)
+        {
+            StatusText.SetResourceReference(ForegroundProperty, "BrushRed");
+            StatusIndicator.SetResourceReference(Shape.FillProperty, "BrushRed");
+            return;
+        }
+
+        StatusText.SetResourceReference(ForegroundProperty, "BrushText2");
+        StatusIndicator.SetResourceReference(Shape.FillProperty, "BrushAccent");
+    }
 
     private void UpdateNavigationButtons()
     {

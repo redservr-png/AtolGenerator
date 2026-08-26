@@ -533,9 +533,15 @@
               <TextBlock Text="{Binding ExportPath}" ToolTip="{Binding ExportPath}"
                          Style="{StaticResource PathLabel}" Margin="16,0,0,0" MaxWidth="420"/>
             </StackPanel>
-            <Button Grid.Column="1" Content="Сохранить CSV для 1С..."
-                    Style="{StaticResource BtnPrimary}" Padding="16,8"
-                    Command="{Binding ExportOneCCsvCommand}"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+              <Button Content="Сохранить CSV для 1С..."
+                      Style="{StaticResource BtnSecondary}" Padding="16,8" Margin="0,0,8,0"
+                      Command="{Binding ExportOneCCsvCommand}"/>
+              <Button Content="Записать в 1С через COM"
+                      Style="{StaticResource BtnPrimary}" Padding="16,8"
+                      Command="{Binding ApplyExportToOneCCommand}"
+                      ToolTip="Пишет ФПД/ФД/дату или только комментарий по режиму сверки. CSV всё равно сохраняется как резерв."/>
+            </StackPanel>
           </Grid>
         </Grid>
       </TabItem>

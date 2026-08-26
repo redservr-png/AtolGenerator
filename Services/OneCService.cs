@@ -2,6 +2,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using AtolGenerator.Constants;
+using AtolGenerator.Helpers;
 using AtolGenerator.Models;
 
 namespace AtolGenerator.Services;
@@ -866,6 +867,229 @@ public static class OneCService
         catch (Exception ex) { Log($"Ошибка записи CSV: {ex.Message}"); }
 
         return res;
+    }
+
+    /// <summary>
+    /// Записывает в 1С результат сверки XML + АТОЛ (+ ОФД) по тем же правилам, что CSV-обработка:
+    /// <c>update_fields</c> — ФПД/ФД/дата + комментарий; <c>comment_only</c> — только комментарий
+    /// (исходный ошибочный чек в реквизитах реализации не трогаем).
+    /// </summary>
+    public static ApplyResult ApplyOneCExportRows(
+        OneCConnectionSettings s, IReadOnlyList<OneCExportRow> rows, bool skipFilled = true)
+    {
+        var ready = rows.Where(x => x.IsReady).ToList();
+        var res = new ApplyResult { Total = ready.Count };
+        if (ready.Count == 0) return res;
+
+        var groups = ready
+            .GroupBy(x => x.RealizationNumber, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        res.Total = groups.Count;
+
+        dynamic? conn = null;
+        dynamic? connector = null;
+        dynamic? docsManager = null;
+
+        Log($"=== ApplyOneCExportRows: {ready.Count} строк, {groups.Count} реализаций ===");
+        try
+        {
+            connector = CreateConnector();
+            conn = connector.Connect(s.ConnectionString);
+            docsManager = conn.Документы.РеализацияТоваровУслуг;
+
+            foreach (var group in groups)
+            {
+                var realizationNum = group.Key;
+                var ordered = group
+                    .OrderBy(x => x.WriteMode == "comment_only" && x.CheckType == "sell_refund" ? 0 : 1)
+                    .ThenBy(x => x.RegisteredAt ?? DateTime.MinValue)
+                    .ToList();
+                var checkDate = ordered
+                    .Select(x => x.RegisteredAt)
+                    .Where(x => x.HasValue)
+                    .Select(x => x!.Value)
+                    .DefaultIfEmpty(DateTime.Now)
+                    .Max();
+                var updateRow = ordered.FirstOrDefault(x =>
+                    string.Equals(x.WriteMode, "update_fields", StringComparison.OrdinalIgnoreCase) &&
+                    x.FiscalSign.HasValue && x.FiscalDocument.HasValue);
+                var commentOnly = updateRow is null;
+                string lastStep = "init";
+
+                try
+                {
+                    lastStep = "query";
+                    var query = conn.NewObject("Запрос");
+                    query.Текст = """
+                        ВЫБРАТЬ ПЕРВЫЕ 1
+                            Док.Ссылка       КАК ДокСсылка,
+                            Док.Дата         КАК ДатаДок,
+                            Док.ЧекНомерФП   КАК ЧекНомерФП,
+                            Док.Комментарий  КАК Комментарий
+                        ИЗ
+                            Документ.РеализацияТоваровУслуг КАК Док
+                        ГДЕ
+                            Док.Номер = &НомерДок
+                            И Док.ПометкаУдаления = ЛОЖЬ
+                            И Док.Дата <= &ДатаЧека
+                        УПОРЯДОЧИТЬ ПО
+                            Док.Дата УБЫВ
+                        """;
+                    query.УстановитьПараметр("НомерДок", realizationNum);
+                    query.УстановитьПараметр("ДатаЧека", checkDate);
+                    var qResult = query.Выполнить();
+                    var sel = qResult.Выбрать();
+                    if (!(bool)sel.Следующий())
+                    {
+                        res.Failed++;
+                        var msg = $"{realizationNum}: документ не найден (до {checkDate:dd.MM.yyyy})";
+                        res.Errors.Add(msg);
+                        Log("  " + msg);
+                        continue;
+                    }
+
+                    var docDate = ToDateTime(sel.ДатаДок);
+                    var existingComment = Str(sel.Комментарий);
+                    dynamic rawFp = sel.ЧекНомерФП;
+                    var fpRaw = string.Empty;
+                    try
+                    {
+                        if (rawFp is not null)
+                            fpRaw = (rawFp.ToString() ?? string.Empty).Trim();
+                    }
+                    catch { /* ignore */ }
+
+                    var isFilled = !IsEmptyFp(fpRaw);
+                    if (!commentOnly && skipFilled && isFilled)
+                    {
+                        // Поля уже заполнены: всё равно допишем новые комментарии, если их ещё нет.
+                        Log($"  {realizationNum}: ЧекНомерФП уже «{fpRaw}» — поля не трогаем, проверяем комментарий");
+                    }
+
+                    lastStep = "sel.ДокСсылка";
+                    var docRef = sel.ДокСсылка;
+                    try { Marshal.ReleaseComObject(sel); } catch { }
+                    try { Marshal.ReleaseComObject(qResult); } catch { }
+                    try { Marshal.ReleaseComObject(query); } catch { }
+
+                    dynamic? obj = null;
+                    var failReasons = string.Empty;
+                    try
+                    {
+                        lastStep = "mgr.НайтиПоНомеру → ПолучитьОбъект()";
+                        var freshRef = docsManager!.НайтиПоНомеру(realizationNum, checkDate);
+                        if (freshRef is not null && !(bool)freshRef.Пустая())
+                            obj = freshRef.ПолучитьОбъект();
+                    }
+                    catch (Exception ex1) { failReasons += $"[fresh: {ex1.Message}] "; }
+
+                    if (obj is null)
+                    {
+                        try
+                        {
+                            lastStep = "docRef.ПолучитьОбъект()";
+                            obj = docRef.ПолучитьОбъект();
+                        }
+                        catch (Exception ex2) { failReasons += $"[ref: {ex2.Message}] "; }
+                    }
+
+                    if (obj is null)
+                    {
+                        res.Failed++;
+                        var msg = $"{realizationNum}: ПолучитьОбъект упал. {failReasons}";
+                        res.Errors.Add(msg);
+                        Log("  ОШИБКА " + msg);
+                        continue;
+                    }
+
+                    var changed = false;
+                    if (!commentOnly && updateRow is not null && !(skipFilled && isFilled))
+                    {
+                        lastStep = "set fields";
+                        obj.ЧекНомерФП = (double)updateRow.FiscalSign!.Value;
+                        obj.НомерЧекаККМ = (double)updateRow.FiscalDocument!.Value;
+                        obj.ДатаПечатиЧека = updateRow.RegisteredAt ?? checkDate;
+                        changed = true;
+                    }
+
+                    var comment = existingComment;
+                    foreach (var row in ordered.Where(x => !string.IsNullOrWhiteSpace(x.Comment)))
+                    {
+                        if (CommentAlreadyHasFiscalSign(comment, row.FiscalSign) ||
+                            comment.Contains(row.Comment, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        comment = string.IsNullOrWhiteSpace(comment)
+                            ? row.Comment
+                            : comment + "   ///   " + row.Comment;
+                        changed = true;
+                    }
+
+                    if (changed && !string.Equals(comment, existingComment, StringComparison.Ordinal))
+                    {
+                        lastStep = "set obj.Комментарий";
+                        obj.Комментарий = comment;
+                    }
+
+                    if (!changed)
+                    {
+                        res.Skipped++;
+                        var detail = $"{realizationNum}: дата={docDate:dd.MM.yyyy} — без изменений";
+                        Log("  " + detail);
+                        if (res.SkippedSamples.Count < 15) res.SkippedSamples.Add(detail);
+                        try { Marshal.ReleaseComObject(obj); } catch { }
+                        continue;
+                    }
+
+                    lastStep = "obj.Записать()";
+                    obj.Записать();
+                    res.Updated++;
+                    Log($"  {realizationNum}: дата={docDate:dd.MM.yyyy} mode={(commentOnly ? "comment_only" : "update_fields")} → записано");
+                    try { Marshal.ReleaseComObject(obj); } catch { }
+                }
+                catch (Exception ex)
+                {
+                    res.Failed++;
+                    var msg = $"{realizationNum} [шаг: {lastStep}]: {ex.GetType().Name}: {ex.Message}";
+                    res.Errors.Add(msg);
+                    Log($"  ОШИБКА {msg}\n{ex.StackTrace}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"ApplyOneCExportRows ERROR: {ex.Message}");
+            res.Errors.Add(ex.Message);
+        }
+        finally
+        {
+            if (docsManager is not null) try { Marshal.ReleaseComObject(docsManager); } catch { }
+            if (conn is not null) Marshal.ReleaseComObject(conn);
+            if (connector is not null) Marshal.ReleaseComObject(connector);
+        }
+
+        Log($"=== ApplyOneCExportRows: обновлено {res.Updated}, пропущено {res.Skipped}, ошибок {res.Failed} ===");
+
+        try
+        {
+            Directory.CreateDirectory(FileHelper.OutputDir);
+            var csvPath = Path.Combine(
+                FileHelper.OutputDir,
+                $"atol_to_1c_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
+            ReportReconciliationService.ExportOneCCsv(csvPath, ready);
+            res.CsvBackupPath = csvPath;
+            Log($"CSV-резерв: {csvPath}");
+        }
+        catch (Exception ex) { Log($"Ошибка записи CSV-резерва: {ex.Message}"); }
+
+        return res;
+    }
+
+    private static bool CommentAlreadyHasFiscalSign(string comment, long? fiscalSign)
+    {
+        if (!fiscalSign.HasValue || string.IsNullOrWhiteSpace(comment)) return false;
+        var token = fiscalSign.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return comment.Contains($"ФП: {token}", StringComparison.OrdinalIgnoreCase);
     }
 
     public class FetchAmountResult

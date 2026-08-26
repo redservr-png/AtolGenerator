@@ -53,7 +53,7 @@
                      Foreground="{DynamicResource BrushText3}" FontSize="11"
                      TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
           <TextBlock x:Name="WarningText"
-                     Foreground="{DynamicResource BrushOrange}" FontSize="12"
+                     Foreground="{DynamicResource BrushText2}" FontSize="12"
                      TextWrapping="Wrap" Margin="0,6,0,0"
                      Visibility="Collapsed"/>
         </StackPanel>
@@ -94,15 +94,21 @@
           <ColumnDefinition Width="*"/>
           <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
-        <Ellipse Width="9" Height="9"
+        <Ellipse x:Name="StatusIndicator" Width="9" Height="9"
                  Fill="{DynamicResource BrushAccent}" VerticalAlignment="Center"/>
         <TextBlock x:Name="StatusText" Grid.Column="2"
                    Text="Откройте «Загрузка чеков из файлов XML (1.05/1.2)»"
                    Foreground="{DynamicResource BrushText2}" FontSize="13"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-        <Button Grid.Column="3" Content="Закрыть"
-                Style="{StaticResource BtnSecondary}" Padding="16,8"
-                Click="CloseButton_Click"/>
+        <StackPanel Grid.Column="3" Orientation="Horizontal">
+          <Button x:Name="MarkDoneButton" Content="XML загружен"
+                  Style="{StaticResource BtnPrimary}" Padding="16,8" Margin="0,0,8,0"
+                  ToolTip="АТОЛ уже принял файл — убрать напоминание и отметить окно как готовое"
+                  Click="MarkDoneButton_Click"/>
+          <Button Content="Закрыть"
+                  Style="{StaticResource BtnSecondary}" Padding="16,8"
+                  Click="CloseButton_Click"/>
+        </StackPanel>
       </Grid>
     </Border>
   </Grid>

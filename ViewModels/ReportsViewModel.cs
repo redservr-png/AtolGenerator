@@ -301,6 +301,7 @@ public sealed class ReportsViewModel : BaseViewModel
     public ICommand ImportXmlCommand { get; }
     public ICommand BuildMatchesCommand { get; }
     public ICommand ExportOneCCsvCommand { get; }
+    public ICommand ApplyExportToOneCCommand { get; }
     public ICommand OpenReceiptCommand { get; }
     public ICommand ClearAtolFiltersCommand { get; }
     public ICommand ClearOfdFiltersCommand { get; }
@@ -325,6 +326,7 @@ public sealed class ReportsViewModel : BaseViewModel
         ImportXmlCommand = new RelayCommand(_ => BrowseXml());
         BuildMatchesCommand = new RelayCommand(_ => BuildMatches(true), _ => CanBuildMatches);
         ExportOneCCsvCommand = new RelayCommand(_ => ExportOneCCsv(), _ => CanExport);
+        ApplyExportToOneCCommand = new AsyncRelayCommand(ApplyExportToOneCAsync);
         OpenReceiptCommand = new RelayCommand(_ => OpenSelectedReceipt(), _ =>
             !string.IsNullOrWhiteSpace(SelectedAtolCheck?.OfdUrl));
         ClearAtolFiltersCommand = new RelayCommand(_ => ClearAtolFilters());
@@ -983,6 +985,83 @@ public sealed class ReportsViewModel : BaseViewModel
             MessageBox.Show($"Не удалось сохранить CSV: {ex.Message}",
                 "Ошибка экспорта", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private async Task ApplyExportToOneCAsync()
+    {
+        if (!CanExport)
+        {
+            MessageBox.Show("Сначала сопоставьте XML и отчёт АТОЛ — нужны готовые строки.",
+                "Запись в 1С", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var settings = OneCConnectionSettings.Load();
+        if (string.IsNullOrWhiteSpace(settings.Server) || string.IsNullOrWhiteSpace(settings.Database))
+        {
+            MessageBox.Show(
+                "Заполните подключение к 1С в настройках (Сервер и База).",
+                "Запись в 1С", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var ready = ExportRows.Where(x => x.IsReady).ToList();
+        var updateCount = ready.Count(x =>
+            string.Equals(x.WriteMode, "update_fields", StringComparison.OrdinalIgnoreCase));
+        var commentCount = ready.Count(x =>
+            string.Equals(x.WriteMode, "comment_only", StringComparison.OrdinalIgnoreCase));
+        var realizations = ready
+            .Select(x => x.RealizationNumber)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        var confirm = MessageBox.Show(
+            $"В 1С будут записаны данные по {realizations} реализациям ({ready.Count} чеков).\n\n" +
+            $"update_fields (поля ФПД/ФД/дата): {updateCount}\n" +
+            $"comment_only (только комментарий): {commentCount}\n\n" +
+            "Да — писать поля только в пустые документы\n" +
+            "Нет — перезаписать поля у update_fields даже если ФП уже есть\n" +
+            "Отмена — выход\n\n" +
+            "Для исправительных пар поля исходного чека не меняются — только комментарий.",
+            "Запись в 1С через COM",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Question);
+        if (confirm == MessageBoxResult.Cancel) return;
+        var skipFilled = confirm == MessageBoxResult.Yes;
+
+        MatchingStatus = $"Записываем в 1С: {realizations} реализаций...";
+        OneCService.ApplyResult result;
+        try
+        {
+            result = await Task.Run(() =>
+                OneCService.ApplyOneCExportRows(settings, ready, skipFilled));
+        }
+        catch (Exception ex)
+        {
+            MatchingStatus = "Ошибка записи в 1С";
+            MessageBox.Show($"Не удалось записать в 1С: {ex.Message}",
+                "Запись в 1С", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        MatchingStatus =
+            $"1С: обновлено {result.Updated}, пропущено {result.Skipped}, ошибок {result.Failed}";
+        var msg =
+            $"Обновлено документов: {result.Updated}\n" +
+            $"Пропущено: {result.Skipped}\n" +
+            $"Ошибок: {result.Failed}";
+        if (result.SkippedSamples.Count > 0)
+            msg += "\n\nПервые пропуски:\n  " + string.Join("\n  ", result.SkippedSamples.Take(10));
+        if (result.Errors.Count > 0)
+            msg += "\n\nПервые ошибки:\n" + string.Join("\n", result.Errors.Take(10));
+        if (!string.IsNullOrEmpty(result.CsvBackupPath))
+        {
+            ExportPath = result.CsvBackupPath;
+            msg += $"\n\nCSV-резерв:\n{result.CsvBackupPath}";
+        }
+
+        MessageBox.Show(msg, "Запись в 1С завершена", MessageBoxButton.OK,
+            result.Failed > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
     }
 
     private void OpenSelectedReceipt()
