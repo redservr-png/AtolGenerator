@@ -1,0 +1,283 @@
+<UserControl x:Class="AtolGenerator.Views.OneCRealizationsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:cv="clr-namespace:AtolGenerator.Views.Converters">
+  <UserControl.Resources>
+    <cv:BoolToVisibilityConverter x:Key="BoolVis"/>
+    <cv:NonZeroToBoolConverter x:Key="NonZeroBool"/>
+    <Style x:Key="DataGridTextStyle" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Padding" Value="0,0,4,0"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+  </UserControl.Resources>
+
+  <Border Background="{DynamicResource BrushSurface1}"
+          BorderBrush="{DynamicResource BrushBorder}"
+          BorderThickness="1" CornerRadius="10" Padding="16">
+    <StackPanel>
+
+      <Grid Margin="0,0,0,10">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+          <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
+                  CornerRadius="2" Margin="0,0,7,0"/>
+          <TextBlock Style="{StaticResource SectionTitle}" Margin="0">
+            <Run Text="РЕАЛИЗАЦИИ ИЗ 1С"/>
+          </TextBlock>
+          <TextBlock FontSize="12" Foreground="{DynamicResource BrushText3}" Margin="8,0,0,0"
+                     VerticalAlignment="Center" Text="{Binding OneCRealizationsSummary}"/>
+        </StackPanel>
+
+        <WrapPanel Grid.Column="2" Orientation="Horizontal">
+          <Button Content="Открыть в окне"
+                  Style="{StaticResource BtnGhost}"
+                  Padding="10,5" FontSize="12" Margin="0,0,6,0"
+                  Command="{Binding OpenOneCRealizationsWindowCommand}"
+                  Visibility="{Binding OneCRealizationsCompact, Converter={StaticResource BoolVis}}"/>
+          <Button Content="Выбрать все"
+                  Style="{StaticResource BtnGhost}"
+                  Padding="10,5" FontSize="12" Margin="0,0,6,0"
+                  Command="{Binding SelectAllOneCCommand}"/>
+          <Button Content="Снять все"
+                  Style="{StaticResource BtnGhost}"
+                  Padding="10,5" FontSize="12" Margin="0,0,6,0"
+                  Command="{Binding DeselectAllOneCCommand}"/>
+          <Button Style="{StaticResource BtnPrimary}"
+                  Padding="12,5" FontSize="12"
+                  Command="{Binding AddSelectedToOrdersCommand}"
+                  IsEnabled="{Binding SelectedOneCCount, Converter={StaticResource NonZeroBool}}"
+                  ToolTip="Добавляет выбранные реализации в основной список. Коррекции формируются только XML.">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="➕  Добавить выбранные (" Margin="0"/>
+              <TextBlock Text="{Binding SelectedOneCCount, Mode=OneWay}" FontWeight="Bold"/>
+              <TextBlock Text=")" Margin="0"/>
+            </StackPanel>
+          </Button>
+        </WrapPanel>
+      </Grid>
+
+      <WrapPanel Margin="0,0,0,10" Orientation="Horizontal">
+        <TextBlock Text="Город:" FontSize="12" Foreground="{DynamicResource BrushText3}"
+                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+        <ComboBox Width="170" FontSize="12" Margin="0,0,14,0"
+                  ItemsSource="{Binding OneCCityOptions}"
+                  SelectedItem="{Binding OneCCityFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+        <TextBlock Text="Чек:" FontSize="12" Foreground="{DynamicResource BrushText3}"
+                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+        <ComboBox Width="120" FontSize="12" Margin="0,0,14,0"
+                  ItemsSource="{Binding OneCHasCheckOptions}"
+                  SelectedItem="{Binding OneCHasCheckFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+        <TextBlock Text="Поиск:" FontSize="12" Foreground="{DynamicResource BrushText3}"
+                   VerticalAlignment="Center" Margin="0,0,6,0"/>
+        <TextBox Width="220" FontSize="12"
+                 Text="{Binding OneCSearchText, UpdateSourceTrigger=PropertyChanged}"
+                 ToolTip="Номер реализации, заказ, покупатель, город или ФП"/>
+        <Button Content="Сбросить фильтры"
+                Style="{StaticResource BtnGhost}"
+                Padding="10,5" FontSize="12" Margin="10,0,0,0"
+                Command="{Binding ClearOneCFiltersCommand}"/>
+      </WrapPanel>
+
+      <DataGrid ItemsSource="{Binding LoadedRealizationsView}"
+                AutoGenerateColumns="False"
+                CanUserAddRows="False"
+                CanUserDeleteRows="False"
+                CanUserReorderColumns="False"
+                CanUserResizeRows="False"
+                SelectionMode="Single"
+                SelectionUnit="FullRow"
+                HeadersVisibility="Column"
+                GridLinesVisibility="Horizontal"
+                RowHeaderWidth="0"
+                MaxHeight="{Binding OneCRealizationsGridMaxHeight}"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource BrushBorder}"
+                Background="{DynamicResource BrushSurface2}"
+                RowBackground="{DynamicResource BrushSurface1}"
+                AlternatingRowBackground="{DynamicResource BrushSurface2}"
+                Foreground="{DynamicResource BrushText}"
+                HorizontalScrollBarVisibility="Auto"
+                VerticalScrollBarVisibility="Auto">
+
+        <DataGrid.Resources>
+          <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{DynamicResource BrushSurface2}"/>
+            <Setter Property="Foreground" Value="{DynamicResource BrushText3}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BrushBorder}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+          </Style>
+          <Style TargetType="DataGridCell">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="DataGridCell">
+                  <Border Padding="{TemplateBinding Padding}"
+                          Background="{TemplateBinding Background}">
+                    <ContentPresenter VerticalAlignment="Center"/>
+                  </Border>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </DataGrid.Resources>
+
+        <DataGrid.RowStyle>
+          <Style TargetType="DataGridRow">
+            <Setter Property="Background" Value="Transparent"/>
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding HasCheck}" Value="True">
+                <Setter Property="Background" Value="#0A2DD4A0"/>
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </DataGrid.RowStyle>
+
+        <DataGrid.Columns>
+          <DataGridTemplateColumn Width="36" CanUserSort="False">
+            <DataGridTemplateColumn.Header>
+              <TextBlock Text="✓" FontSize="12" HorizontalAlignment="Center"/>
+            </DataGridTemplateColumn.Header>
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+
+          <DataGridTextColumn Header="Реализация" Binding="{Binding DocNumber}"
+                              Width="130" IsReadOnly="True"
+                              ElementStyle="{StaticResource DataGridTextStyle}"/>
+          <DataGridTextColumn Header="Дата" Binding="{Binding DocDate}"
+                              Width="88" IsReadOnly="True"
+                              ElementStyle="{StaticResource DataGridTextStyle}"/>
+          <DataGridTextColumn Header="Заказ покупателя" Binding="{Binding OrderNumber}"
+                              Width="130" IsReadOnly="True"
+                              ElementStyle="{StaticResource DataGridTextStyle}"/>
+          <DataGridTextColumn Header="Покупатель" Binding="{Binding CustomerName}"
+                              Width="*" IsReadOnly="True"
+                              ElementStyle="{StaticResource DataGridTextStyle}"/>
+          <DataGridTextColumn Header="Город" Binding="{Binding City}"
+                              Width="110" IsReadOnly="True"
+                              ElementStyle="{StaticResource DataGridTextStyle}"/>
+          <DataGridTextColumn Header="Сумма, ₽"
+                              Binding="{Binding Amount, StringFormat={}{0:N2}}"
+                              Width="90" IsReadOnly="True">
+            <DataGridTextColumn.ElementStyle>
+              <Style TargetType="TextBlock">
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="HorizontalAlignment" Value="Right"/>
+                <Setter Property="Foreground" Value="{DynamicResource BrushGreen}"/>
+                <Setter Property="Padding" Value="0,0,8,0"/>
+              </Style>
+            </DataGridTextColumn.ElementStyle>
+          </DataGridTextColumn>
+          <DataGridTextColumn Header="№ чека ККМ" Binding="{Binding CheckNumber}"
+                              Width="110" IsReadOnly="True"
+                              ElementStyle="{StaticResource DataGridTextStyle}"/>
+          <DataGridTextColumn Header="№ ФП" Binding="{Binding FiscalNumber}"
+                              Width="110" IsReadOnly="True"
+                              ElementStyle="{StaticResource DataGridTextStyle}"/>
+
+          <DataGridTemplateColumn Header="Агент" Width="52" CanUserSort="False">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <TextBlock HorizontalAlignment="Center" FontSize="13"
+                           ToolTip="Агентский договор (НДС: нет)">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="Text" Value=""/>
+                      <Setter Property="Foreground" Value="Transparent"/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsService}" Value="True">
+                          <Setter Property="Text" Value="🔧"/>
+                          <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+
+          <DataGridTemplateColumn Header="Чек" Width="58" CanUserSort="False">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                        CornerRadius="4" Padding="5,2">
+                  <Border.Style>
+                    <Style TargetType="Border">
+                      <Setter Property="Background" Value="#1A4C8AF5"/>
+                      <Setter Property="Visibility" Value="Collapsed"/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasCheck}" Value="True">
+                          <Setter Property="Background" Value="#1A059669"/>
+                          <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Border.Style>
+                  <TextBlock Text="пробит" FontSize="10" FontWeight="Bold"
+                             Foreground="{DynamicResource BrushGreen}"
+                             ToolTip="{Binding CheckDate}"/>
+                </Border>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+
+          <DataGridTemplateColumn Header="АТОЛ" Width="130" CanUserSort="False">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <Border CornerRadius="4" Padding="5,2" HorizontalAlignment="Left"
+                        VerticalAlignment="Center">
+                  <Border.Style>
+                    <Style TargetType="Border">
+                      <Setter Property="Background" Value="Transparent"/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding PunchOk}" Value="True">
+                          <Setter Property="Background" Value="#1A44FF44"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding PunchFail}" Value="True">
+                          <Setter Property="Background" Value="#1AFF4444"/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Border.Style>
+                  <TextBlock Text="{Binding PunchStatus}" FontSize="11"
+                             TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                             ToolTip="{Binding PunchStatus}">
+                    <TextBlock.Style>
+                      <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="{DynamicResource BrushText3}"/>
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding PunchOk}" Value="True">
+                            <Setter Property="Foreground" Value="{DynamicResource BrushGreen}"/>
+                          </DataTrigger>
+                          <DataTrigger Binding="{Binding PunchFail}" Value="True">
+                            <Setter Property="Foreground" Value="{DynamicResource BrushRed}"/>
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </TextBlock.Style>
+                  </TextBlock>
+                </Border>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+        </DataGrid.Columns>
+      </DataGrid>
+    </StackPanel>
+  </Border>
+</UserControl>

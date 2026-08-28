@@ -23,7 +23,8 @@ public sealed class ReportsViewModel : BaseViewModel
     private string _localStatus = string.Empty;
     private string _atolStatus = "Отчёт не загружен";
     private string _ofdStatus = "Отчёт не загружен";
-    private string _matchingStatus = "Загрузите XML и отчёт АТОЛ";
+    private string _matchingStatus = "Загрузите XML и отчёт АТОЛ или архив Такском";
+    private string _matchingWarning = string.Empty;
     private AtolJournalReportRow? _selectedAtolCheck;
     private DateTime? _atolDateFrom;
     private DateTime? _atolDateTo;
@@ -98,6 +99,17 @@ public sealed class ReportsViewModel : BaseViewModel
     public string AtolStatus { get => _atolStatus; private set => Set(ref _atolStatus, value); }
     public string OfdStatus { get => _ofdStatus; private set => Set(ref _ofdStatus, value); }
     public string MatchingStatus { get => _matchingStatus; private set => Set(ref _matchingStatus, value); }
+    public string MatchingWarning
+    {
+        get => _matchingWarning;
+        private set
+        {
+            if (!Set(ref _matchingWarning, value ?? string.Empty)) return;
+            OnPropertyChanged(nameof(HasMatchingWarning));
+        }
+    }
+
+    public bool HasMatchingWarning => !string.IsNullOrWhiteSpace(MatchingWarning);
 
     public string AtolFileName => FileNameOrPlaceholder(AtolReportPath, "CSV АТОЛ не выбран");
     public string OfdFileName => OfdArchiveFileCount > 1
@@ -124,7 +136,7 @@ public sealed class ReportsViewModel : BaseViewModel
             OnPropertyChanged(nameof(OfdFileName));
         }
     }
-    public bool CanBuildMatches => _xmlChecks.Count > 0 && AtolChecks.Count > 0;
+    public bool CanBuildMatches => _xmlChecks.Count > 0 && (AtolChecks.Count > 0 || OfdChecks.Count > 0);
     public bool CanExport => ReadyCount > 0;
 
     public AtolJournalReportRow? SelectedAtolCheck
@@ -629,12 +641,14 @@ public sealed class ReportsViewModel : BaseViewModel
 
     public void BuildMatches(bool showErrors)
     {
+        MatchingWarning = ReportReconciliationService.GetAtolCoverageWarning(_xmlChecks, AtolChecks) ?? string.Empty;
+
         if (!CanBuildMatches)
         {
             ExportRows.Clear();
             MatchingStatus = _xmlChecks.Count == 0
                 ? "Загрузите XML с пробитыми чеками"
-                : "Загрузите CSV из журнала АТОЛ";
+                : "Загрузите CSV АТОЛ или архив Такском";
             RefreshExportCounters();
             return;
         }
@@ -644,7 +658,12 @@ public sealed class ReportsViewModel : BaseViewModel
             var rows = ReportReconciliationService.Build(_xmlChecks, AtolChecks, OfdChecks);
             ExportRows.Clear();
             foreach (var row in rows) ExportRows.Add(row);
-            MatchingStatus = $"Готово: {ReadyCount} · требуют внимания: {ErrorCount} · проверено ОФД: {OfdVerifiedCount}";
+            var sourceHint = AtolChecks.Count == 0
+                ? " · источник: Такском"
+                : OfdChecks.Count > 0 && rows.Any(x => x.Status.Contains("Такском", StringComparison.OrdinalIgnoreCase))
+                    ? " · часть строк из Такском"
+                    : string.Empty;
+            MatchingStatus = $"Готово: {ReadyCount} · требуют внимания: {ErrorCount} · проверено ОФД: {OfdVerifiedCount}{sourceHint}";
             SelectedTabIndex = 3;
             RefreshExportCounters();
         }

@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Input;
 using AtolGenerator.Constants;
 using AtolGenerator.Helpers;
@@ -17,6 +19,11 @@ public class MainViewModel : BaseViewModel
     private string _navBeforeCorrectionWork = "obsidian";
     private bool _startupInitialized;
     private Views.CorrectionWorkWindow? _correctionWorkWindow;
+    private Views.OneCRealizationsWindow? _oneCRealizationsWindow;
+    private string _oneCCityFilter = "Все";
+    private string _oneCHasCheckFilter = "Все";
+    private string _oneCSearchText = string.Empty;
+    private bool _oneCRealizationsCompact = true;
 
     public ReportsViewModel Reports { get; } = new();
     public ObsidianCasesViewModel ObsidianCases { get; }
@@ -249,6 +256,9 @@ public class MainViewModel : BaseViewModel
 
     // ── 1C staging table ─────────────────────────────────────────────────────
     public ObservableCollection<OneCRealizationViewModel> LoadedRealizations { get; } = new();
+    public ObservableCollection<string> OneCCityOptions { get; } = new() { "Все" };
+    public ObservableCollection<string> OneCHasCheckOptions { get; } = new() { "Все", "С чеком", "Без чека" };
+    public ICollectionView LoadedRealizationsView { get; }
     private bool _showLoadedRealizations;
     public bool ShowLoadedRealizations
     {
@@ -262,6 +272,58 @@ public class MainViewModel : BaseViewModel
     // С пробитым не в день реализации чеком — исправительный комплект XML.
     public int SelectedHasCheckCount    => LoadedRealizations.Count(r => r.IsSelected && r.HasCheck);
     public int TotalOneCLoaded       => LoadedRealizations.Count;
+    public int VisibleOneCCount      => LoadedRealizationsView.Cast<object>().Count();
+    public string OneCRealizationsSummary
+    {
+        get
+        {
+            var text = $"{TotalOneCLoaded} записей";
+            if (OneCFiltersActive)
+                text += $" · видно: {VisibleOneCCount}";
+            return $"{text} · выбрано: {SelectedOneCCount}";
+        }
+    }
+    public bool OneCFiltersActive =>
+        !string.Equals(OneCCityFilter, "Все", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(OneCHasCheckFilter, "Все", StringComparison.OrdinalIgnoreCase) ||
+        !string.IsNullOrWhiteSpace(OneCSearchText);
+    public bool OneCRealizationsCompact
+    {
+        get => _oneCRealizationsCompact;
+        private set => Set(ref _oneCRealizationsCompact, value);
+    }
+    public double OneCRealizationsGridMaxHeight => OneCRealizationsCompact ? 380 : 10000;
+
+    public string OneCCityFilter
+    {
+        get => _oneCCityFilter;
+        set
+        {
+            if (!Set(ref _oneCCityFilter, value ?? "Все")) return;
+            RefreshOneCRealizationsView();
+        }
+    }
+
+    public string OneCHasCheckFilter
+    {
+        get => _oneCHasCheckFilter;
+        set
+        {
+            if (!Set(ref _oneCHasCheckFilter, value ?? "Все")) return;
+            RefreshOneCRealizationsView();
+        }
+    }
+
+    public string OneCSearchText
+    {
+        get => _oneCSearchText;
+        set
+        {
+            if (!Set(ref _oneCSearchText, value ?? string.Empty)) return;
+            RefreshOneCRealizationsView();
+        }
+    }
+
     public bool CanPunchSelectedRealizationsViaAtol =>
         SelectedNoCheckCount > 0 && CheckType == "sell";
 
@@ -396,6 +458,8 @@ public class MainViewModel : BaseViewModel
     public ICommand TestOneCCommand            { get; }
     public ICommand LoadFromOneCCommand        { get; }
     public ICommand SelectAllOneCCommand       { get; }
+    public ICommand ClearOneCFiltersCommand    { get; }
+    public ICommand OpenOneCRealizationsWindowCommand { get; }
     public ICommand DeselectAllOneCCommand     { get; }
     public ICommand AddSelectedToOrdersCommand { get; }
     public ICommand ToggleAtolPanelCommand     { get; }
@@ -457,8 +521,13 @@ public class MainViewModel : BaseViewModel
         ToggleOneCPanelCommand     = new RelayCommand(_ => ShowOneCPanel = !ShowOneCPanel);
         TestOneCCommand            = new AsyncRelayCommand(TestOneCAsync);
         LoadFromOneCCommand        = new AsyncRelayCommand(LoadFromOneCAsync);
+        LoadedRealizationsView = CollectionViewSource.GetDefaultView(LoadedRealizations);
+        LoadedRealizationsView.Filter = FilterOneCRealization;
+
         SelectAllOneCCommand       = new RelayCommand(_ => SetAllOneCSelected(true));
         DeselectAllOneCCommand     = new RelayCommand(_ => SetAllOneCSelected(false));
+        ClearOneCFiltersCommand    = new RelayCommand(_ => ClearOneCFilters());
+        OpenOneCRealizationsWindowCommand = new RelayCommand(_ => OpenOneCRealizationsWindow(), _ => ShowLoadedRealizations);
         AddSelectedToOrdersCommand = new AsyncRelayCommand(AddSelectedToOrdersAsync);
         ToggleAtolPanelCommand     = new RelayCommand(_ => ShowAtolPanel = !ShowAtolPanel);
         SaveAtolSettingsCommand    = new RelayCommand(_ => SaveAtolSettings());
@@ -1956,22 +2025,21 @@ public class MainViewModel : BaseViewModel
             var vm = new OneCRealizationViewModel(r);
             // Все строки выбираются по умолчанию.
             // Реализации из 1С без фискального чека формируются как XML чеков коррекции.
-            vm.PropertyChanged += (_, _) =>
+            vm.PropertyChanged += (_, e) =>
             {
-                OnPropertyChanged(nameof(SelectedOneCCount));
-                OnPropertyChanged(nameof(SelectedNoCheckCount));
-                OnPropertyChanged(nameof(SelectedHasCheckCount));
-                OnPropertyChanged(nameof(CanPunchSelectedRealizationsViaAtol));
+                if (e.PropertyName is nameof(OneCRealizationViewModel.IsSelected))
+                    NotifyOneCSelectionChanged();
             };
             LoadedRealizations.Add(vm);
         }
 
         ShowLoadedRealizations = LoadedRealizations.Count > 0;
-        OnPropertyChanged(nameof(SelectedOneCCount));
-        OnPropertyChanged(nameof(SelectedNoCheckCount));
-        OnPropertyChanged(nameof(SelectedHasCheckCount));
-        OnPropertyChanged(nameof(CanPunchSelectedRealizationsViaAtol));
+        RefreshOneCCityOptions();
+        ClearOneCFilters();
+        NotifyOneCSelectionChanged();
         OnPropertyChanged(nameof(TotalOneCLoaded));
+        OnPropertyChanged(nameof(OneCRealizationsSummary));
+        CommandManager.InvalidateRequerySuggested();
 
         var withCheck    = realizations.Count(r => r.HasCheck);
         var withoutCheck = realizations.Count - withCheck;
@@ -1982,13 +2050,103 @@ public class MainViewModel : BaseViewModel
 
     private void SetAllOneCSelected(bool value)
     {
-        foreach (var r in LoadedRealizations)
+        foreach (OneCRealizationViewModel r in LoadedRealizationsView)
             r.IsSelected = value;
+        NotifyOneCSelectionChanged();
+    }
+
+    public void SetOneCRealizationsCompact(bool compact)
+    {
+        OneCRealizationsCompact = compact;
+        OnPropertyChanged(nameof(OneCRealizationsGridMaxHeight));
+    }
+
+    private void OpenOneCRealizationsWindow()
+    {
+        if (_oneCRealizationsWindow is not null)
+        {
+            if (_oneCRealizationsWindow.WindowState == WindowState.Minimized)
+                _oneCRealizationsWindow.WindowState = WindowState.Normal;
+            _oneCRealizationsWindow.Activate();
+            return;
+        }
+
+        var owner = Application.Current?.MainWindow;
+        var window = new Views.OneCRealizationsWindow { DataContext = this };
+        if (owner is not null && !ReferenceEquals(owner, window))
+            window.Owner = owner;
+        window.Closed += (_, _) => _oneCRealizationsWindow = null;
+        _oneCRealizationsWindow = window;
+        window.Show();
+        StatusText = "Открыто окно реализаций из 1С";
+    }
+
+    private void ClearOneCFilters()
+    {
+        _oneCCityFilter = "Все";
+        _oneCHasCheckFilter = "Все";
+        _oneCSearchText = string.Empty;
+        OnPropertyChanged(nameof(OneCCityFilter));
+        OnPropertyChanged(nameof(OneCHasCheckFilter));
+        OnPropertyChanged(nameof(OneCSearchText));
+        RefreshOneCRealizationsView();
+    }
+
+    private void RefreshOneCCityOptions()
+    {
+        OneCCityOptions.Clear();
+        OneCCityOptions.Add("Все");
+        foreach (var city in LoadedRealizations
+                     .Select(r => r.City)
+                     .Where(c => !string.IsNullOrWhiteSpace(c))
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(c => c, StringComparer.OrdinalIgnoreCase))
+            OneCCityOptions.Add(city);
+    }
+
+    private void RefreshOneCRealizationsView()
+    {
+        LoadedRealizationsView.Refresh();
+        OnPropertyChanged(nameof(VisibleOneCCount));
+        OnPropertyChanged(nameof(OneCFiltersActive));
+        OnPropertyChanged(nameof(OneCRealizationsSummary));
+    }
+
+    private void NotifyOneCSelectionChanged()
+    {
         OnPropertyChanged(nameof(SelectedOneCCount));
         OnPropertyChanged(nameof(SelectedNoCheckCount));
         OnPropertyChanged(nameof(SelectedHasCheckCount));
         OnPropertyChanged(nameof(CanPunchSelectedRealizationsViaAtol));
+        OnPropertyChanged(nameof(OneCRealizationsSummary));
     }
+
+    private bool FilterOneCRealization(object obj)
+    {
+        if (obj is not OneCRealizationViewModel row) return false;
+
+        if (!string.Equals(OneCCityFilter, "Все", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(row.City, OneCCityFilter, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (string.Equals(OneCHasCheckFilter, "С чеком", StringComparison.OrdinalIgnoreCase) && !row.HasCheck)
+            return false;
+        if (string.Equals(OneCHasCheckFilter, "Без чека", StringComparison.OrdinalIgnoreCase) && row.HasCheck)
+            return false;
+
+        if (string.IsNullOrWhiteSpace(OneCSearchText)) return true;
+
+        var query = OneCSearchText.Trim();
+        return ContainsIgnoreCase(row.DocNumber, query)
+               || ContainsIgnoreCase(row.OrderNumber, query)
+               || ContainsIgnoreCase(row.CustomerName, query)
+               || ContainsIgnoreCase(row.City, query)
+               || ContainsIgnoreCase(row.FiscalNumber, query);
+    }
+
+    private static bool ContainsIgnoreCase(string? source, string query) =>
+        !string.IsNullOrEmpty(source) &&
+        source.Contains(query, StringComparison.OrdinalIgnoreCase);
 
     private async Task AddSelectedToOrdersAsync()
     {

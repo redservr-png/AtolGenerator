@@ -457,7 +457,7 @@
         <Grid Margin="16">
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="12"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="12"/>
             <RowDefinition Height="Auto"/>
@@ -483,18 +483,27 @@
                        Style="{StaticResource PathLabel}" Margin="8,0,0,0"/>
             <Button Grid.Column="3" Content="CSV АТОЛ..."
                     Style="{StaticResource BtnSecondary}" Padding="12,7"
-                    Command="{Binding ImportAtolReportCommand}"/>
+                    Command="{Binding ImportAtolReportCommand}"
+                    ToolTip="Журнал АТОЛ Online — обычно только последние ~15 дней"/>
             <TextBlock Grid.Column="4" Text="{Binding AtolFileName}" ToolTip="{Binding AtolReportPath}"
                        Style="{StaticResource PathLabel}" Margin="8,0,0,0"/>
             <Button Grid.Column="6" Content="Архив ОФД..."
                     Style="{StaticResource BtnSecondary}" Padding="12,7"
-                    Command="{Binding ImportOfdReportCommand}"/>
+                    Command="{Binding ImportOfdReportCommand}"
+                    ToolTip="Отчёты Такском — основной источник для старых чеков"/>
             <TextBlock Grid.Column="7" Text="{Binding OfdFileName}" ToolTip="{Binding OfdReportPath}"
                        Style="{StaticResource PathLabel}" Margin="8,0,0,0"/>
             <Button Grid.Column="9" Content="Сопоставить"
                     Style="{StaticResource BtnPrimary}" Padding="14,7"
                     Command="{Binding BuildMatchesCommand}"/>
           </Grid>
+
+          <TextBlock Grid.Row="1" Margin="0,8,0,0"
+                     Text="{Binding MatchingWarning}"
+                     TextWrapping="Wrap"
+                     FontSize="12"
+                     Foreground="{DynamicResource BrushYellow}"
+                     Visibility="{Binding HasMatchingWarning, Converter={StaticResource BoolVis}}"/>
 
           <DataGrid Grid.Row="2" Style="{StaticResource ReportGrid}"
                     ItemsSource="{Binding ExportRows}">
