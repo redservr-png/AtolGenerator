@@ -151,6 +151,8 @@ public static class OneCService
             Log("Создаём запрос...");
             query = conn.NewObject("Запрос");
             query.Текст = BuildQuery();
+            var correctionProps = CorrectionPropertyRefs.Resolve(conn);
+            BindCorrectionPropertyParameters(query, correctionProps);
             query.УстановитьПараметр("НачалоПериода", from.Date);
             query.УстановитьПараметр("КонецПериода",  to.Date.AddDays(1).AddSeconds(-1));
 
@@ -180,10 +182,21 @@ public static class OneCService
                     var orderNum  = Str(selection.НомерЗаказа);
                     var orderDate = ToDateTime(selection.ДатаЗаказа);
 
-                    var checkDt  = ToDateTime(selection.ДатаПечатиЧека);
+                    var effectiveCheckDt = ToDateTime(selection.ДатаПечатиЧекаЭффективная);
+                    if (!IsMeaningfulDate(effectiveCheckDt))
+                    {
+                        skipped++;
+                        continue;
+                    }
+
                     var checkNum = Str(selection.НомерЧекаККМ);
-                    var hasCheck = !string.IsNullOrEmpty(checkNum)
-                                && checkDt > new DateTime(2000, 1, 1);
+                    if (string.IsNullOrWhiteSpace(checkNum))
+                        checkNum = Str(selection.НомерЧекаККМСвойство);
+                    var fiscalNumber = Str(selection.ЧекНомерФП);
+                    if (IsEmptyFp(fiscalNumber))
+                        fiscalNumber = Str(selection.ЧекНомерФПСвойство);
+                    var hasCheck = effectiveCheckDt > new DateTime(2000, 1, 1)
+                                   && (!string.IsNullOrWhiteSpace(checkNum) || !IsEmptyFp(fiscalNumber));
 
                     var dogovor   = Str(selection.Договор);
                     var isService = dogovor.IndexOf("агент", StringComparison.OrdinalIgnoreCase) >= 0;
@@ -204,9 +217,9 @@ public static class OneCService
                         City         = Str(selection.Подразделение),
                         HasCheck     = hasCheck,
                         CheckNumber  = checkNum,
-                        FiscalNumber = Str(selection.ЧекНомерФП),
+                        FiscalNumber = fiscalNumber,
                         CheckDate    = hasCheck
-                                        ? checkDt.ToString("dd.MM.yyyy HH:mm:ss")
+                                        ? effectiveCheckDt.ToString("dd.MM.yyyy HH:mm:ss")
                                         : string.Empty,
                     });
                 }
@@ -643,6 +656,7 @@ public static class OneCService
         {
             connector = CreateConnector();
             conn      = connector.Connect(s.ConnectionString);
+            var correctionProps = CorrectionPropertyRefs.Resolve(conn);
             // Получаем менеджер документа один раз — будем использовать его ПолучитьОбъект(Ссылка)
             docsManager = conn.Документы.РеализацияТоваровУслуг;
 
@@ -680,8 +694,7 @@ public static class OneCService
                         ВЫБРАТЬ ПЕРВЫЕ 1
                             Док.Ссылка       КАК ДокСсылка,
                             Док.Дата         КАК ДатаДок,
-                            Док.ЧекНомерФП   КАК ЧекНомерФП,
-                            Док.Комментарий  КАК Комментарий
+                            Док.ЧекНомерФП   КАК ЧекНомерФП
                         ИЗ
                             Документ.РеализацияТоваровУслуг КАК Док
                         ГДЕ
@@ -705,7 +718,6 @@ public static class OneCService
                     }
 
                     var docDate         = ToDateTime(sel.ДатаДок);
-                    var existingComment = Str(sel.Комментарий);
 
                     // Получаем «сырое» значение ЧекНомерФП с типом для диагностики
                     dynamic rawFp = sel.ЧекНомерФП;
@@ -800,22 +812,25 @@ public static class OneCService
                     lastStep = "set obj.ДатаПечатиЧека";
                     obj.ДатаПечатиЧека = checkDate;
 
-                    // 4. Комментарий: пустой → marker; непустой → дописываем через "   \\\   ".
-                    //                 Если уже содержит «Пробит чек коррекции» — не дописываем.
-                    const string marker = "Пробит чек коррекции \"Приход\"";
-                    if (!existingComment.Contains("Пробит чек коррекции", StringComparison.OrdinalIgnoreCase))
-                    {
-                        lastStep = "set obj.Комментарий";
-                        obj.Комментарий = string.IsNullOrWhiteSpace(existingComment)
-                            ? marker
-                            : existingComment + "   \\\\\\   " + marker;
-                    }
-
-                    // 5. Запись — без ОбменДанными.Загрузка (он не во всех конфигурациях работает)
                     lastStep = "obj.Записать()";
                     obj.Записать();
+
+                    lastStep = "write properties";
+                    string correctionComment = ReadPropertyString(conn, docRef, correctionProps.Comment);
+                    var comment = $"{checkDate:dd.MM.yyyy} Пробит чек коррекции \"Приход\" ФП: {rec.FiscalSign!.Value}";
+                    WriteCheckPropertiesBundle(
+                        conn,
+                        docRef,
+                        correctionProps,
+                        comment,
+                        checkDate,
+                        rec.FiscalDoc,
+                        rec.FiscalSign,
+                        ref correctionComment,
+                        appendComment: true);
+
                     res.Updated++;
-                    Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ФПД={rec.FiscalSign} №ФД={rec.FiscalDoc} → записано");
+                    Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ФПД={rec.FiscalSign} №ФД={rec.FiscalDoc} → реквизиты + свойства");
 
                     // Освобождаем COM-объект документа
                     try { System.Runtime.InteropServices.Marshal.ReleaseComObject(obj); } catch { }
@@ -870,9 +885,10 @@ public static class OneCService
     }
 
     /// <summary>
-    /// Записывает в 1С результат сверки XML + АТОЛ (+ ОФД) по тем же правилам, что CSV-обработка:
-    /// <c>update_fields</c> — ФПД/ФД/дата + комментарий; <c>comment_only</c> — только комментарий
-    /// (исходный ошибочный чек в реквизитах реализации не трогаем).
+    /// Записывает в 1С результат сверки XML + АТОЛ (+ ОФД):
+    /// <c>update_fields</c> — реквизиты чека на документе + свойства;
+    /// <c>comment_only</c> — только свойства (по одному набору на каждый чек пары).
+    /// В реквизит <c>Комментарий</c> документа ничего не пишется.
     /// </summary>
     public static ApplyResult ApplyOneCExportRows(
         OneCConnectionSettings s, IReadOnlyList<OneCExportRow> rows, bool skipFilled = true)
@@ -897,6 +913,7 @@ public static class OneCService
             connector = CreateConnector();
             conn = connector.Connect(s.ConnectionString);
             docsManager = conn.Документы.РеализацияТоваровУслуг;
+            var correctionProps = CorrectionPropertyRefs.Resolve(conn);
 
             foreach (var group in groups)
             {
@@ -925,8 +942,7 @@ public static class OneCService
                         ВЫБРАТЬ ПЕРВЫЕ 1
                             Док.Ссылка       КАК ДокСсылка,
                             Док.Дата         КАК ДатаДок,
-                            Док.ЧекНомерФП   КАК ЧекНомерФП,
-                            Док.Комментарий  КАК Комментарий
+                            Док.ЧекНомерФП   КАК ЧекНомерФП
                         ИЗ
                             Документ.РеализацияТоваровУслуг КАК Док
                         ГДЕ
@@ -950,7 +966,6 @@ public static class OneCService
                     }
 
                     var docDate = ToDateTime(sel.ДатаДок);
-                    var existingComment = Str(sel.Комментарий);
                     dynamic rawFp = sel.ЧекНомерФП;
                     var fpRaw = string.Empty;
                     try
@@ -962,16 +977,48 @@ public static class OneCService
 
                     var isFilled = !IsEmptyFp(fpRaw);
                     if (!commentOnly && skipFilled && isFilled)
-                    {
-                        // Поля уже заполнены: всё равно допишем новые комментарии, если их ещё нет.
-                        Log($"  {realizationNum}: ЧекНомерФП уже «{fpRaw}» — поля не трогаем, проверяем комментарий");
-                    }
+                        Log($"  {realizationNum}: ЧекНомерФП уже «{fpRaw}» — реквизиты не трогаем, свойства проверим");
 
                     lastStep = "sel.ДокСсылка";
                     var docRef = sel.ДокСсылка;
                     try { Marshal.ReleaseComObject(sel); } catch { }
                     try { Marshal.ReleaseComObject(qResult); } catch { }
                     try { Marshal.ReleaseComObject(query); } catch { }
+
+                    string correctionComment = ReadPropertyString(conn, docRef, correctionProps.Comment);
+                    var changed = false;
+
+                    if (commentOnly)
+                    {
+                        lastStep = "write properties (comment_only)";
+                        foreach (var row in ordered)
+                        {
+                            if (WriteCheckPropertiesBundle(
+                                    conn,
+                                    docRef,
+                                    correctionProps,
+                                    row.Comment,
+                                    row.RegisteredAt,
+                                    row.FiscalDocument,
+                                    row.FiscalSign,
+                                    ref correctionComment,
+                                    appendComment: true))
+                                changed = true;
+                        }
+
+                        if (!changed)
+                        {
+                            res.Skipped++;
+                            var detail = $"{realizationNum}: дата={docDate:dd.MM.yyyy} — свойства без изменений";
+                            Log("  " + detail);
+                            if (res.SkippedSamples.Count < 15) res.SkippedSamples.Add(detail);
+                            continue;
+                        }
+
+                        res.Updated++;
+                        Log($"  {realizationNum}: дата={docDate:dd.MM.yyyy} mode=comment_only → {ordered.Count} чек(ов) в свойства");
+                        continue;
+                    }
 
                     dynamic? obj = null;
                     var failReasons = string.Empty;
@@ -1003,8 +1050,7 @@ public static class OneCService
                         continue;
                     }
 
-                    var changed = false;
-                    if (!commentOnly && updateRow is not null && !(skipFilled && isFilled))
+                    if (updateRow is not null && !(skipFilled && isFilled))
                     {
                         lastStep = "set fields";
                         obj.ЧекНомерФП = (double)updateRow.FiscalSign!.Value;
@@ -1013,22 +1059,28 @@ public static class OneCService
                         changed = true;
                     }
 
-                    var comment = existingComment;
-                    foreach (var row in ordered.Where(x => !string.IsNullOrWhiteSpace(x.Comment)))
+                    if (changed)
                     {
-                        if (CommentAlreadyHasFiscalSign(comment, row.FiscalSign) ||
-                            comment.Contains(row.Comment, StringComparison.OrdinalIgnoreCase))
-                            continue;
-                        comment = string.IsNullOrWhiteSpace(comment)
-                            ? row.Comment
-                            : comment + "   ///   " + row.Comment;
-                        changed = true;
+                        lastStep = "obj.Записать()";
+                        obj.Записать();
                     }
 
-                    if (changed && !string.Equals(comment, existingComment, StringComparison.Ordinal))
+                    try { Marshal.ReleaseComObject(obj); } catch { }
+
+                    if (updateRow is not null)
                     {
-                        lastStep = "set obj.Комментарий";
-                        obj.Комментарий = comment;
+                        lastStep = "write properties (update_fields)";
+                        if (WriteCheckPropertiesBundle(
+                                conn,
+                                docRef,
+                                correctionProps,
+                                updateRow.Comment,
+                                updateRow.RegisteredAt,
+                                updateRow.FiscalDocument,
+                                updateRow.FiscalSign,
+                                ref correctionComment,
+                                appendComment: true))
+                            changed = true;
                     }
 
                     if (!changed)
@@ -1037,15 +1089,11 @@ public static class OneCService
                         var detail = $"{realizationNum}: дата={docDate:dd.MM.yyyy} — без изменений";
                         Log("  " + detail);
                         if (res.SkippedSamples.Count < 15) res.SkippedSamples.Add(detail);
-                        try { Marshal.ReleaseComObject(obj); } catch { }
                         continue;
                     }
 
-                    lastStep = "obj.Записать()";
-                    obj.Записать();
                     res.Updated++;
-                    Log($"  {realizationNum}: дата={docDate:dd.MM.yyyy} mode={(commentOnly ? "comment_only" : "update_fields")} → записано");
-                    try { Marshal.ReleaseComObject(obj); } catch { }
+                    Log($"  {realizationNum}: дата={docDate:dd.MM.yyyy} mode=update_fields → реквизиты + свойства");
                 }
                 catch (Exception ex)
                 {
@@ -1476,24 +1524,202 @@ public static class OneCService
         return text;
     }
 
+    // ── Свойства коррекции (ПВХ СвойстваОбъектов / ЧекиКоррекции) ─────────────
+    private static class CorrectionPropertyNames
+    {
+        public const string Comment = "КомментарийКорректировки";
+        public const string CheckDate = "ДатаПечатиЧека";
+        public const string CheckNumber = "НомерЧекаККМ";
+        public const string FiscalSign = "ЧекНомерФП";
+    }
+
+    private sealed class CorrectionPropertyRefs
+    {
+        public required dynamic Comment { get; init; }
+        public required dynamic CheckDate { get; init; }
+        public required dynamic CheckNumber { get; init; }
+        public required dynamic FiscalSign { get; init; }
+
+        public static CorrectionPropertyRefs Resolve(dynamic conn)
+        {
+            dynamic plan = conn.ПланыВидовХарактеристик.СвойстваОбъектов;
+            var refs = new CorrectionPropertyRefs
+            {
+                Comment = plan.НайтиПоНаименованию(CorrectionPropertyNames.Comment),
+                CheckDate = plan.НайтиПоНаименованию(CorrectionPropertyNames.CheckDate),
+                CheckNumber = plan.НайтиПоНаименованию(CorrectionPropertyNames.CheckNumber),
+                FiscalSign = plan.НайтиПоНаименованию(CorrectionPropertyNames.FiscalSign),
+            };
+
+            var missing = new List<string>();
+            if (IsEmptyOneCRef(refs.Comment)) missing.Add(CorrectionPropertyNames.Comment);
+            if (IsEmptyOneCRef(refs.CheckDate)) missing.Add(CorrectionPropertyNames.CheckDate);
+            if (IsEmptyOneCRef(refs.CheckNumber)) missing.Add(CorrectionPropertyNames.CheckNumber);
+            if (IsEmptyOneCRef(refs.FiscalSign)) missing.Add(CorrectionPropertyNames.FiscalSign);
+            if (missing.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "Не найдены свойства в ПВХ СвойстваОбъектов: " + string.Join(", ", missing));
+            }
+
+            return refs;
+        }
+    }
+
+    private static bool IsEmptyOneCRef(dynamic? reference)
+    {
+        if (reference is null) return true;
+        try { return (bool)reference.Пустая(); }
+        catch { return false; }
+    }
+
+    private static void BindCorrectionPropertyParameters(dynamic query, CorrectionPropertyRefs props)
+    {
+        query.УстановитьПараметр("СвойствоКомментарийКорректировки", props.Comment);
+        query.УстановитьПараметр("СвойствоДатаПечатиЧека", props.CheckDate);
+        query.УстановитьПараметр("СвойствоНомерЧекаККМ", props.CheckNumber);
+        query.УстановитьПараметр("СвойствоЧекНомерФП", props.FiscalSign);
+    }
+
+    private static string ReadPropertyString(dynamic conn, dynamic docRef, dynamic propertyRef)
+    {
+        dynamic? query = null;
+        dynamic? queryResult = null;
+        dynamic? selection = null;
+        try
+        {
+            query = conn.NewObject("Запрос");
+            query.Текст = """
+                ВЫБРАТЬ
+                    Значения.Значение КАК Значение
+                ИЗ
+                    РегистрСведений.ЗначенияСвойствОбъектов КАК Значения
+                ГДЕ
+                    Значения.Объект = &Объект
+                    И Значения.Свойство = &Свойство
+                """;
+            query.УстановитьПараметр("Объект", docRef);
+            query.УстановитьПараметр("Свойство", propertyRef);
+            queryResult = query.Выполнить();
+            selection = queryResult.Выбрать();
+            if (!(bool)selection.Следующий()) return string.Empty;
+            return Str(selection.Значение);
+        }
+        finally
+        {
+            ReleaseComObject(selection);
+            ReleaseComObject(queryResult);
+            ReleaseComObject(query);
+        }
+    }
+
+    private static void WritePropertyValue(dynamic conn, dynamic docRef, dynamic propertyRef, object value)
+    {
+        dynamic manager = conn.РегистрыСведений.ЗначенияСвойствОбъектов.СоздатьМенеджерЗаписи();
+        try
+        {
+            manager.Объект = docRef;
+            manager.Свойство = propertyRef;
+            manager.Значение = value;
+            manager.Записать();
+        }
+        finally
+        {
+            ReleaseComObject(manager);
+        }
+    }
+
+    private static bool WriteCheckPropertiesBundle(
+        dynamic conn,
+        dynamic docRef,
+        CorrectionPropertyRefs props,
+        string? comment,
+        DateTime? checkDate,
+        long? fiscalDocument,
+        long? fiscalSign,
+        ref string correctionCommentState,
+        bool appendComment)
+    {
+        if (!string.IsNullOrWhiteSpace(comment) &&
+            CommentAlreadyHasFiscalSign(correctionCommentState, fiscalSign))
+            return false;
+
+        var changed = false;
+
+        if (!string.IsNullOrWhiteSpace(comment))
+        {
+            var merged = appendComment && !string.IsNullOrWhiteSpace(correctionCommentState)
+                ? correctionCommentState + "   ///   " + comment
+                : comment;
+            if (!string.Equals(merged, correctionCommentState, StringComparison.Ordinal))
+            {
+                WritePropertyValue(conn, docRef, props.Comment, merged);
+                correctionCommentState = merged;
+                changed = true;
+            }
+        }
+
+        if (checkDate.HasValue && checkDate.Value > new DateTime(2000, 1, 1))
+        {
+            WritePropertyValue(conn, docRef, props.CheckDate, checkDate.Value);
+            changed = true;
+        }
+
+        if (fiscalDocument.HasValue)
+        {
+            WritePropertyValue(conn, docRef, props.CheckNumber, (double)fiscalDocument.Value);
+            changed = true;
+        }
+
+        if (fiscalSign.HasValue)
+        {
+            WritePropertyValue(conn, docRef, props.FiscalSign, (double)fiscalSign.Value);
+            changed = true;
+        }
+
+        return changed;
+    }
+
     // ── Запрос к УТ 10.3 ─────────────────────────────────────────────────────
-    // Используем скалярные атрибуты (строки/числа/даты) вместо ПРЕДСТАВЛЕНИЕ(),
-    // чтобы избежать ошибки COM NullReferenceException при выполнении запроса.
     private static string BuildQuery() => """
         ВЫБРАТЬ
-            РеализацияТоваровУслуг.Номер                                            КАК НомерДок,
-            РеализацияТоваровУслуг.Дата                                             КАК Дата,
-            РеализацияТоваровУслуг.Сделка.Номер                                     КАК НомерЗаказа,
-            РеализацияТоваровУслуг.Сделка.Дата                                      КАК ДатаЗаказа,
-            РеализацияТоваровУслуг.Сделка.КонтактноеЛицоКонтрагента.Наименование   КАК Покупатель,
-            РеализацияТоваровУслуг.СуммаДокумента                                   КАК СуммаДокумента,
-            РеализацияТоваровУслуг.ДоговорКонтрагента.Наименование                  КАК Договор,
-            РеализацияТоваровУслуг.Подразделение.Наименование                       КАК Подразделение,
-            РеализацияТоваровУслуг.НомерЧекаККМ                                     КАК НомерЧекаККМ,
-            РеализацияТоваровУслуг.ЧекНомерФП                                       КАК ЧекНомерФП,
-            РеализацияТоваровУслуг.ДатаПечатиЧека                                   КАК ДатаПечатиЧека
+            РеализацияТоваровУслуг.Ссылка                                              КАК Ссылка,
+            РеализацияТоваровУслуг.Номер                                               КАК НомерДок,
+            РеализацияТоваровУслуг.Дата                                                КАК Дата,
+            РеализацияТоваровУслуг.Сделка.Номер                                        КАК НомерЗаказа,
+            РеализацияТоваровУслуг.Сделка.Дата                                         КАК ДатаЗаказа,
+            РеализацияТоваровУслуг.Сделка.КонтактноеЛицоКонтрагента.Наименование      КАК Покупатель,
+            РеализацияТоваровУслуг.СуммаДокумента                                      КАК СуммаДокумента,
+            РеализацияТоваровУслуг.ДоговорКонтрагента.Наименование                     КАК Договор,
+            РеализацияТоваровУслуг.Подразделение.Наименование                          КАК Подразделение,
+            РеализацияТоваровУслуг.НомерЧекаККМ                                        КАК НомерЧекаККМ,
+            РеализацияТоваровУслуг.ЧекНомерФП                                          КАК ЧекНомерФП,
+            РеализацияТоваровУслуг.ДатаПечатиЧека                                      КАК ДатаПечатиЧека,
+            ЗначКомментарийКорр.Значение                                               КАК КомментарийКорректировки,
+            ЗначНомерЧека.Значение                                                     КАК НомерЧекаККМСвойство,
+            ЗначЧекФП.Значение                                                         КАК ЧекНомерФПСвойство,
+            ЗначДатаПечати.Значение                                                    КАК ДатаПечатиЧекаСвойство,
+            ВЫБОР
+                КОГДА РеализацияТоваровУслуг.ДатаПечатиЧека >= ДАТАВРЕМЯ(2000, 1, 1)
+                    ТОГДА РеализацияТоваровУслуг.ДатаПечатиЧека
+                КОГДА ЗначДатаПечати.Значение >= ДАТАВРЕМЯ(2000, 1, 1)
+                    ТОГДА ЗначДатаПечати.Значение
+                ИНАЧЕ ДАТАВРЕМЯ(1, 1, 1)
+            КОНЕЦ                                                                      КАК ДатаПечатиЧекаЭффективная
         ИЗ
             Документ.РеализацияТоваровУслуг КАК РеализацияТоваровУслуг
+                ЛЕВОЕ СОЕДИНЕНИЕ РегистрСведений.ЗначенияСвойствОбъектов КАК ЗначКомментарийКорр
+                ПО ЗначКомментарийКорр.Объект = РеализацияТоваровУслуг.Ссылка
+                    И ЗначКомментарийКорр.Свойство = &СвойствоКомментарийКорректировки
+                ЛЕВОЕ СОЕДИНЕНИЕ РегистрСведений.ЗначенияСвойствОбъектов КАК ЗначДатаПечати
+                ПО ЗначДатаПечати.Объект = РеализацияТоваровУслуг.Ссылка
+                    И ЗначДатаПечати.Свойство = &СвойствоДатаПечатиЧека
+                ЛЕВОЕ СОЕДИНЕНИЕ РегистрСведений.ЗначенияСвойствОбъектов КАК ЗначНомерЧека
+                ПО ЗначНомерЧека.Объект = РеализацияТоваровУслуг.Ссылка
+                    И ЗначНомерЧека.Свойство = &СвойствоНомерЧекаККМ
+                ЛЕВОЕ СОЕДИНЕНИЕ РегистрСведений.ЗначенияСвойствОбъектов КАК ЗначЧекФП
+                ПО ЗначЧекФП.Объект = РеализацияТоваровУслуг.Ссылка
+                    И ЗначЧекФП.Свойство = &СвойствоЧекНомерФП
         ГДЕ
             РеализацияТоваровУслуг.ПометкаУдаления = ЛОЖЬ
             И РеализацияТоваровУслуг.Проведен = ИСТИНА
@@ -1505,12 +1731,28 @@ public static class OneCService
             И РеализацияТоваровУслуг.Подразделение.Наименование <> "Интернет-магазин (продажи)"
             И РеализацияТоваровУслуг.Сделка.Контрагент.Наименование = "Розничный покупатель"
             И РеализацияТоваровУслуг.СуммаДокумента > 0
-            И НАЧАЛОПЕРИОДА(РеализацияТоваровУслуг.Дата, ДЕНЬ) <> НАЧАЛОПЕРИОДА(РеализацияТоваровУслуг.ДатаПечатиЧека, ДЕНЬ)
-            И (НЕ РеализацияТоваровУслуг.Комментарий ПОДОБНО "%Пробит%"
-                    ИЛИ РеализацияТоваровУслуг.Комментарий ЕСТЬ NULL)
+            И ВЫБОР
+                    КОГДА РеализацияТоваровУслуг.ДатаПечатиЧека >= ДАТАВРЕМЯ(2000, 1, 1)
+                        ТОГДА РеализацияТоваровУслуг.ДатаПечатиЧека
+                    КОГДА ЗначДатаПечати.Значение >= ДАТАВРЕМЯ(2000, 1, 1)
+                        ТОГДА ЗначДатаПечати.Значение
+                    ИНАЧЕ ДАТАВРЕМЯ(1, 1, 1)
+                КОНЕЦ >= ДАТАВРЕМЯ(2000, 1, 1)
+            И НАЧАЛОПЕРИОДА(РеализацияТоваровУслуг.Дата, ДЕНЬ) <> НАЧАЛОПЕРИОДА(
+                ВЫБОР
+                    КОГДА РеализацияТоваровУслуг.ДатаПечатиЧека >= ДАТАВРЕМЯ(2000, 1, 1)
+                        ТОГДА РеализацияТоваровУслуг.ДатаПечатиЧека
+                    КОГДА ЗначДатаПечати.Значение >= ДАТАВРЕМЯ(2000, 1, 1)
+                        ТОГДА ЗначДатаПечати.Значение
+                    ИНАЧЕ ДАТАВРЕМЯ(1, 1, 1)
+                КОНЕЦ, ДЕНЬ)
+            И (РеализацияТоваровУслуг.Комментарий = ""
+                    ИЛИ НЕ РеализацияТоваровУслуг.Комментарий ПОДОБНО "%Пробит%")
+            И (ЗначКомментарийКорр.Значение ЕСТЬ NULL
+                    ИЛИ ВЫРАЗИТЬ(ЗначКомментарийКорр.Значение КАК СТРОКА(500)) = ""
+                    ИЛИ НЕ ВЫРАЗИТЬ(ЗначКомментарийКорр.Значение КАК СТРОКА(500)) ПОДОБНО "%Пробит%")
         УПОРЯДОЧИТЬ ПО
             РеализацияТоваровУслуг.Подразделение.Наименование,
             РеализацияТоваровУслуг.Дата
         """;
-    // Параметры даты устанавливаются отдельно через query.УстановитьПараметр
 }

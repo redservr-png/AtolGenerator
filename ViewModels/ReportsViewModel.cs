@@ -1037,11 +1037,13 @@ public sealed class ReportsViewModel : BaseViewModel
         var confirm = MessageBox.Show(
             $"В 1С будут записаны данные по {realizations} реализациям ({ready.Count} чеков).\n\n" +
             $"update_fields (поля ФПД/ФД/дата): {updateCount}\n" +
-            $"comment_only (только комментарий): {commentCount}\n\n" +
+            $"comment_only (свойства, 2 чека пары): {commentCount}\n\n" +
             "Да — писать поля только в пустые документы\n" +
             "Нет — перезаписать поля у update_fields даже если ФП уже есть\n" +
             "Отмена — выход\n\n" +
-            "Для исправительных пар поля исходного чека не меняются — только комментарий.",
+            "Реквизит «Комментарий» документа не меняется. Для исправительных пар " +
+            "поля исходного чека не трогаем — оба новых чека пишем в свойства " +
+            "(КомментарийКорректировки и др.) с датой в тексте.",
             "Запись в 1С через COM",
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);
