@@ -150,14 +150,38 @@ public static class OneCService
 
             Log("Создаём запрос...");
             query = conn.NewObject("Запрос");
-            query.Текст = BuildQuery();
-            var correctionProps = CorrectionPropertyRefs.Resolve(conn);
-            BindCorrectionPropertyParameters(query, correctionProps);
+            var usePropertyQuery = CorrectionPropertyRefs.TryResolve(
+                conn, out CorrectionPropertyRefs? correctionProps, out List<string> missingProps);
+            if (usePropertyQuery)
+            {
+                Log("Свойства коррекции найдены — запрос с регистром свойств.");
+                query.Текст = BuildQueryWithProperties();
+                BindCorrectionPropertyParameters(query, correctionProps!);
+            }
+            else
+            {
+                Log($"Свойства не найдены ({string.Join(", ", missingProps)}) — упрощённый запрос.");
+                query.Текст = BuildQueryLegacy();
+            }
             query.УстановитьПараметр("НачалоПериода", from.Date);
             query.УстановитьПараметр("КонецПериода",  to.Date.AddDays(1).AddSeconds(-1));
 
             Log("Выполняем запрос...");
-            queryResult = query.Выполнить();
+            try
+            {
+                queryResult = query.Выполнить();
+            }
+            catch (Exception ex) when (usePropertyQuery)
+            {
+                Log($"Запрос со свойствами упал: {FormatComError(ex)} — повтор без регистра свойств.");
+                ReleaseComObject(query);
+                query = conn.NewObject("Запрос");
+                query.Текст = BuildQueryLegacy();
+                query.УстановитьПараметр("НачалоПериода", from.Date);
+                query.УстановитьПараметр("КонецПериода",  to.Date.AddDays(1).AddSeconds(-1));
+                usePropertyQuery = false;
+                queryResult = query.Выполнить();
+            }
             selection   = queryResult.Выбрать();
             Log("Запрос выполнен, читаем строки...");
 
@@ -182,7 +206,9 @@ public static class OneCService
                     var orderNum  = Str(selection.НомерЗаказа);
                     var orderDate = ToDateTime(selection.ДатаЗаказа);
 
-                    var effectiveCheckDt = ToDateTime(selection.ДатаПечатиЧекаЭффективная);
+                    var effectiveCheckDt = usePropertyQuery
+                        ? ToDateTime(selection.ДатаПечатиЧекаЭффективная)
+                        : ToDateTime(selection.ДатаПечатиЧека);
                     if (!IsMeaningfulDate(effectiveCheckDt))
                     {
                         skipped++;
@@ -190,10 +216,10 @@ public static class OneCService
                     }
 
                     var checkNum = Str(selection.НомерЧекаККМ);
-                    if (string.IsNullOrWhiteSpace(checkNum))
+                    if (usePropertyQuery && string.IsNullOrWhiteSpace(checkNum))
                         checkNum = Str(selection.НомерЧекаККМСвойство);
                     var fiscalNumber = Str(selection.ЧекНомерФП);
-                    if (IsEmptyFp(fiscalNumber))
+                    if (usePropertyQuery && IsEmptyFp(fiscalNumber))
                         fiscalNumber = Str(selection.ЧекНомерФПСвойство);
                     var hasCheck = effectiveCheckDt > new DateTime(2000, 1, 1)
                                    && (!string.IsNullOrWhiteSpace(checkNum) || !IsEmptyFp(fiscalNumber));
@@ -1542,27 +1568,69 @@ public static class OneCService
 
         public static CorrectionPropertyRefs Resolve(dynamic conn)
         {
-            dynamic plan = conn.ПланыВидовХарактеристик.СвойстваОбъектов;
-            var refs = new CorrectionPropertyRefs
-            {
-                Comment = plan.НайтиПоНаименованию(CorrectionPropertyNames.Comment),
-                CheckDate = plan.НайтиПоНаименованию(CorrectionPropertyNames.CheckDate),
-                CheckNumber = plan.НайтиПоНаименованию(CorrectionPropertyNames.CheckNumber),
-                FiscalSign = plan.НайтиПоНаименованию(CorrectionPropertyNames.FiscalSign),
-            };
-
-            var missing = new List<string>();
-            if (IsEmptyOneCRef(refs.Comment)) missing.Add(CorrectionPropertyNames.Comment);
-            if (IsEmptyOneCRef(refs.CheckDate)) missing.Add(CorrectionPropertyNames.CheckDate);
-            if (IsEmptyOneCRef(refs.CheckNumber)) missing.Add(CorrectionPropertyNames.CheckNumber);
-            if (IsEmptyOneCRef(refs.FiscalSign)) missing.Add(CorrectionPropertyNames.FiscalSign);
-            if (missing.Count > 0)
+            if (!TryResolve(conn, out CorrectionPropertyRefs? refs, out List<string> missing))
             {
                 throw new InvalidOperationException(
                     "Не найдены свойства в ПВХ СвойстваОбъектов: " + string.Join(", ", missing));
             }
 
-            return refs;
+            return refs!;
+        }
+
+        public static bool TryResolve(
+            dynamic conn, out CorrectionPropertyRefs? refs, out List<string> missing)
+        {
+            missing = new List<string>();
+            refs = null;
+
+            dynamic plan;
+            try { plan = conn.ПланыВидовХарактеристик.СвойстваОбъектов; }
+            catch (Exception ex)
+            {
+                Log($"ПВХ СвойстваОбъектов недоступен: {FormatComError(ex)}");
+                return false;
+            }
+
+            var comment = FindPropertyRef(plan, CorrectionPropertyNames.Comment, missing);
+            var checkDate = FindPropertyRef(plan, CorrectionPropertyNames.CheckDate, missing);
+            var checkNumber = FindPropertyRef(plan, CorrectionPropertyNames.CheckNumber, missing);
+            var fiscalSign = FindPropertyRef(plan, CorrectionPropertyNames.FiscalSign, missing);
+            if (missing.Count > 0)
+            {
+                refs = null;
+                return false;
+            }
+
+            refs = new CorrectionPropertyRefs
+            {
+                Comment = comment!,
+                CheckDate = checkDate!,
+                CheckNumber = checkNumber!,
+                FiscalSign = fiscalSign!,
+            };
+
+            return true;
+        }
+
+        private static dynamic? FindPropertyRef(dynamic plan, string name, List<string> missing)
+        {
+            try
+            {
+                var reference = plan.НайтиПоНаименованию(name);
+                if (IsEmptyOneCRef(reference))
+                {
+                    missing.Add(name);
+                    return null;
+                }
+
+                return reference;
+            }
+            catch (Exception ex)
+            {
+                Log($"Свойство {name}: {FormatComError(ex)}");
+                missing.Add(name);
+                return null;
+            }
         }
     }
 
@@ -1570,7 +1638,7 @@ public static class OneCService
     {
         if (reference is null) return true;
         try { return (bool)reference.Пустая(); }
-        catch { return false; }
+        catch { return true; }
     }
 
     private static void BindCorrectionPropertyParameters(dynamic query, CorrectionPropertyRefs props)
@@ -1681,7 +1749,43 @@ public static class OneCService
     }
 
     // ── Запрос к УТ 10.3 ─────────────────────────────────────────────────────
-    private static string BuildQuery() => """
+    private static string BuildQueryLegacy() => """
+        ВЫБРАТЬ
+            РеализацияТоваровУслуг.Номер                                            КАК НомерДок,
+            РеализацияТоваровУслуг.Дата                                             КАК Дата,
+            РеализацияТоваровУслуг.Сделка.Номер                                     КАК НомерЗаказа,
+            РеализацияТоваровУслуг.Сделка.Дата                                      КАК ДатаЗаказа,
+            РеализацияТоваровУслуг.Сделка.КонтактноеЛицоКонтрагента.Наименование   КАК Покупатель,
+            РеализацияТоваровУслуг.СуммаДокумента                                   КАК СуммаДокумента,
+            РеализацияТоваровУслуг.ДоговорКонтрагента.Наименование                  КАК Договор,
+            РеализацияТоваровУслуг.Подразделение.Наименование                       КАК Подразделение,
+            РеализацияТоваровУслуг.НомерЧекаККМ                                     КАК НомерЧекаККМ,
+            РеализацияТоваровУслуг.ЧекНомерФП                                       КАК ЧекНомерФП,
+            РеализацияТоваровУслуг.ДатаПечатиЧека                                   КАК ДатаПечатиЧека
+        ИЗ
+            Документ.РеализацияТоваровУслуг КАК РеализацияТоваровУслуг
+        ГДЕ
+            РеализацияТоваровУслуг.ПометкаУдаления = ЛОЖЬ
+            И РеализацияТоваровУслуг.Проведен = ИСТИНА
+            И РеализацияТоваровУслуг.ЭтоРекламация = ЛОЖЬ
+            И РеализацияТоваровУслуг.Дата МЕЖДУ &НачалоПериода И &КонецПериода
+            И РеализацияТоваровУслуг.Подразделение.Наименование <> "OZON"
+            И РеализацияТоваровУслуг.Подразделение.Наименование <> "Вологда ОПТ"
+            И РеализацияТоваровУслуг.Подразделение.Наименование <> "Новодвинск"
+            И РеализацияТоваровУслуг.Подразделение.Наименование <> "Интернет-магазин (продажи)"
+            И РеализацияТоваровУслуг.Сделка.Контрагент.Наименование = "Розничный покупатель"
+            И РеализацияТоваровУслуг.СуммаДокумента > 0
+            И РеализацияТоваровУслуг.ДатаПечатиЧека >= ДАТАВРЕМЯ(2000, 1, 1)
+            И НАЧАЛОПЕРИОДА(РеализацияТоваровУслуг.Дата, ДЕНЬ) <> НАЧАЛОПЕРИОДА(РеализацияТоваровУслуг.ДатаПечатиЧека, ДЕНЬ)
+            И (РеализацияТоваровУслуг.Комментарий ЕСТЬ NULL
+                    ИЛИ РеализацияТоваровУслуг.Комментарий = ""
+                    ИЛИ НЕ РеализацияТоваровУслуг.Комментарий ПОДОБНО "%Пробит%")
+        УПОРЯДОЧИТЬ ПО
+            РеализацияТоваровУслуг.Подразделение.Наименование,
+            РеализацияТоваровУслуг.Дата
+        """;
+
+    private static string BuildQueryWithProperties() => """
         ВЫБРАТЬ
             РеализацияТоваровУслуг.Ссылка                                              КАК Ссылка,
             РеализацияТоваровУслуг.Номер                                               КАК НомерДок,
@@ -1731,22 +1835,10 @@ public static class OneCService
             И РеализацияТоваровУслуг.Подразделение.Наименование <> "Интернет-магазин (продажи)"
             И РеализацияТоваровУслуг.Сделка.Контрагент.Наименование = "Розничный покупатель"
             И РеализацияТоваровУслуг.СуммаДокумента > 0
-            И ВЫБОР
-                    КОГДА РеализацияТоваровУслуг.ДатаПечатиЧека >= ДАТАВРЕМЯ(2000, 1, 1)
-                        ТОГДА РеализацияТоваровУслуг.ДатаПечатиЧека
-                    КОГДА ЗначДатаПечати.Значение >= ДАТАВРЕМЯ(2000, 1, 1)
-                        ТОГДА ЗначДатаПечати.Значение
-                    ИНАЧЕ ДАТАВРЕМЯ(1, 1, 1)
-                КОНЕЦ >= ДАТАВРЕМЯ(2000, 1, 1)
-            И НАЧАЛОПЕРИОДА(РеализацияТоваровУслуг.Дата, ДЕНЬ) <> НАЧАЛОПЕРИОДА(
-                ВЫБОР
-                    КОГДА РеализацияТоваровУслуг.ДатаПечатиЧека >= ДАТАВРЕМЯ(2000, 1, 1)
-                        ТОГДА РеализацияТоваровУслуг.ДатаПечатиЧека
-                    КОГДА ЗначДатаПечати.Значение >= ДАТАВРЕМЯ(2000, 1, 1)
-                        ТОГДА ЗначДатаПечати.Значение
-                    ИНАЧЕ ДАТАВРЕМЯ(1, 1, 1)
-                КОНЕЦ, ДЕНЬ)
-            И (РеализацияТоваровУслуг.Комментарий = ""
+            И РеализацияТоваровУслуг.ДатаПечатиЧека >= ДАТАВРЕМЯ(2000, 1, 1)
+            И НАЧАЛОПЕРИОДА(РеализацияТоваровУслуг.Дата, ДЕНЬ) <> НАЧАЛОПЕРИОДА(РеализацияТоваровУслуг.ДатаПечатиЧека, ДЕНЬ)
+            И (РеализацияТоваровУслуг.Комментарий ЕСТЬ NULL
+                    ИЛИ РеализацияТоваровУслуг.Комментарий = ""
                     ИЛИ НЕ РеализацияТоваровУслуг.Комментарий ПОДОБНО "%Пробит%")
             И (ЗначКомментарийКорр.Значение ЕСТЬ NULL
                     ИЛИ ВЫРАЗИТЬ(ЗначКомментарийКорр.Значение КАК СТРОКА(500)) = ""
