@@ -613,9 +613,10 @@
                          HorizontalAlignment="Center" Margin="0,4,0,0"
                          TextWrapping="Wrap" TextAlignment="Center"
                          Visibility="{Binding ShowCorrectionPunchHint, Converter={StaticResource BoolVis}}"/>
-              <TextBlock Text="Файлы сохраняются в папку atol_output/"
+              <TextBlock Text="Новые XML — xml/год/месяц, служебки — отдельно. После записи в 1С XML уходят в xml_в_1с."
                          FontSize="11" Foreground="{DynamicResource BrushText3}"
-                         HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                         HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
+                         Margin="0,8,0,0"/>
               <Border Background="#1AFF4444" BorderBrush="#44FF4444"
                       BorderThickness="1" CornerRadius="6" Padding="10,8"
                       Margin="0,8,0,0"

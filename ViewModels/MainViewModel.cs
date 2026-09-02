@@ -36,7 +36,7 @@ public class MainViewModel : BaseViewModel
     public bool IsRefundsNav => _activeNav == "refunds";
     public bool IsPaymentNav => _activeNav == "payment";
     public bool IsRealizationCorrectionsNav => _activeNav == "realizationCorrections";
-    public bool ShowCheckTypeCard => IsRefundsNav || IsPaymentNav || IsRealizationCorrectionsNav;
+    public bool ShowCheckTypeCard => IsRefundsNav || IsPaymentNav;
     public bool ShowRefundCheckType => IsRefundsNav;
     public bool ShowSellCheckType => IsPaymentNav;
     public bool ShowCorrectionCheckTypes => IsRealizationCorrectionsNav;
