@@ -22,7 +22,7 @@
       <Setter Property="TextWrapping" Value="Wrap"/>
       <Setter Property="VerticalContentAlignment" Value="Top"/>
       <Setter Property="Cursor" Value="IBeam"/>
-      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+      <Setter Property="FocusVisualStyle" Value="{StaticResource AccentFocusVisual}"/>
     </Style>
     <Style x:Key="SelectableValue" TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
       <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
@@ -134,7 +134,7 @@
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Padding" Value="7,0"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
-      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+      <Setter Property="FocusVisualStyle" Value="{StaticResource AccentFocusVisual}"/>
       <Style.Triggers>
         <Trigger Property="IsSelected" Value="True">
           <Setter Property="Background" Value="{DynamicResource BrushSurface3}"/>
@@ -160,9 +160,8 @@
           <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
         <StackPanel>
-          <TextBlock Text="Исправление чеков" Style="{StaticResource PageTitle}"/>
           <TextBlock Text="{Binding FilePath}" Foreground="{DynamicResource BrushText3}"
-                     FontSize="12" Margin="0,4,16,0" TextTrimming="CharacterEllipsis"
+                     FontSize="12" TextTrimming="CharacterEllipsis"
                      ToolTip="{Binding FilePath}"/>
         </StackPanel>
         <StackPanel Grid.Column="1" VerticalAlignment="Center" MinWidth="180">
@@ -279,7 +278,6 @@
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
           <DataGridTextColumn Header="План" Binding="{Binding PlanStatus}" Width="170" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Пояснение ошибки" Binding="{Binding EditableProblem}" Width="240" IsReadOnly="True"/>
           <DataGridTextColumn Header="Документ" Binding="{Binding DocumentNumber}" Width="125" IsReadOnly="True"/>
           <DataGridTextColumn Header="Тип" Binding="{Binding DocumentType}" Width="130" IsReadOnly="True"/>
           <DataGridTextColumn Header="Дата" Binding="{Binding DocumentDate}" Width="145" IsReadOnly="True"/>
@@ -288,7 +286,6 @@
           <DataGridTextColumn Header="Номер чека" Binding="{Binding OneCCheckNumberText}" Width="110" IsReadOnly="True"/>
           <DataGridTextColumn Header="ФП чека" Binding="{Binding OneCFiscalNumberText}" Width="120" IsReadOnly="True"/>
           <DataGridTextColumn Header="Исходный чек ОФД" Binding="{Binding OriginalReceiptLookupText}" Width="145" IsReadOnly="True"/>
-          <DataGridTextColumn Header="Комментарий 1С" Binding="{Binding OneCCommentText}" Width="220" IsReadOnly="True"/>
         </DataGrid.Columns>
       </DataGrid>
 

@@ -16,6 +16,7 @@ public static partial class ReportImportService
     {
         "yyyy-MM-ddTHH:mm:ss.fff",
         "yyyy-MM-ddTHH:mm:ss",
+        "yyyy-MM-dd",
         "dd.MM.yyyy HH:mm:ss",
         "dd.MM.yyyy",
     };
@@ -248,7 +249,7 @@ public static partial class ReportImportService
         };
     }
 
-    public static List<XmlReportCheck> ReadXmlChecks(string path)
+    public static List<XmlReportCheck> ReadXmlChecks(string path, int startIndex = 0)
     {
         var document = XDocument.Load(path);
         var checks = document.Root?.Name.LocalName == "check"
@@ -256,7 +257,7 @@ public static partial class ReportImportService
             : document.Root?.Elements().Where(e => e.Name.LocalName == "check") ?? Enumerable.Empty<XElement>();
 
         var result = new List<XmlReportCheck>();
-        var index = 0;
+        var index = startIndex;
         foreach (var check in checks)
         {
             var receipt = Child(check, "receipt");
@@ -304,6 +305,7 @@ public static partial class ReportImportService
                 BaseDate = baseDate,
                 Amount = amount,
                 OriginalFiscalSign = originalFiscalSign,
+                SourcePath = path,
             });
         }
 

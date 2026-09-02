@@ -41,7 +41,15 @@ public static class ServiceNoteValidationService
             return string.Empty;
 
         var safeNumber = FileHelper.SafeFilename(documentNumber);
-        return Directory.EnumerateFiles(FileHelper.OutputDir, $"*{safeNumber}*служебка.docx")
+        var searchRoots = new[]
+        {
+            FileHelper.ServiceNotesRoot(),
+            FileHelper.OutputDir,
+        };
+
+        return searchRoots
+            .Where(Directory.Exists)
+            .SelectMany(root => Directory.EnumerateFiles(root, $"*{safeNumber}*служебка.docx", SearchOption.AllDirectories))
             .OrderByDescending(File.GetLastWriteTime)
             .FirstOrDefault() ?? string.Empty;
     }

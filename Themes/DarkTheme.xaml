@@ -53,6 +53,19 @@
   <Color x:Key="ColorGreen"   >#059669</Color>
   <Color x:Key="ColorBorder"  >#D4DEE9</Color>
 
+  <Style x:Key="AccentFocusVisual">
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Rectangle Stroke="{DynamicResource BrushAccent}"
+                     StrokeThickness="1.5"
+                     RadiusX="3" RadiusY="3"
+                     SnapsToDevicePixels="True"/>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- ── SCROLLBAR ── -->
   <Style x:Key="ScrollBarThumb" TargetType="Thumb">
     <Setter Property="Background" Value="#C7D2E1"/>
@@ -979,7 +992,7 @@
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="Padding" Value="10,0"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
-    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="FocusVisualStyle" Value="{StaticResource AccentFocusVisual}"/>
     <Style.Triggers>
       <Trigger Property="IsSelected" Value="True">
         <Setter Property="Background" Value="#26155EEF"/>

@@ -30,15 +30,19 @@
 
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <Button x:Name="BackButton" Content="←" ToolTip="Назад"
+                  AutomationProperties.Name="Назад"
                   Style="{StaticResource BtnSecondary}" Width="40" Height="40"
                   Padding="0" Click="BackButton_Click"/>
           <Button x:Name="ForwardButton" Content="→" ToolTip="Вперёд"
+                  AutomationProperties.Name="Вперёд"
                   Style="{StaticResource BtnSecondary}" Width="40" Height="40"
                   Padding="0" Margin="6,0,0,0" Click="ForwardButton_Click"/>
           <Button Content="↻" ToolTip="Обновить"
+                  AutomationProperties.Name="Обновить"
                   Style="{StaticResource BtnSecondary}" Width="40" Height="40"
                   Padding="0" Margin="6,0,0,0" Click="ReloadButton_Click"/>
           <Button Content="⌂" ToolTip="Главная страница кабинета"
+                  AutomationProperties.Name="Главная страница кабинета"
                   Style="{StaticResource BtnSecondary}" Width="40" Height="40"
                   Padding="0" Margin="6,0,0,0" Click="HomeButton_Click"/>
         </StackPanel>

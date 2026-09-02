@@ -111,11 +111,27 @@ public sealed class ReportsViewModel : BaseViewModel
 
     public bool HasMatchingWarning => !string.IsNullOrWhiteSpace(MatchingWarning);
 
+    private bool _showExtraColumns;
+    public bool ShowExtraColumns
+    {
+        get => _showExtraColumns;
+        set => Set(ref _showExtraColumns, value);
+    }
+
     public string AtolFileName => FileNameOrPlaceholder(AtolReportPath, "CSV АТОЛ не выбран");
     public string OfdFileName => OfdArchiveFileCount > 1
         ? $"Архив ОФД · {OfdArchiveFileCount} файлов"
         : FileNameOrPlaceholder(OfdReportPath, "Отчёт Такскома не выбран");
-    public string XmlFileName => FileNameOrPlaceholder(XmlPath, "XML не выбран");
+    public string XmlFileName
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(XmlPath)) return "XML не выбран";
+            var files = SplitXmlPaths(XmlPath);
+            if (files.Count == 1) return Path.GetFileName(files[0]);
+            return $"{files.Count} XML: {string.Join(", ", files.Select(Path.GetFileName))}";
+        }
+    }
     public string LocalFileName => FileNameOrPlaceholder(LocalHistoryPath, "Локальный журнал не выбран");
 
     public int AtolCorrectionCount => AtolChecks.Count(x =>
@@ -627,21 +643,39 @@ public sealed class ReportsViewModel : BaseViewModel
             select(options[index]);
     }
 
-    public void LoadXml(string path)
+    public void LoadXml(string path) => LoadXml(new[] { path });
+
+    public void LoadXml(IReadOnlyList<string> paths)
     {
-        _xmlChecks = ReportImportService.ReadXmlChecks(path);
-        XmlPath = path;
+        var files = paths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => path.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (files.Count == 0)
+            throw new FileNotFoundException("XML-файл не выбран.");
+
+        var checks = new List<XmlReportCheck>();
+        foreach (var path in files)
+            checks.AddRange(ReportImportService.ReadXmlChecks(path, checks.Count));
+
+        _xmlChecks = checks;
+        XmlPath = string.Join(";", files);
         OnPropertyChanged(nameof(XmlFileName));
         OnPropertyChanged(nameof(CanBuildMatches));
         SelectedTabIndex = 3;
-        MatchingStatus = $"XML: {_xmlChecks.Count} чеков";
+        MatchingStatus = files.Count == 1
+            ? $"XML: {_xmlChecks.Count} чеков"
+            : $"XML: {_xmlChecks.Count} чеков из {files.Count} файлов";
         BuildMatches(false);
         CommandManager.InvalidateRequerySuggested();
     }
 
     public void BuildMatches(bool showErrors)
     {
-        MatchingWarning = ReportReconciliationService.GetAtolCoverageWarning(_xmlChecks, AtolChecks) ?? string.Empty;
+        MatchingWarning = JoinWarnings(
+            ReportReconciliationService.GetPairXmlWarning(_xmlChecks),
+            ReportReconciliationService.GetAtolCoverageWarning(_xmlChecks, AtolChecks));
 
         if (!CanBuildMatches)
         {
@@ -664,6 +698,16 @@ public sealed class ReportsViewModel : BaseViewModel
                     ? " · часть строк из Такском"
                     : string.Empty;
             MatchingStatus = $"Готово: {ReadyCount} · требуют внимания: {ErrorCount} · проверено ОФД: {OfdVerifiedCount}{sourceHint}";
+            var hiddenRetries = Math.Max(0, _xmlChecks.Count - ExportRows.Count);
+            if (hiddenRetries > 0)
+            {
+                MatchingStatus += $" · скрыто повторных XML: {hiddenRetries}";
+                var retryHint =
+                    $"Скрыто {hiddenRetries} повторных XML: для каждой реализации остаётся пробитый чек, непробитые попытки не показываются.";
+                MatchingWarning = string.IsNullOrWhiteSpace(MatchingWarning)
+                    ? retryHint
+                    : MatchingWarning + " " + retryHint;
+            }
             SelectedTabIndex = 3;
             RefreshExportCounters();
         }
@@ -973,11 +1017,14 @@ public sealed class ReportsViewModel : BaseViewModel
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Выберите XML, загруженный в АТОЛ Online",
+            Title = "Выберите XML. Для пары исправления отметьте оба файла: возврат и коррекцию",
             Filter = "XML|*.xml|Все файлы|*.*",
+            Multiselect = true,
+            InitialDirectory = FileHelper.GetPendingXmlDirectory(),
         };
+        Directory.CreateDirectory(FileHelper.GetPendingXmlDirectory());
         if (dialog.ShowDialog() != true) return;
-        TryLoad(() => LoadXml(dialog.FileName), "Не удалось загрузить XML");
+        TryLoad(() => LoadXml(dialog.FileNames), "Не удалось загрузить XML");
     }
 
     private void ExportOneCCsv()
@@ -1067,6 +1114,17 @@ public sealed class ReportsViewModel : BaseViewModel
 
         MatchingStatus =
             $"1С: обновлено {result.Updated}, пропущено {result.Skipped}, ошибок {result.Failed}";
+        var archived = FileHelper.ArchiveProcessedXml(
+            _xmlChecks, ready, result.ProcessedNumbers);
+        if (archived > 0)
+        {
+            MatchingStatus += $" · XML в архиве: {archived}";
+            var remaining = SplitXmlPaths(XmlPath)
+                .Where(File.Exists)
+                .ToList();
+            XmlPath = remaining.Count > 0 ? string.Join(";", remaining) : string.Empty;
+            OnPropertyChanged(nameof(XmlFileName));
+        }
         var msg =
             $"Обновлено документов: {result.Updated}\n" +
             $"Пропущено: {result.Skipped}\n" +
@@ -1080,6 +1138,8 @@ public sealed class ReportsViewModel : BaseViewModel
             ExportPath = result.CsvBackupPath;
             msg += $"\n\nCSV-резерв:\n{result.CsvBackupPath}";
         }
+        if (archived > 0)
+            msg += $"\n\nОтработанные XML перенесены в xml_в_1с: {archived} файл(ов).";
 
         MessageBox.Show(msg, "Запись в 1С завершена", MessageBoxButton.OK,
             result.Failed > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
@@ -1119,4 +1179,10 @@ public sealed class ReportsViewModel : BaseViewModel
 
     private static string FileNameOrPlaceholder(string path, string placeholder) =>
         string.IsNullOrWhiteSpace(path) ? placeholder : Path.GetFileName(path);
+
+    private static List<string> SplitXmlPaths(string path) =>
+        path.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    private static string JoinWarnings(params string?[] parts) =>
+        string.Join(" ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));
 }

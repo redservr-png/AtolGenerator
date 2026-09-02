@@ -22,6 +22,8 @@ public class OrderEntry
     public ServiceProvider? AgentInfo       { get; set; }
     public string          CorrectionDate   { get; set; } = string.Empty;  // DD.MM.YYYY
     public string          CorrectionNumber { get; set; } = string.Empty;
+    [JsonIgnore]
+    public string          DocumentUuid     { get; set; } = string.Empty;
     public bool            IsService        { get; set; }
     public bool            IsOwnService     { get; set; }  // собственная услуга организации, агент не требуется
     public string          ServiceType      { get; set; } = string.Empty;  // "доставка" / "сборка" из текста заказа

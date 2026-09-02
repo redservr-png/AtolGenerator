@@ -18,12 +18,12 @@ public class MainViewModel : BaseViewModel
     private string _activeNav = "refunds";
     private string _navBeforeCorrectionWork = "obsidian";
     private bool _startupInitialized;
-    private Views.CorrectionWorkWindow? _correctionWorkWindow;
     private Views.OneCRealizationsWindow? _oneCRealizationsWindow;
+    private Views.ReceiptPreviewWindow? _receiptPreviewWindow;
+    private bool _showManualEntryOnCorrections;
     private string _oneCCityFilter = "Все";
-    private string _oneCHasCheckFilter = "Все";
+    private RealizationCheckKind _oneCActiveKind = RealizationCheckKind.NoCheck;
     private string _oneCSearchText = string.Empty;
-    private bool _oneCRealizationsCompact = true;
 
     public ReportsViewModel Reports { get; } = new();
     public ObsidianCasesViewModel ObsidianCases { get; }
@@ -31,27 +31,43 @@ public class MainViewModel : BaseViewModel
     public bool ShowMainWorkspace => _activeWorkspace == "main";
     public bool ShowReportsWorkspace => _activeWorkspace == "reports";
     public bool ShowObsidianWorkspace => _activeWorkspace == "obsidian";
+    public bool ShowCorrectionWorkWorkspace => _activeWorkspace == "correctionWork";
     public string ActiveNav => _activeNav;
-    public string HeaderTitle => HeaderNav switch
+    public bool IsRefundsNav => _activeNav == "refunds";
+    public bool IsPaymentNav => _activeNav == "payment";
+    public bool IsRealizationCorrectionsNav => _activeNav == "realizationCorrections";
+    public bool ShowCheckTypeCard => IsRefundsNav || IsPaymentNav || IsRealizationCorrectionsNav;
+    public bool ShowRefundCheckType => IsRefundsNav;
+    public bool ShowSellCheckType => IsPaymentNav;
+    public bool ShowCorrectionCheckTypes => IsRealizationCorrectionsNav;
+    public bool ShowBulkInputCard => IsRefundsNav || IsPaymentNav;
+    public bool ShowOneCLoadCard => IsRealizationCorrectionsNav;
+    public bool ShowLeftInputCard => ShowBulkInputCard || ShowOneCLoadCard;
+    public bool ShowManualEntryToggle => IsRealizationCorrectionsNav;
+    public bool ShowManualOrderSection =>
+        IsRefundsNav || IsPaymentNav || (IsRealizationCorrectionsNav && _showManualEntryOnCorrections);
+    public string ManualEntryToggleLabel =>
+        _showManualEntryOnCorrections ? "Скрыть ручной ввод" : "Ввести реализацию вручную";
+    public string HeaderTitle => _activeNav switch
     {
         "reports" => "Отчёты",
         "obsidian" => "Исправление чеков",
+        "correctionWork" => "Пробитие исправлений",
         "refunds" => "Возвраты по заказам",
         "realizationCorrections" => "Коррекции реализаций 1С",
         "payment" => "Оплаты / приход",
         _ => "Рабочее место кассира",
     };
-    public string HeaderSubtitle => HeaderNav switch
+    public string HeaderSubtitle => _activeNav switch
     {
         "reports" => "Журнал АТОЛ, ОФД и сверка с XML",
         "obsidian" => "Очередь расхождений 1С и фискальных данных",
+        "correctionWork" => "Сформировать и пробить исправительные чеки",
         "refunds" => "Обычный возврат прихода без тега 1192",
         "realizationCorrections" => "Исправительные XML по реализациям 1С",
         "payment" => "Редкий приход через АТОЛ API",
         _ => "Чеки, исправления и сверка фискальных данных",
     };
-    private string HeaderNav =>
-        _activeNav == "correctionWork" ? _navBeforeCorrectionWork : _activeNav;
 
     // ── Tab ──────────────────────────────────────────────────────────────────
     private string _tab = "payment";
@@ -67,6 +83,7 @@ public class MainViewModel : BaseViewModel
             OnPropertyChanged(nameof(ShowItemsSection));
             OnPropertyChanged(nameof(ShowBuyRefundOption));
             OnPropertyChanged(nameof(OneCPanelVisible));
+            OnPropertyChanged(nameof(ShowLoadedRealizationsInMain));
             // Reset to sell on tab switch
             if (CheckType is "buy_refund" && value == "payment")
                 CheckType = "sell";
@@ -129,7 +146,7 @@ public class MainViewModel : BaseViewModel
 
     /// <summary>Показывать ли подсказку про невозможность пробития через API.</summary>
     public bool ShowCorrectionPunchHint => IsCorrection || HasXmlOnlyCorrection;
-    public bool ShowPaymentType   => IsPaymentTab;  // на вкладке реализации тип оплаты всегда 14 (аванс)
+    public bool ShowPaymentType   => IsPaymentNav;
     public bool ShowBuyRefundOption => IsRealizationTab;
     public bool ShowItemsSection  => IsRealizationTab && !IsCorrection;
 
@@ -257,22 +274,30 @@ public class MainViewModel : BaseViewModel
     // ── 1C staging table ─────────────────────────────────────────────────────
     public ObservableCollection<OneCRealizationViewModel> LoadedRealizations { get; } = new();
     public ObservableCollection<string> OneCCityOptions { get; } = new() { "Все" };
-    public ObservableCollection<string> OneCHasCheckOptions { get; } = new() { "Все", "С чеком", "Без чека" };
     public ICollectionView LoadedRealizationsView { get; }
     private bool _showLoadedRealizations;
     public bool ShowLoadedRealizations
     {
         get => _showLoadedRealizations;
-        set => Set(ref _showLoadedRealizations, value);
+        set
+        {
+            if (!Set(ref _showLoadedRealizations, value)) return;
+            OnPropertyChanged(nameof(ShowLoadedRealizationsInMain));
+        }
     }
+    public bool ShowLoadedRealizationsInMain => ShowLoadedRealizations && IsRealizationTab;
     // Все выбранные строки из запроса 1С.
-    public int SelectedOneCCount        => LoadedRealizations.Count(r => r.IsSelected);
-    // Только без чека — иногда вручную пробиваются как обычный "Приход" через API.
-    public int SelectedNoCheckCount     => LoadedRealizations.Count(r => r.IsSelected && !r.HasCheck);
-    // С пробитым не в день реализации чеком — исправительный комплект XML.
-    public int SelectedHasCheckCount    => LoadedRealizations.Count(r => r.IsSelected && r.HasCheck);
-    public int TotalOneCLoaded       => LoadedRealizations.Count;
-    public int VisibleOneCCount      => LoadedRealizationsView.Cast<object>().Count();
+    public int SelectedOneCCount => LoadedRealizations.Count(r => r.IsSelected && r.CheckKind == OneCActiveKind);
+    public int SelectedNoCheckCount => LoadedRealizations.Count(r => r.IsSelected && r.CheckKind == RealizationCheckKind.NoCheck);
+    public int SelectedHasCheckCount => LoadedRealizations.Count(r => r.IsSelected && r.CheckKind == RealizationCheckKind.WrongDay);
+    public int TotalOneCLoaded => LoadedRealizations.Count;
+    public int VisibleOneCCount => LoadedRealizationsView.Cast<object>().Count();
+    public int NoCheckCount => LoadedRealizations.Count(r => r.CheckKind == RealizationCheckKind.NoCheck);
+    public int WrongDayCount => LoadedRealizations.Count(r => r.CheckKind == RealizationCheckKind.WrongDay);
+    public int IncompleteCount => LoadedRealizations.Count(r => r.CheckKind == RealizationCheckKind.Incomplete);
+    public string TabNoCheckLabel => $"Нет чека — коррекция ({NoCheckCount})";
+    public string TabWrongDayLabel => $"Другой день — пара ({WrongDayCount})";
+    public string TabIncompleteLabel => $"ФП без даты ({IncompleteCount})";
     public string OneCRealizationsSummary
     {
         get
@@ -285,14 +310,7 @@ public class MainViewModel : BaseViewModel
     }
     public bool OneCFiltersActive =>
         !string.Equals(OneCCityFilter, "Все", StringComparison.OrdinalIgnoreCase) ||
-        !string.Equals(OneCHasCheckFilter, "Все", StringComparison.OrdinalIgnoreCase) ||
         !string.IsNullOrWhiteSpace(OneCSearchText);
-    public bool OneCRealizationsCompact
-    {
-        get => _oneCRealizationsCompact;
-        private set => Set(ref _oneCRealizationsCompact, value);
-    }
-    public double OneCRealizationsGridMaxHeight => OneCRealizationsCompact ? 380 : 10000;
 
     public string OneCCityFilter
     {
@@ -304,15 +322,28 @@ public class MainViewModel : BaseViewModel
         }
     }
 
-    public string OneCHasCheckFilter
+    public RealizationCheckKind OneCActiveKind => _oneCActiveKind;
+
+    public bool IsTabNoCheck
     {
-        get => _oneCHasCheckFilter;
-        set
-        {
-            if (!Set(ref _oneCHasCheckFilter, value ?? "Все")) return;
-            RefreshOneCRealizationsView();
-        }
+        get => _oneCActiveKind == RealizationCheckKind.NoCheck;
+        set { if (value) SetOneCActiveKind(RealizationCheckKind.NoCheck); }
     }
+
+    public bool IsTabWrongDay
+    {
+        get => _oneCActiveKind == RealizationCheckKind.WrongDay;
+        set { if (value) SetOneCActiveKind(RealizationCheckKind.WrongDay); }
+    }
+
+    public bool IsTabIncomplete
+    {
+        get => _oneCActiveKind == RealizationCheckKind.Incomplete;
+        set { if (value) SetOneCActiveKind(RealizationCheckKind.Incomplete); }
+    }
+
+    public bool CanAddSelectedRealizations =>
+        SelectedOneCCount > 0 && _oneCActiveKind != RealizationCheckKind.Incomplete;
 
     public string OneCSearchText
     {
@@ -332,7 +363,15 @@ public class MainViewModel : BaseViewModel
     public ObservableCollection<ResultDisplayEntry>  AllResultEntries { get; } = new();
 
     private bool _showResults;
-    public bool ShowResults { get => _showResults; set => Set(ref _showResults, value); }
+    public bool ShowResults
+    {
+        get => _showResults;
+        set
+        {
+            if (!Set(ref _showResults, value)) return;
+            if (!value) CloseReceiptPreviewWindow();
+        }
+    }
 
     // ── Выбранный элемент + предпросмотр ─────────────────────────────────────
     private ResultDisplayEntry? _selectedEntry;
@@ -366,8 +405,13 @@ public class MainViewModel : BaseViewModel
     public string SelectedReceiptPreview
     {
         get => _selectedReceiptPreview;
-        set => Set(ref _selectedReceiptPreview, value);
+        set
+        {
+            Set(ref _selectedReceiptPreview, value);
+            OnPropertyChanged(nameof(HasReceiptPreview));
+        }
     }
+    public bool HasReceiptPreview => !string.IsNullOrWhiteSpace(_selectedReceiptPreview);
 
     private string _statusText = "Готов к работе";
     public string StatusText { get => _statusText; set => Set(ref _statusText, value); }
@@ -403,7 +447,7 @@ public class MainViewModel : BaseViewModel
         get => _showOneCPanel;
         set { Set(ref _showOneCPanel, value); OnPropertyChanged(nameof(OneCPanelVisible)); }
     }
-    public bool OneCPanelVisible => ShowOneCPanel && IsRealizationTab;
+    public bool OneCPanelVisible => IsRealizationCorrectionsNav;
 
     public bool IsOneCAvailable => OneCService.IsAvailable();
 
@@ -460,6 +504,8 @@ public class MainViewModel : BaseViewModel
     public ICommand SelectAllOneCCommand       { get; }
     public ICommand ClearOneCFiltersCommand    { get; }
     public ICommand OpenOneCRealizationsWindowCommand { get; }
+    public ICommand OpenReceiptPreviewCommand { get; }
+    public ICommand ToggleManualEntryCommand { get; }
     public ICommand DeselectAllOneCCommand     { get; }
     public ICommand AddSelectedToOrdersCommand { get; }
     public ICommand ToggleAtolPanelCommand     { get; }
@@ -486,7 +532,7 @@ public class MainViewModel : BaseViewModel
             (Reports.OfdReportPath, Reports.OfdChecks.ToList());
         ObsidianCases.OnlineOfdRowsImported = Reports.AddOnlineOfdReceipts;
         ObsidianCases.SendToWorkRequested += AddObsidianCasesToWork;
-        CorrectionWork.BackRequested += CloseCorrectionWorkWindow;
+        CorrectionWork.BackRequested += LeaveCorrectionWork;
         CorrectionWork.EditRequested += EditCorrectionWorkItem;
         CorrectionWork.Generated += results =>
         {
@@ -511,7 +557,7 @@ public class MainViewModel : BaseViewModel
         DeleteOrderCommand = new RelayCommand(o => DeleteOrder(o as OrderEntry));
         ClearOrdersCommand = new RelayCommand(_ => ClearOrders());
         GenerateCommand    = new AsyncRelayCommand(GenerateChecksAsync);
-        OpenFolderCommand  = new RelayCommand(_ => FileHelper.OpenFolder(FileHelper.OutputDir));
+        OpenFolderCommand  = new RelayCommand(_ => FileHelper.OpenFolder(FileHelper.GetPendingXmlDirectory()));
         AddItemCommand     = new RelayCommand(_ => CurrentItems.Add(new OrderItemViewModel()));
         DeleteItemCommand  = new RelayCommand(o => { if (o is OrderItemViewModel vm) CurrentItems.Remove(vm); });
         SwitchTabCommand       = new RelayCommand(t => { if (t is string s) Tab = s; });
@@ -528,6 +574,13 @@ public class MainViewModel : BaseViewModel
         DeselectAllOneCCommand     = new RelayCommand(_ => SetAllOneCSelected(false));
         ClearOneCFiltersCommand    = new RelayCommand(_ => ClearOneCFilters());
         OpenOneCRealizationsWindowCommand = new RelayCommand(_ => OpenOneCRealizationsWindow(), _ => ShowLoadedRealizations);
+        OpenReceiptPreviewCommand = new RelayCommand(_ => OpenReceiptPreviewWindow(), _ => ShowResults);
+        ToggleManualEntryCommand = new RelayCommand(_ =>
+        {
+            _showManualEntryOnCorrections = !_showManualEntryOnCorrections;
+            OnPropertyChanged(nameof(ShowManualOrderSection));
+            OnPropertyChanged(nameof(ManualEntryToggleLabel));
+        });
         AddSelectedToOrdersCommand = new AsyncRelayCommand(AddSelectedToOrdersAsync);
         ToggleAtolPanelCommand     = new RelayCommand(_ => ShowAtolPanel = !ShowAtolPanel);
         SaveAtolSettingsCommand    = new RelayCommand(_ => SaveAtolSettings());
@@ -623,6 +676,7 @@ public class MainViewModel : BaseViewModel
             SetNav("reports");
             SetWorkspace("reports");
             ShowOfdToolsPanel = false;
+            CloseOneCRealizationsWindow();
             StatusText = "Работа с отчётами";
             return;
         }
@@ -632,6 +686,7 @@ public class MainViewModel : BaseViewModel
             SetNav("obsidian");
             SetWorkspace("obsidian");
             ShowOfdToolsPanel = false;
+            CloseOneCRealizationsWindow();
             ObsidianCases.Activate();
             StatusText = "Исправление чеков";
             return;
@@ -639,10 +694,7 @@ public class MainViewModel : BaseViewModel
 
         if (target == "correctionWork")
         {
-            if (_activeNav != "correctionWork")
-                _navBeforeCorrectionWork = string.IsNullOrWhiteSpace(_activeNav) ? "obsidian" : _activeNav;
-            SetNav("correctionWork");
-            OpenCorrectionWorkWindow();
+            OpenCorrectionWork();
             return;
         }
 
@@ -657,6 +709,7 @@ public class MainViewModel : BaseViewModel
                 CheckType = "sell_refund";
                 ShowOneCPanel = false;
                 ShowOfdToolsPanel = false;
+                CloseOneCRealizationsWindow();
                 StatusText = "Возвраты по заказам";
                 break;
 
@@ -680,6 +733,7 @@ public class MainViewModel : BaseViewModel
                 CheckType = "sell";
                 ShowOneCPanel = false;
                 ShowOfdToolsPanel = false;
+                CloseOneCRealizationsWindow();
                 StatusText = "Оплаты";
                 break;
 
@@ -705,53 +759,56 @@ public class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(ShowMainWorkspace));
         OnPropertyChanged(nameof(ShowReportsWorkspace));
         OnPropertyChanged(nameof(ShowObsidianWorkspace));
+        OnPropertyChanged(nameof(ShowCorrectionWorkWorkspace));
         OnPropertyChanged(nameof(HeaderTitle));
         OnPropertyChanged(nameof(HeaderSubtitle));
     }
 
     private void SetNav(string nav)
     {
-        if (string.Equals(_activeNav, nav, StringComparison.Ordinal)) return;
+        if (string.Equals(_activeNav, nav, StringComparison.Ordinal))
+        {
+            NotifyModeUi();
+            return;
+        }
         _activeNav = nav;
         OnPropertyChanged(nameof(ActiveNav));
         OnPropertyChanged(nameof(HeaderTitle));
         OnPropertyChanged(nameof(HeaderSubtitle));
+        NotifyModeUi();
     }
 
-    private void OpenCorrectionWorkWindow()
+    private void NotifyModeUi()
+    {
+        OnPropertyChanged(nameof(IsRefundsNav));
+        OnPropertyChanged(nameof(IsPaymentNav));
+        OnPropertyChanged(nameof(IsRealizationCorrectionsNav));
+        OnPropertyChanged(nameof(ShowCheckTypeCard));
+        OnPropertyChanged(nameof(ShowRefundCheckType));
+        OnPropertyChanged(nameof(ShowSellCheckType));
+        OnPropertyChanged(nameof(ShowCorrectionCheckTypes));
+        OnPropertyChanged(nameof(ShowBulkInputCard));
+        OnPropertyChanged(nameof(ShowOneCLoadCard));
+        OnPropertyChanged(nameof(ShowLeftInputCard));
+        OnPropertyChanged(nameof(ShowManualEntryToggle));
+        OnPropertyChanged(nameof(ShowManualOrderSection));
+        OnPropertyChanged(nameof(ShowPaymentType));
+        OnPropertyChanged(nameof(OneCPanelVisible));
+        OnPropertyChanged(nameof(ShowLoadedRealizationsInMain));
+    }
+
+    private void OpenCorrectionWork()
     {
         CorrectionWork.SyncCashiers(AvailableCashiers, SelectedCashier);
-        if (_correctionWorkWindow is not null)
-        {
-            if (_correctionWorkWindow.WindowState == WindowState.Minimized)
-                _correctionWorkWindow.WindowState = WindowState.Normal;
-            _correctionWorkWindow.Activate();
-            return;
-        }
-
-        var owner = Application.Current?.MainWindow;
-        var window = new Views.CorrectionWorkWindow { DataContext = CorrectionWork };
-        if (owner is not null && !ReferenceEquals(owner, window))
-            window.Owner = owner;
-        window.Closed += (_, _) =>
-        {
-            if (_correctionWorkWindow is null) return;
-            _correctionWorkWindow = null;
-            RestoreNavAfterCorrectionWork();
-        };
-        _correctionWorkWindow = window;
-        window.Show();
-        StatusText = "Открыто отдельное окно пробития исправлений";
+        if (_activeNav != "correctionWork")
+            _navBeforeCorrectionWork = string.IsNullOrWhiteSpace(_activeNav) ? "obsidian" : _activeNav;
+        SetNav("correctionWork");
+        SetWorkspace("correctionWork");
+        CloseOneCRealizationsWindow();
+        StatusText = "Пробитие исправлений";
     }
 
-    private void CloseCorrectionWorkWindow()
-    {
-        var window = _correctionWorkWindow;
-        _correctionWorkWindow = null;
-        window?.Close();
-        RestoreNavAfterCorrectionWork();
-        Application.Current?.MainWindow?.Activate();
-    }
+    private void LeaveCorrectionWork() => RestoreNavAfterCorrectionWork();
 
     private void RestoreNavAfterCorrectionWork()
     {
@@ -1348,6 +1405,19 @@ public class MainViewModel : BaseViewModel
         if (order is null) return;
         try
         {
+            if (order.DocumentType == SourceDocumentType.Realization)
+            {
+                try
+                {
+                    OneCService.RefreshRealizationLineItems(BuildOneCSettings(), order);
+                }
+                catch (Exception ex)
+                {
+                    ShowToast($"Не удалось перечитать позиции из 1С: {ex.Message}", true);
+                    return;
+                }
+            }
+
             // Работаем с копией — если пользователь отменит, оригинал не пострадает.
             var copy = CloneOrderEntry(order);
             var dlg = new Views.CorrectionEditorWindow(copy)
@@ -1375,6 +1445,19 @@ public class MainViewModel : BaseViewModel
     {
         try
         {
+            if (item.Entry.DocumentType == SourceDocumentType.Realization)
+            {
+                try
+                {
+                    OneCService.RefreshRealizationLineItems(BuildOneCSettings(), item.Entry);
+                }
+                catch (Exception ex)
+                {
+                    ShowToast($"Не удалось перечитать позиции из 1С: {ex.Message}", true);
+                    return;
+                }
+            }
+
             var copy = CloneOrderEntry(item.Entry);
             var dialog = new Views.CorrectionEditorWindow(copy)
             {
@@ -1392,10 +1475,7 @@ public class MainViewModel : BaseViewModel
         }
     }
 
-    private Window? ResolveDialogOwner() =>
-        _correctionWorkWindow is { IsVisible: true }
-            ? _correctionWorkWindow
-            : System.Windows.Application.Current?.MainWindow;
+    private Window? ResolveDialogOwner() => Application.Current?.MainWindow;
 
     private void ShowEditorError(Exception ex)
     {
@@ -1434,6 +1514,7 @@ public class MainViewModel : BaseViewModel
         AgentInfo            = s.AgentInfo,
         CorrectionDate       = s.CorrectionDate,
         CorrectionNumber     = s.CorrectionNumber,
+        DocumentUuid         = s.DocumentUuid,
         IsService            = s.IsService,
         IsOwnService         = s.IsOwnService,
         ServiceType          = s.ServiceType,
@@ -1485,6 +1566,7 @@ public class MainViewModel : BaseViewModel
         to.AgentInfo            = from.AgentInfo;
         to.CorrectionDate       = from.CorrectionDate;
         to.CorrectionNumber     = from.CorrectionNumber;
+        to.DocumentUuid         = from.DocumentUuid;
         to.IsService            = from.IsService;
         to.IsOwnService         = from.IsOwnService;
         to.ServiceType          = from.ServiceType;
@@ -1574,11 +1656,9 @@ public class MainViewModel : BaseViewModel
         return await Task.Run(() =>
         {
             var errors = new List<string>();
-            // Агентским реализациям номенклатура нужна для определения услуги/НДС.
-            // Реализациям с уже пробитым чеком она нужна для обратного обычного чека:
-            // в ФФД 1.05 sell_refund обязан содержать табличную часть.
+            // Табличная часть реализации нужна для XML/API у всех строк, кроме «ФП без даты».
             var enrichmentRows = rows
-                .Where(row => row.Source.IsService || row.Source.HasCheck)
+                .Where(row => row.CheckKind != RealizationCheckKind.Incomplete)
                 .ToList();
             List<OneCRealizationEnrichmentError> enrichmentErrors;
             try
@@ -1661,6 +1741,7 @@ public class MainViewModel : BaseViewModel
             AgentInfo        = r.Source.AgentInfo,
             CorrectionDate   = r.DocDate,
             CorrectionNumber = r.DocNumber,
+            DocumentUuid     = r.Source.DocumentUuid,
             IsService        = r.IsService,
             IsOwnService     = r.Source.IsOwnService,
             ServiceType      = r.Source.ServiceType,
@@ -1684,6 +1765,12 @@ public class MainViewModel : BaseViewModel
             entry.OriginalCheckAmount  = r.Amount;
             entry.CorrectionScenario   = CorrectionScenario.WrongDate;
             entry.Kind                 = OrderKind.RefundCorrectionPair;
+            entry.OriginalItems        = entry.Items.Select(i => new OrderItem
+            {
+                Name     = i.Name,
+                Quantity = i.Quantity,
+                Sum      = i.Sum,
+            }).ToList();
             entry.Notes                = string.IsNullOrWhiteSpace(r.OrderNumber)
                 ? "Реализация из 1С пробита не в день реализации — исправительный комплект"
                 : $"Реализация из 1С пробита не в день реализации — заказ покупателя {r.OrderNumber}";
@@ -1728,7 +1815,7 @@ public class MainViewModel : BaseViewModel
         }
 
         var rows = LoadedRealizations
-            .Where(r => r.IsSelected && !r.HasCheck)
+            .Where(r => r.IsSelected && r.CheckKind == RealizationCheckKind.NoCheck)
             .ToList();
 
         if (rows.Count == 0)
@@ -2022,9 +2109,10 @@ public class MainViewModel : BaseViewModel
         LoadedRealizations.Clear();
         foreach (var r in realizations)
         {
-            var vm = new OneCRealizationViewModel(r);
-            // Все строки выбираются по умолчанию.
-            // Реализации из 1С без фискального чека формируются как XML чеков коррекции.
+            var vm = new OneCRealizationViewModel(r)
+            {
+                IsSelected = r.CheckKind != RealizationCheckKind.Incomplete,
+            };
             vm.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName is nameof(OneCRealizationViewModel.IsSelected))
@@ -2041,11 +2129,16 @@ public class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(OneCRealizationsSummary));
         CommandManager.InvalidateRequerySuggested();
 
-        var withCheck    = realizations.Count(r => r.HasCheck);
-        var withoutCheck = realizations.Count - withCheck;
-        OneCStatus = $"Загружено {realizations.Count}: без чека — {withoutCheck}, уже пробиты — {withCheck}";
+        var noCheck = realizations.Count(r => r.CheckKind == RealizationCheckKind.NoCheck);
+        var wrongDay = realizations.Count(r => r.CheckKind == RealizationCheckKind.WrongDay);
+        var incomplete = realizations.Count(r => r.CheckKind == RealizationCheckKind.Incomplete);
+        OneCStatus = realizations.Count == 0
+            ? $"Загружено 0: нет чека 0, другой день 0, без даты 0 — см. {OneCService.LogPath}"
+            : $"Загружено {realizations.Count}: нет чека {noCheck}, другой день {wrongDay}, без даты {incomplete}";
         ShowToast(OneCStatus, false);
         StatusText = "Готов к работе";
+        if (LoadedRealizations.Count > 0)
+            OpenOneCRealizationsWindow();
     }
 
     private void SetAllOneCSelected(bool value)
@@ -2053,12 +2146,6 @@ public class MainViewModel : BaseViewModel
         foreach (OneCRealizationViewModel r in LoadedRealizationsView)
             r.IsSelected = value;
         NotifyOneCSelectionChanged();
-    }
-
-    public void SetOneCRealizationsCompact(bool compact)
-    {
-        OneCRealizationsCompact = compact;
-        OnPropertyChanged(nameof(OneCRealizationsGridMaxHeight));
     }
 
     private void OpenOneCRealizationsWindow()
@@ -2081,13 +2168,78 @@ public class MainViewModel : BaseViewModel
         StatusText = "Открыто окно реализаций из 1С";
     }
 
+    private void CloseOneCRealizationsWindow()
+    {
+        _oneCRealizationsWindow?.Close();
+        _oneCRealizationsWindow = null;
+    }
+
+    public void OpenReceiptPreviewWindow()
+    {
+        if (_receiptPreviewWindow is not null)
+        {
+            if (_receiptPreviewWindow.WindowState == WindowState.Minimized)
+                _receiptPreviewWindow.WindowState = WindowState.Normal;
+            _receiptPreviewWindow.Activate();
+            return;
+        }
+
+        var owner = Application.Current?.MainWindow;
+        var window = new Views.ReceiptPreviewWindow { DataContext = this };
+        if (owner is not null && !ReferenceEquals(owner, window))
+            window.Owner = owner;
+        window.Closed += (_, _) => _receiptPreviewWindow = null;
+        _receiptPreviewWindow = window;
+        PositionReceiptPreview(window, owner);
+        window.Show();
+    }
+
+    private void CloseReceiptPreviewWindow()
+    {
+        _receiptPreviewWindow?.Close();
+        _receiptPreviewWindow = null;
+    }
+
+    private static void PositionReceiptPreview(Window window, Window? owner)
+    {
+        if (owner is null) return;
+
+        var work = SystemParameters.WorkArea;
+        var width = window.Width;
+        var availableHeight = owner.ActualHeight > 80 ? owner.ActualHeight - 48 : window.Height;
+        window.Height = Math.Max(420, Math.Min(window.Height, availableHeight));
+
+        var left = owner.Left + owner.ActualWidth - 16;
+        if (left + width > work.Right - 8)
+            left = Math.Max(work.Left, owner.Left + owner.ActualWidth - width - 24);
+
+        var top = owner.Top + 56;
+        if (top + window.Height > work.Bottom)
+            top = Math.Max(work.Top, work.Bottom - window.Height);
+
+        window.Left = left;
+        window.Top = top;
+    }
+
+    private void SetOneCActiveKind(RealizationCheckKind kind)
+    {
+        if (_oneCActiveKind == kind) return;
+        _oneCActiveKind = kind;
+        OnPropertyChanged(nameof(OneCActiveKind));
+        OnPropertyChanged(nameof(IsTabNoCheck));
+        OnPropertyChanged(nameof(IsTabWrongDay));
+        OnPropertyChanged(nameof(IsTabIncomplete));
+        OnPropertyChanged(nameof(CanAddSelectedRealizations));
+        RefreshOneCRealizationsView();
+        NotifyOneCSelectionChanged();
+        CommandManager.InvalidateRequerySuggested();
+    }
+
     private void ClearOneCFilters()
     {
         _oneCCityFilter = "Все";
-        _oneCHasCheckFilter = "Все";
         _oneCSearchText = string.Empty;
         OnPropertyChanged(nameof(OneCCityFilter));
-        OnPropertyChanged(nameof(OneCHasCheckFilter));
         OnPropertyChanged(nameof(OneCSearchText));
         RefreshOneCRealizationsView();
     }
@@ -2118,20 +2270,25 @@ public class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(SelectedNoCheckCount));
         OnPropertyChanged(nameof(SelectedHasCheckCount));
         OnPropertyChanged(nameof(CanPunchSelectedRealizationsViaAtol));
+        OnPropertyChanged(nameof(CanAddSelectedRealizations));
         OnPropertyChanged(nameof(OneCRealizationsSummary));
+        OnPropertyChanged(nameof(TabNoCheckLabel));
+        OnPropertyChanged(nameof(TabWrongDayLabel));
+        OnPropertyChanged(nameof(TabIncompleteLabel));
+        OnPropertyChanged(nameof(NoCheckCount));
+        OnPropertyChanged(nameof(WrongDayCount));
+        OnPropertyChanged(nameof(IncompleteCount));
     }
 
     private bool FilterOneCRealization(object obj)
     {
         if (obj is not OneCRealizationViewModel row) return false;
 
-        if (!string.Equals(OneCCityFilter, "Все", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(row.City, OneCCityFilter, StringComparison.OrdinalIgnoreCase))
+        if (row.CheckKind != OneCActiveKind)
             return false;
 
-        if (string.Equals(OneCHasCheckFilter, "С чеком", StringComparison.OrdinalIgnoreCase) && !row.HasCheck)
-            return false;
-        if (string.Equals(OneCHasCheckFilter, "Без чека", StringComparison.OrdinalIgnoreCase) && row.HasCheck)
+        if (!string.Equals(OneCCityFilter, "Все", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(row.City, OneCCityFilter, StringComparison.OrdinalIgnoreCase))
             return false;
 
         if (string.IsNullOrWhiteSpace(OneCSearchText)) return true;
@@ -2150,7 +2307,15 @@ public class MainViewModel : BaseViewModel
 
     private async Task AddSelectedToOrdersAsync()
     {
-        var selected = LoadedRealizations.Where(r => r.IsSelected).ToList();
+        if (_oneCActiveKind == RealizationCheckKind.Incomplete)
+        {
+            ShowToast("Строки «ФП без даты» в XML не добавляются. Проставьте дату печати в 1С и загрузите снова.", true);
+            return;
+        }
+
+        var selected = LoadedRealizations
+            .Where(r => r.IsSelected && r.CheckKind == OneCActiveKind)
+            .ToList();
         if (selected.Count == 0)
         {
             ShowToast("Нет выбранных реализаций для добавления", true);
@@ -2174,6 +2339,7 @@ public class MainViewModel : BaseViewModel
         var existing = new HashSet<string>(Orders.Select(o =>
             !string.IsNullOrWhiteSpace(o.CorrectionNumber) ? o.CorrectionNumber : o.OrderNum));
         int addedCorrect  = 0;
+        var settings = BuildOneCSettings();
 
         foreach (var r in selected)
         {
@@ -2181,6 +2347,15 @@ public class MainViewModel : BaseViewModel
             if (existing.Contains(key)) continue;
 
             var entry = BuildCorrectionOrderFromRealization(r);
+            try
+            {
+                OneCService.RefreshRealizationLineItems(settings, entry);
+            }
+            catch (Exception ex)
+            {
+                ShowToast($"Не удалось загрузить позиции {r.DocNumber}: {ex.Message}", true);
+                continue;
+            }
             addedCorrect++;
 
             Orders.Add(entry);
@@ -2205,6 +2380,22 @@ public class MainViewModel : BaseViewModel
         StatusText = "Генерация...";
         Results.Clear();
         ShowResults = false;
+
+        var settings = BuildOneCSettings();
+        try
+        {
+            await Task.Run(() =>
+            {
+                foreach (var order in Orders.Where(o => o.DocumentType == SourceDocumentType.Realization))
+                    OneCService.RefreshRealizationLineItems(settings, order);
+            });
+        }
+        catch (Exception ex)
+        {
+            StatusText = "Ошибка загрузки табличной части из 1С";
+            ShowToast($"Не удалось загрузить позиции реализации: {ex.Message}", true);
+            return;
+        }
 
         var parms = new GenerationParams
         {
@@ -2257,7 +2448,7 @@ public class MainViewModel : BaseViewModel
     {
         CorrectionWork.SyncCashiers(AvailableCashiers, SelectedCashier);
         var (added, updated) = CorrectionWork.AddOrUpdate(entries);
-        OpenCorrectionWorkWindow();
+        OpenCorrectionWork();
         ShowOfdToolsPanel = false;
         StatusText = updated > 0
             ? $"Исправления: добавлено {added}; обновлено {updated}"
@@ -2285,6 +2476,9 @@ public class MainViewModel : BaseViewModel
 
         if (AllResultEntries.Count > 0)
             SelectedEntry = AllResultEntries[0];
+
+        if (ShowResults)
+            OpenReceiptPreviewWindow();
 
         if (CorrectionPunchPlanner.IsRepairBatch(results))
             return;

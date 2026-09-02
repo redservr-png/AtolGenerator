@@ -23,6 +23,7 @@ public class OneCRealizationViewModel : BaseViewModel
     public bool   IsService    => Source.IsService;
     public string City         => Source.City;
     public bool   HasCheck     => Source.HasCheck;
+    public RealizationCheckKind CheckKind => Source.CheckKind;
     public string CheckDate    => Source.CheckDate;
     public string CheckNumber  => Source.CheckNumber;
     public string FiscalNumber => Source.FiscalNumber;

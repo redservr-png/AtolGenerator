@@ -18,6 +18,7 @@ public static class XmlOfdMatcherService
     {
         public int    Index         { get; set; }
         public string BaseNumber    { get; set; } = string.Empty;
+        public string BaseDate      { get; set; } = string.Empty;
         public double Sum           { get; set; }
         public string ExternalId    { get; set; } = string.Empty;
     }
@@ -57,11 +58,14 @@ public static class XmlOfdMatcherService
 
             // sell_correction
             string baseNumber = string.Empty;
+            string baseDate   = string.Empty;
             double sum        = 0;
             if (correction is not null)
             {
                 baseNumber = correction.Element("correction_info")?
                                        .Element("base_number")?.Value ?? string.Empty;
+                baseDate = correction.Element("correction_info")?
+                                     .Element("base_date")?.Value ?? string.Empty;
                 var firstPay = correction.Element("payments")?
                                          .Element("payment")?.Element("sum")?.Value;
                 double.TryParse(firstPay,
@@ -94,6 +98,7 @@ public static class XmlOfdMatcherService
                 {
                     Index      = idx++,
                     BaseNumber = baseNumber,
+                    BaseDate   = baseDate,
                     Sum        = sum,
                     ExternalId = ext,
                 });
@@ -207,6 +212,7 @@ public static class XmlOfdMatcherService
             report.Records.Add(new OneCService.PunchedRecord
             {
                 RealizationNum = x.BaseNumber,
+                DocumentDate   = ParseXmlBaseDate(x.BaseDate),
                 FiscalDoc      = ofd.FiscalDoc,
                 FiscalSign     = ofd.FiscalSign,
                 ReceiptDt      = ofd.Date.ToString("dd.MM.yyyy HH:mm:ss"),
@@ -214,5 +220,20 @@ public static class XmlOfdMatcherService
         }
 
         return report;
+    }
+
+    private static DateTime? ParseXmlBaseDate(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var text = value.Trim();
+        if (DateTime.TryParseExact(text, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var iso))
+            return iso.Date;
+        if (DateTime.TryParseExact(text, "dd.MM.yyyy",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var ru))
+            return ru.Date;
+        return null;
     }
 }

@@ -94,11 +94,13 @@ public sealed class XmlReportCheck
     public string BaseDate { get; init; } = string.Empty;
     public double Amount { get; init; }
     public string OriginalFiscalSign { get; init; } = string.Empty;
+    public string SourcePath { get; init; } = string.Empty;
 }
 
 public sealed class OneCExportRow
 {
     public string RealizationNumber { get; init; } = string.Empty;
+    public DateTime? DocumentDate { get; init; }
     public string CheckType { get; init; } = string.Empty;
     public string WriteMode { get; init; } = string.Empty;
     public string ExternalId { get; init; } = string.Empty;
@@ -109,4 +111,5 @@ public sealed class OneCExportRow
     public string OfdStatus { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
     public bool IsReady { get; init; }
+    public string SourcePath { get; init; } = string.Empty;
 }

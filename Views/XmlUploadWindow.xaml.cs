@@ -137,7 +137,7 @@ public partial class XmlUploadWindow : Window
         if (!string.IsNullOrWhiteSpace(path))
             FileHelper.RevealInExplorer(path);
         else
-            FileHelper.OpenFolder(FileHelper.OutputDir);
+            FileHelper.OpenFolder(FileHelper.GetPendingXmlDirectory());
     }
 
     private void MarkDoneButton_Click(object sender, RoutedEventArgs e)

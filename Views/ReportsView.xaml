@@ -1,8 +1,10 @@
 <UserControl x:Class="AtolGenerator.Views.ReportsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
              Background="{DynamicResource BrushBg}">
   <UserControl.Resources>
+    <cv:BindingProxy x:Key="Proxy" Data="{Binding}"/>
     <Style x:Key="ReportTabItem" TargetType="TabItem">
       <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
       <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -126,7 +128,7 @@
       <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Padding" Value="10,0"/>
       <Setter Property="VerticalContentAlignment" Value="Center"/>
-      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+      <Setter Property="FocusVisualStyle" Value="{StaticResource AccentFocusVisual}"/>
     </Style>
 
     <Style x:Key="PathLabel" TargetType="TextBlock">
@@ -154,10 +156,10 @@
     </Style>
   </UserControl.Resources>
 
-  <Grid Margin="28,24,28,24">
+  <Grid Margin="20,12,20,16">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/>
-      <RowDefinition Height="14"/>
+      <RowDefinition Height="10"/>
       <RowDefinition Height="*"/>
     </Grid.RowDefinitions>
 
@@ -166,18 +168,16 @@
         <ColumnDefinition/>
         <ColumnDefinition Width="Auto"/>
       </Grid.ColumnDefinitions>
-      <StackPanel>
-        <TextBlock Text="Работа с отчётами" Style="{StaticResource PageTitle}"/>
-        <TextBlock Text="АТОЛ Online · ОФД / Такском · подготовка CSV для 1С"
-                   Style="{StaticResource PageSubtitle}" Margin="0,4,0,0"/>
-      </StackPanel>
-      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-        <TextBlock Foreground="{DynamicResource BrushText3}" FontSize="12" VerticalAlignment="Center">
+      <CheckBox Grid.Column="0" Content="Служебные столбцы"
+                IsChecked="{Binding ShowExtraColumns}"
+                VerticalAlignment="Center" FontSize="12"
+                AutomationProperties.Name="Показать служебные столбцы"
+                ToolTip="Показать служебные колонки: UUID, External Id, ККТ, файл-источник"/>
+      <TextBlock Grid.Column="1" Foreground="{DynamicResource BrushText3}" FontSize="12" VerticalAlignment="Center">
           <Run Text="АТОЛ: "/><Run Text="{Binding AtolChecks.Count, Mode=OneWay}" FontWeight="SemiBold"/>
           <Run Text="   ОФД: "/><Run Text="{Binding OfdChecks.Count, Mode=OneWay}" FontWeight="SemiBold"/>
           <Run Text="   Для 1С: "/><Run Text="{Binding ReadyCount, Mode=OneWay}" FontWeight="SemiBold"/>
-        </TextBlock>
-      </StackPanel>
+      </TextBlock>
     </Grid>
 
     <TabControl Grid.Row="2"
@@ -224,7 +224,8 @@
               <DataGridTextColumn Header="ФД" Binding="{Binding FiscalDocument}" Width="90"/>
               <DataGridTextColumn Header="ФПД" Binding="{Binding FiscalSign}" Width="115"/>
               <DataGridTextColumn Header="Кассир" Binding="{Binding Cashier}" Width="220"/>
-              <DataGridTextColumn Header="UUID" Binding="{Binding Uuid}" Width="250"/>
+              <DataGridTextColumn Header="UUID" Binding="{Binding Uuid}" Width="250"
+                                  Visibility="{Binding Data.ShowExtraColumns, Source={StaticResource Proxy}, Converter={StaticResource BoolVis}}"/>
             </DataGrid.Columns>
           </DataGrid>
         </Grid>
@@ -330,9 +331,11 @@
               <DataGridTextColumn Header="ФД" Binding="{Binding FiscalDocument}" Width="85"/>
               <DataGridTextColumn Header="ФПД" Binding="{Binding FiscalSign}" Width="115"/>
               <DataGridTextColumn Header="Основание" Binding="{Binding BaseNumber}" Width="170"/>
-              <DataGridTextColumn Header="External Id" Binding="{Binding ExternalId}" Width="260"/>
-              <DataGridTextColumn Header="UUID" Binding="{Binding Uuid}" Width="250"/>
               <DataGridTextColumn Header="Статус" Binding="{Binding Status}" Width="120"/>
+              <DataGridTextColumn Header="External Id" Binding="{Binding ExternalId}" Width="260"
+                                  Visibility="{Binding Data.ShowExtraColumns, Source={StaticResource Proxy}, Converter={StaticResource BoolVis}}"/>
+              <DataGridTextColumn Header="UUID" Binding="{Binding Uuid}" Width="250"
+                                  Visibility="{Binding Data.ShowExtraColumns, Source={StaticResource Proxy}, Converter={StaticResource BoolVis}}"/>
             </DataGrid.Columns>
           </DataGrid>
         </Grid>
@@ -402,19 +405,22 @@
                             ItemsSource="{Binding OfdOperationOptions}"
                             SelectedIndex="{Binding OfdOperationFilterIndex, Mode=TwoWay}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,16,10">
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,10"
+                            Visibility="{Binding ShowExtraColumns, Converter={StaticResource BoolVis}}">
                   <TextBlock Text="Расчёт" Style="{StaticResource FilterLabel}"/>
                   <ComboBox Width="155"
                             ItemsSource="{Binding OfdCalculationMethodOptions}"
                             SelectedIndex="{Binding OfdCalculationMethodFilterIndex, Mode=TwoWay}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,16,10">
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,10"
+                            Visibility="{Binding ShowExtraColumns, Converter={StaticResource BoolVis}}">
                   <TextBlock Text="Торговая точка" Style="{StaticResource FilterLabel}"/>
                   <ComboBox Width="155"
                             ItemsSource="{Binding OfdTradingPointOptions}"
                             SelectedIndex="{Binding OfdTradingPointFilterIndex, Mode=TwoWay}"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,0,16,10">
+                <StackPanel Orientation="Horizontal" Margin="0,0,16,10"
+                            Visibility="{Binding ShowExtraColumns, Converter={StaticResource BoolVis}}">
                   <TextBlock Text="ККТ" Style="{StaticResource FilterLabel}"/>
                   <ComboBox Width="145"
                             ItemsSource="{Binding OfdKktOptions}"
@@ -434,19 +440,27 @@
                     ItemsSource="{Binding OfdChecksView}">
             <DataGrid.Columns>
               <DataGridTextColumn Header="Дата чека" Binding="{Binding RegisteredAt, StringFormat={}{0:dd.MM.yyyy HH:mm:ss}}" Width="160"/>
-              <DataGridTextColumn Header="Документ" Binding="{Binding Document}" Width="200"/>
               <DataGridTextColumn Header="Операция" Binding="{Binding Operation}" Width="140"/>
-              <DataGridTextColumn Header="Способ расчёта" Binding="{Binding CalculationMethod}" Width="165"/>
-              <DataGridTextColumn Header="Торговая точка" Binding="{Binding TradingPoint}" Width="170"/>
-              <DataGridTextColumn Header="Название ККТ" Binding="{Binding KktName}" Width="170"/>
-              <DataGridTextColumn Header="Рег. № ККТ" Binding="{Binding KktRegistrationNumber}" Width="155"/>
-              <DataGridTextColumn Header="ФН" Binding="{Binding FiscalDriveNumber}" Width="175"/>
               <DataGridTextColumn Header="Сумма" Binding="{Binding Amount, StringFormat={}{0:N2}}" Width="110"/>
               <DataGridTextColumn Header="ФД" Binding="{Binding FiscalDocument}" Width="100"/>
               <DataGridTextColumn Header="ФПД" Binding="{Binding FiscalSign}" Width="130"/>
               <DataGridTextColumn Header="Реализация" Binding="{Binding AdditionalUserPropValue}" Width="140"/>
-              <DataGridTextColumn Header="1192" Binding="{Binding AdditionalCheckProps}" Width="120"/>
-              <DataGridTextColumn Header="Файл-источник" Binding="{Binding SourceFile}" Width="240"/>
+              <DataGridTextColumn Header="Документ" Binding="{Binding Document}" Width="200"
+                                  Visibility="{Binding Data.ShowExtraColumns, Source={StaticResource Proxy}, Converter={StaticResource BoolVis}}"/>
+              <DataGridTextColumn Header="Способ расчёта" Binding="{Binding CalculationMethod}" Width="165"
+                                  Visibility="{Binding Data.ShowExtraColumns, Source={StaticResource Proxy}, Converter={StaticResource BoolVis}}"/>
+              <DataGridTextColumn Header="Торговая точка" Binding="{Binding TradingPoint}" Width="170"
+                                  Visibility="{Binding Data.ShowExtraColumns, Source={StaticResource Proxy}, Converter={StaticResource BoolVis}}"/>
+              <DataGridTextColumn Header="Название ККТ" Binding="{Binding KktName}" Width="170"
+                                  Visibility="{Binding Data.ShowExtraColumns, Source={StaticResource Proxy}, Converter={StaticResource BoolVis}}"/>
+              <DataGridTextColumn Header="Рег. № ККТ" Binding="{Binding KktRegistrationNumber}" Width="155"
+                                  Visibility="{Binding Data.ShowExtraColumns, Source={StaticResource Proxy}, Converter={StaticResource BoolVis}}"/>
+              <DataGridTextColumn Header="ФН" Binding="{Binding FiscalDriveNumber}" Width="175"
+                                  Visibility="{Binding Data.ShowExtraColumns, Source={StaticResource Proxy}, Converter={StaticResource BoolVis}}"/>
+              <DataGridTextColumn Header="1192" Binding="{Binding AdditionalCheckProps}" Width="120"
+                                  Visibility="{Binding Data.ShowExtraColumns, Source={StaticResource Proxy}, Converter={StaticResource BoolVis}}"/>
+              <DataGridTextColumn Header="Файл-источник" Binding="{Binding SourceFile}" Width="240"
+                                  Visibility="{Binding Data.ShowExtraColumns, Source={StaticResource Proxy}, Converter={StaticResource BoolVis}}"/>
               <DataGridTextColumn Header="Ссылка на чек" Binding="{Binding ReceiptUrl}" Width="340"/>
             </DataGrid.Columns>
           </DataGrid>
@@ -478,6 +492,7 @@
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0" Content="Выбрать XML..."
                     Style="{StaticResource BtnSecondary}" Padding="12,7"
+                    ToolTip="Можно выбрать несколько файлов. Для пары исправления отметьте возврат и коррекцию вместе."
                     Command="{Binding ImportXmlCommand}"/>
             <TextBlock Grid.Column="1" Text="{Binding XmlFileName}" ToolTip="{Binding XmlPath}"
                        Style="{StaticResource PathLabel}" Margin="8,0,0,0"/>
@@ -518,6 +533,7 @@
             </DataGrid.RowStyle>
             <DataGrid.Columns>
               <DataGridTextColumn Header="Реализация" Binding="{Binding RealizationNumber}" Width="130"/>
+              <DataGridTextColumn Header="Дата реализации" Binding="{Binding DocumentDate, StringFormat={}{0:dd.MM.yyyy}}" Width="120"/>
               <DataGridTextColumn Header="Тип чека" Binding="{Binding CheckType}" Width="125"/>
               <DataGridTextColumn Header="Режим" Binding="{Binding WriteMode}" Width="115"/>
               <DataGridTextColumn Header="Дата чека" Binding="{Binding RegisteredAt, StringFormat={}{0:dd.MM.yyyy HH:mm:ss}}" Width="150"/>
@@ -526,7 +542,8 @@
               <DataGridTextColumn Header="Проверка ОФД" Binding="{Binding OfdStatus}" Width="130"/>
               <DataGridTextColumn Header="Результат" Binding="{Binding Status}" Width="230"/>
               <DataGridTextColumn Header="Комментарий для 1С" Binding="{Binding Comment}" Width="360"/>
-              <DataGridTextColumn Header="External Id" Binding="{Binding ExternalId}" Width="250"/>
+              <DataGridTextColumn Header="External Id" Binding="{Binding ExternalId}" Width="250"
+                                  Visibility="{Binding Data.ShowExtraColumns, Source={StaticResource Proxy}, Converter={StaticResource BoolVis}}"/>
             </DataGrid.Columns>
           </DataGrid>
 

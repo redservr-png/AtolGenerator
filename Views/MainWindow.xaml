@@ -7,7 +7,7 @@
         Title="АТОЛ Чек-генератор"
         Icon="/Resources/app.ico"
         Height="720" Width="1440"
-        MinHeight="640" MinWidth="1100"
+        MinHeight="600" MinWidth="1100"
         Background="{DynamicResource BrushBg}"
         WindowStartupLocation="CenterScreen"
         Loaded="OnLoaded">
@@ -68,8 +68,7 @@
             <Border.Background>
               <SolidColorBrush Color="#0F766E"/>
             </Border.Background>
-            <TextBlock Text="&#xE8B7;" FontFamily="Segoe Fluent Icons"
-                       FontSize="19" Foreground="White"
+            <TextBlock Text="A" FontSize="20" FontWeight="Bold" Foreground="White"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
           </Border>
           <StackPanel VerticalAlignment="Center">
@@ -89,45 +88,53 @@
                   Tag="refunds"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
+                  AutomationProperties.Name="Возвраты по заказам"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="refunds">
-            <TextBlock Text="↩   Возвраты по заказам"
+            <TextBlock Text="Возвраты по заказам"
                        Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource SidebarButton}"
                   Tag="realizationCorrections"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
+                  AutomationProperties.Name="Коррекции реализаций 1С"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="realizationCorrections">
-            <TextBlock Text="⇄   Коррекции реализаций 1С"
+            <TextBlock Text="Коррекции реализаций 1С"
                        Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource SidebarButton}"
                   Tag="obsidian"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
+                  AutomationProperties.Name="Исправление чеков"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="obsidian">
-            <TextBlock Text="▧   Исправление чеков"
+            <TextBlock Text="Исправление чеков"
                        Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource SidebarButton}"
                   Tag="correctionWork"
                   HorizontalContentAlignment="Left"
-                  Margin="0,0,0,8"
+                  Margin="18,0,0,8"
+                  Padding="10,7"
+                  MinHeight="36"
+                  AutomationProperties.Name="Пробитие исправлений"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="correctionWork">
-            <TextBlock Text="▦   Пробитие исправлений"
+            <TextBlock Text="Пробитие исправлений"
+                       FontSize="12"
                        Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource SidebarButton}"
                   Tag="reports"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,22"
+                  AutomationProperties.Name="Отчёты"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="reports">
-            <TextBlock Text="▤   Отчёты"
+            <TextBlock Text="Отчёты"
                        Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
 
@@ -137,16 +144,18 @@
                   Tag="payment"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,8"
+                  AutomationProperties.Name="Оплаты и приход"
                   Command="{Binding OpenWorkspaceCommand}"
                   CommandParameter="payment">
-            <TextBlock Text="＋   Оплаты / приход"
+            <TextBlock Text="Оплаты / приход"
                        Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
           <Button Style="{StaticResource SidebarButton}"
                   HorizontalContentAlignment="Left"
                   Margin="0,0,0,22"
+                  AutomationProperties.Name="Настройки"
                   Command="{Binding OpenSettingsCommand}">
-            <TextBlock Text="⚙   Настройки"
+            <TextBlock Text="Настройки"
                        Foreground="{DynamicResource BrushSidebarText}"/>
           </Button>
         </StackPanel>
@@ -156,12 +165,11 @@
           <Separator Background="{DynamicResource BrushSidebarSeparator}" Margin="0,0,0,14"/>
           <TextBlock Text="Кассир" FontSize="11" Foreground="{DynamicResource BrushSidebarMuted}"/>
           <TextBlock FontSize="13" FontWeight="SemiBold"
-                     Foreground="{DynamicResource BrushSidebarText}" Margin="0,3,0,14">
-            <Run Text="Кассир: "/>
-            <Run Text="{Binding SelectedCashierShort, Mode=OneWay}"/>
-          </TextBlock>
-          <TextBlock Text="Готово к работе" FontSize="12"
-                     Foreground="{DynamicResource BrushSidebarStatus}"/>
+                     Foreground="{DynamicResource BrushSidebarText}" Margin="0,3,0,12"
+                     Text="{Binding SelectedCashierShort, Mode=OneWay}"/>
+          <TextBlock Text="{Binding StatusText}" FontSize="12"
+                     Foreground="{DynamicResource BrushSidebarStatus}"
+                     TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="36"/>
         </StackPanel>
       </Grid>
     </Border>
@@ -180,19 +188,13 @@
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
           <Border Background="{DynamicResource BrushSurface2}"
                   BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
-                  CornerRadius="6" Padding="11,7" Margin="0,0,10,0">
+                  CornerRadius="6" Padding="11,7">
             <StackPanel Orientation="Horizontal">
               <Ellipse Width="7" Height="7" Fill="{DynamicResource BrushGreen}" Margin="0,0,8,0"/>
               <TextBlock Text="ИП Шевелев Е.Н. · ФФД 1.05" FontSize="12"
                          Foreground="{DynamicResource BrushText2}"/>
             </StackPanel>
           </Border>
-          <Button Content="Исправления" Style="{StaticResource BtnSecondary}"
-                  Padding="12,7" FontSize="12" Margin="0,0,8,0"
-                  ToolTip="Подготовить исправительные XML"
-                  Command="{Binding OpenWorkspaceCommand}" CommandParameter="correctionWork"/>
-          <Button Content="Настройки" Style="{StaticResource BtnSecondary}"
-                  Padding="12,7" FontSize="12" Command="{Binding OpenSettingsCommand}"/>
         </StackPanel>
       </Grid>
     </Border>
@@ -218,41 +220,9 @@
                       Padding="0,0,8,0">
         <StackPanel>
 
-          <Grid Margin="0,0,0,18">
-            <StackPanel>
-              <TextBlock Text="Формирование чеков" Style="{StaticResource PageTitle}"/>
-              <TextBlock Text="Подготовка возвратов, оплат и документов по данным 1С"
-                         Style="{StaticResource PageSubtitle}" Margin="0,4,0,0"/>
-            </StackPanel>
-            <Border HorizontalAlignment="Right" VerticalAlignment="Center"
-                    Background="{DynamicResource BrushSurface3}" CornerRadius="6" Padding="10,6">
-              <TextBlock Text="ФФД 1.05" FontSize="12" FontWeight="SemiBold"
-                         Foreground="{DynamicResource BrushAccent2}"/>
-            </Border>
-          </Grid>
-
-          <!-- Tabs -->
-          <Border Background="{DynamicResource BrushSurface2}"
-                  CornerRadius="10" Padding="4"
-                  Visibility="Collapsed">
-            <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition/>
-                <ColumnDefinition/>
-              </Grid.ColumnDefinitions>
-              <ToggleButton Grid.Column="0" Style="{StaticResource TabBtn}"
-                            Content="💳  Оплаты"
-                            IsChecked="{Binding Tab, Converter={StaticResource StrEq}, ConverterParameter=payment, Mode=TwoWay}"
-                            Command="{Binding SwitchTabCommand}" CommandParameter="payment"/>
-              <ToggleButton Grid.Column="1" Style="{StaticResource TabBtn}"
-                            Content="📦  Реализации / Возвраты"
-                            IsChecked="{Binding Tab, Converter={StaticResource StrEq}, ConverterParameter=realization, Mode=TwoWay}"
-                            Command="{Binding SwitchTabCommand}" CommandParameter="realization"/>
-            </Grid>
-          </Border>
-
           <!-- Check Type card -->
-          <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+          <Border Style="{StaticResource Card}" Margin="0,0,0,14"
+                  Visibility="{Binding ShowCheckTypeCard, Converter={StaticResource BoolVis}}">
             <StackPanel>
               <!-- Section title -->
               <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
@@ -264,18 +234,22 @@
               <!-- Radio chips -->
               <WrapPanel>
                 <RadioButton Style="{StaticResource RadioChip}" Content="Приход"
+                             Visibility="{Binding ShowSellCheckType, Converter={StaticResource BoolVis}}"
                              IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=sell, Mode=TwoWay}"/>
                 <RadioButton Style="{StaticResource RadioChip}" Content="Возврат прихода"
+                             Visibility="{Binding ShowRefundCheckType, Converter={StaticResource BoolVis}}"
                              IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=sell_refund, Mode=TwoWay}"/>
                 <RadioButton Style="{StaticResource RadioChip}" Content="Коррекция прихода"
+                             Visibility="{Binding ShowCorrectionCheckTypes, Converter={StaticResource BoolVis}}"
                              IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=sell_correction, Mode=TwoWay}"
                              ToolTip="Коррекция не поддерживается через АТОЛ API — пробейте вручную через XML"/>
                 <RadioButton Style="{StaticResource RadioChip}" Content="Коррекция расхода"
+                             Visibility="{Binding ShowCorrectionCheckTypes, Converter={StaticResource BoolVis}}"
                              IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=buy_correction, Mode=TwoWay}"
                              ToolTip="Коррекция не поддерживается через АТОЛ API — пробейте вручную через XML"/>
                 <RadioButton Style="{StaticResource RadioChip}" Content="Коррекция возврата"
                              IsChecked="{Binding CheckType, Converter={StaticResource StrEq}, ConverterParameter=buy_refund, Mode=TwoWay}"
-                             Visibility="{Binding ShowBuyRefundOption, Converter={StaticResource BoolVis}}"/>
+                             Visibility="{Binding ShowCorrectionCheckTypes, Converter={StaticResource BoolVis}}"/>
               </WrapPanel>
 
               <!-- Payment Type (только на вкладке оплаты; реализация всегда тип 14 — аванс) -->
@@ -327,45 +301,44 @@
             </StackPanel>
           </Border>
 
-          <!-- Bulk input card -->
-          <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+          <!-- Bulk / 1C input card -->
+          <Border Style="{StaticResource Card}" Margin="0,0,0,14"
+                  Visibility="{Binding ShowLeftInputCard, Converter={StaticResource BoolVis}}">
             <StackPanel>
-              <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
-                        CornerRadius="2" Margin="0,0,7,0"/>
-                <TextBlock Text="Массовый ввод заказов" Style="{StaticResource SectionTitle}" Margin="0"/>
+              <StackPanel Visibility="{Binding ShowBulkInputCard, Converter={StaticResource BoolVis}}">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                  <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
+                          CornerRadius="2" Margin="0,0,7,0"/>
+                  <TextBlock Text="Массовый ввод заказов" Style="{StaticResource SectionTitle}" Margin="0"/>
+                </StackPanel>
+                <TextBlock Text="Вставьте сообщение с заказами" Style="{StaticResource FieldLabel}"/>
+                <TextBox Text="{Binding BulkText, UpdateSourceTrigger=PropertyChanged}"
+                         AcceptsReturn="True" MinHeight="112" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         Tag="Заказ покупателя т0000027760 от 23.03.2026 12:37:39 сумма 3000 Шкрабий Екатерина Васильевна"/>
+                <TextBlock Text="Ctrl+V · Разделитель: «;» или перевод строки."
+                           Style="{StaticResource HintText}"/>
+                <WrapPanel Margin="0,10,0,0">
+                  <Button Content="Распознать заказы"
+                          Style="{StaticResource BtnPrimary}"
+                          Padding="13,7" FontSize="13"
+                          Command="{Binding ParseBulkCommand}"/>
+                </WrapPanel>
               </StackPanel>
-              <TextBlock Text="Вставьте сообщение с заказами" Style="{StaticResource FieldLabel}"/>
-              <TextBox Text="{Binding BulkText, UpdateSourceTrigger=PropertyChanged}"
-                       AcceptsReturn="True" MinHeight="112" TextWrapping="Wrap"
-                       VerticalScrollBarVisibility="Auto"
-                       Tag="Заказ покупателя т0000027760 от 23.03.2026 12:37:39 сумма 3000 Шкрабий Екатерина Васильевна"/>
-              <TextBlock Text="Ctrl+V · Разделитель: «;» или перевод строки."
-                         Style="{StaticResource HintText}"/>
-              <WrapPanel Margin="0,10,0,0">
-                <Button Content="Распознать заказы"
-                        Style="{StaticResource BtnPrimary}"
-                        Padding="13,7" FontSize="13"
-                        Margin="0,0,8,0"
-                        Command="{Binding ParseBulkCommand}"/>
-                <Button Content="Импорт из Excel"
-                        Style="{StaticResource BtnSecondary}"
-                        Padding="13,7" FontSize="13"
-                        Visibility="{Binding IsRealizationTab, Converter={StaticResource BoolVis}}"
-                        Command="{Binding ImportExcelCommand}"/>
-                <Button Content="Панель 1С"
-                        Style="{StaticResource BtnSecondary}"
-                        Padding="13,7" FontSize="13" Margin="8,0,0,0"
-                        ToolTip="Открыть подключение к 1С. Загрузка документов — отдельной кнопкой внутри панели."
-                        Visibility="{Binding IsRealizationTab, Converter={StaticResource BoolVis}}"
-                        Command="{Binding ToggleOneCPanelCommand}"/>
-              </WrapPanel>
+
+              <StackPanel Visibility="{Binding ShowOneCLoadCard, Converter={StaticResource BoolVis}}">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                  <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
+                          CornerRadius="2" Margin="0,0,7,0"/>
+                  <TextBlock Text="Загрузка из 1С" Style="{StaticResource SectionTitle}" Margin="0"/>
+                </StackPanel>
+              </StackPanel>
 
               <!-- 1C settings panel -->
-              <Border Visibility="{Binding OneCPanelVisible, Converter={StaticResource BoolVis}}"
+              <Border Visibility="{Binding ShowOneCLoadCard, Converter={StaticResource BoolVis}}"
                       Background="{DynamicResource BrushSurface2}"
                       BorderBrush="{DynamicResource BrushBorder}"
-                      BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,10,0,0">
+                      BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,0">
                 <StackPanel>
                   <TextBlock Text="ПОДКЛЮЧЕНИЕ К 1С" FontSize="11" FontWeight="Bold"
                              Foreground="{DynamicResource BrushAccent2}" Margin="0,0,0,10"/>
@@ -374,7 +347,7 @@
                   <Border Background="#1AFF6B00" BorderBrush="#44FF6B00"
                           BorderThickness="1" CornerRadius="6" Padding="10,7" Margin="0,0,0,10"
                           Visibility="{Binding IsOneCAvailable, Converter={StaticResource InvBoolVis}}">
-                    <TextBlock Text="⚠️ Компонент V83.COMConnector не найден. Установите клиент 1С на этот компьютер."
+                    <TextBlock Text="Компонент V83.COMConnector не найден. Установите клиент 1С на этот компьютер."
                                FontSize="12" Foreground="{DynamicResource BrushOrange}" TextWrapping="Wrap"/>
                   </Border>
 
@@ -426,14 +399,23 @@
                   </Grid>
 
                   <WrapPanel>
-                    <Button Content="🔌  Проверить подключение"
+                    <Button Content="Проверить подключение"
                             Style="{StaticResource BtnSecondary}"
                             Padding="11,6" FontSize="12"
                             Command="{Binding TestOneCCommand}"/>
-                    <Button Content="⬇  Загрузить реализации"
+                    <Button Content="Загрузить реализации"
                             Style="{StaticResource BtnPrimary}"
                             Padding="11,6" FontSize="12" Margin="8,0,0,0"
                             Command="{Binding LoadFromOneCCommand}"/>
+                    <Button Content="Импорт из Excel"
+                            Style="{StaticResource BtnSecondary}"
+                            Padding="11,6" FontSize="12" Margin="8,0,0,0"
+                            Command="{Binding ImportExcelCommand}"/>
+                    <Button Content="{Binding ManualEntryToggleLabel}"
+                            Style="{StaticResource BtnGhost}"
+                            Padding="11,6" FontSize="12" Margin="8,0,0,0"
+                            Visibility="{Binding ShowManualEntryToggle, Converter={StaticResource BoolVis}}"
+                            Command="{Binding ToggleManualEntryCommand}"/>
                   </WrapPanel>
                   <TextBlock Text="{Binding OneCStatus}"
                              FontSize="12" Foreground="{DynamicResource BrushText2}"
@@ -445,7 +427,7 @@
           </Border>
 
           <!-- Divider -->
-          <Grid>
+          <Grid Visibility="{Binding ShowBulkInputCard, Converter={StaticResource BoolVis}}">
             <Grid.ColumnDefinitions>
               <ColumnDefinition/>
               <ColumnDefinition Width="Auto"/>
@@ -459,7 +441,8 @@
           </Grid>
 
           <!-- Single order card -->
-          <Border Style="{StaticResource Card}" Margin="0,0,0,14">
+          <Border Style="{StaticResource Card}" Margin="0,0,0,14"
+                  Visibility="{Binding ShowManualOrderSection, Converter={StaticResource BoolVis}}">
             <StackPanel>
               <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
                 <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
@@ -500,7 +483,7 @@
               </Grid>
 
               <!-- Service / agent checkbox -->
-              <CheckBox Content="🔧  Услуга (поставщик / агент)"
+              <CheckBox Content="Услуга (поставщик / агент)"
                         IsChecked="{Binding IsServiceProvider}"
                         Margin="0,4,0,0"/>
 
@@ -633,6 +616,18 @@
               <TextBlock Text="Файлы сохраняются в папку atol_output/"
                          FontSize="11" Foreground="{DynamicResource BrushText3}"
                          HorizontalAlignment="Center" Margin="0,8,0,0"/>
+              <Border Background="#1AFF4444" BorderBrush="#44FF4444"
+                      BorderThickness="1" CornerRadius="6" Padding="10,8"
+                      Margin="0,8,0,0"
+                      Visibility="{Binding HasAtolError, Converter={StaticResource BoolVis}}">
+                <StackPanel>
+                  <TextBlock Text="Ошибки пробития" FontSize="11" FontWeight="Bold"
+                             Foreground="{DynamicResource BrushRed}" Margin="0,0,0,4"/>
+                  <TextBlock Text="{Binding AtolLastError}"
+                             FontSize="11" Foreground="{DynamicResource BrushRed}"
+                             TextWrapping="Wrap" FontFamily="Consolas"/>
+                </StackPanel>
+              </Border>
             </StackPanel>
           </Border>
 
@@ -640,75 +635,6 @@
                         HorizontalScrollBarVisibility="Disabled"
                         Padding="0,0,4,0">
           <StackPanel>
-
-          <!-- АТОЛ Online panel -->
-          <Border Background="{DynamicResource BrushSurface1}"
-                  BorderBrush="{DynamicResource BrushBorder}"
-                  BorderThickness="1" CornerRadius="10" Padding="16"
-                  Margin="0,0,0,14"
-                  Visibility="{Binding ShowAtolPanel, Converter={StaticResource BoolVis}}">
-            <StackPanel>
-              <TextBlock Text="🔑  АТОЛ ONLINE — НАСТРОЙКИ API"
-                         FontSize="11" FontWeight="Bold"
-                         Foreground="{DynamicResource BrushAccent2}" Margin="0,0,0,10"/>
-              <Grid Margin="0,0,0,8">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0">
-                  <TextBlock Text="Логин API" Style="{StaticResource FieldLabel}"/>
-                  <TextBox Text="{Binding AtolLogin, UpdateSourceTrigger=PropertyChanged}"
-                           Tag="ts-alleya-ru"/>
-                </StackPanel>
-                <StackPanel Grid.Column="2">
-                  <TextBlock Text="Пароль API" Style="{StaticResource FieldLabel}"/>
-                  <PasswordBox Tag="••••••"
-                               cv:PasswordHelper.Attach="True"
-                               cv:PasswordHelper.Password="{Binding AtolPassword, Mode=TwoWay}"/>
-                </StackPanel>
-              </Grid>
-              <StackPanel Margin="0,0,0,10">
-                <TextBlock Text="Group Code" Style="{StaticResource FieldLabel}"/>
-                <TextBox Text="{Binding AtolGroupCode, UpdateSourceTrigger=PropertyChanged}"
-                         Tag="ts-alleya-ru_11415"/>
-              </StackPanel>
-              <WrapPanel>
-                <Button Content="💾  Сохранить"
-                        Style="{StaticResource BtnSecondary}"
-                        Padding="11,6" FontSize="12" Margin="0,0,8,0"
-                        Command="{Binding SaveAtolSettingsCommand}"/>
-                <Button Content="🔌  Проверить подключение"
-                        Style="{StaticResource BtnSecondary}"
-                        Padding="11,6" FontSize="12"
-                        Command="{Binding TestAtolConnectionCommand}"/>
-              </WrapPanel>
-              <TextBlock Text="{Binding AtolStatus}"
-                         FontSize="12" Foreground="{DynamicResource BrushText2}"
-                         Margin="0,8,0,0" TextWrapping="Wrap"/>
-              <!-- Блок ошибок (показывается когда есть ошибки) -->
-              <Border Background="#1AFF4444" BorderBrush="#44FF4444"
-                      BorderThickness="1" CornerRadius="6" Padding="10,8"
-                      Margin="0,8,0,0"
-                      Visibility="{Binding HasAtolError, Converter={StaticResource BoolVis}}">
-                <StackPanel>
-                  <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                    <TextBlock Text="❌  Ошибки пробития:"
-                               FontSize="11" FontWeight="Bold"
-                               Foreground="{DynamicResource BrushRed}"/>
-                    <TextBlock Text="{Binding AtolLogPath, StringFormat='  (лог: {0})'}"
-                               FontSize="10" Foreground="{DynamicResource BrushText3}"
-                               VerticalAlignment="Center"/>
-                  </StackPanel>
-                  <ScrollViewer MaxHeight="100" VerticalScrollBarVisibility="Auto"
-                                HorizontalScrollBarVisibility="Disabled">
-                    <TextBlock Text="{Binding AtolLastError}"
-                               FontSize="11" Foreground="{DynamicResource BrushRed}"
-                               TextWrapping="Wrap" FontFamily="Consolas"/>
-                  </ScrollViewer>
-                </StackPanel>
-              </Border>
-            </StackPanel>
-          </Border>
 
           <!-- Orders list card -->
           <Border Style="{StaticResource Card}" Margin="0,0,0,14">
@@ -722,7 +648,7 @@
                              FontSize="12" Foreground="{DynamicResource BrushText3}"
                              VerticalAlignment="Center"/>
                 </StackPanel>
-                <Button Content="🗑 Очистить"
+                <Button Content="Очистить"
                         Style="{StaticResource BtnGhost}"
                         HorizontalAlignment="Right" VerticalAlignment="Center"
                         Padding="8,4" FontSize="11"
@@ -877,51 +803,45 @@
           </ScrollViewer>
         </DockPanel>
 
-        <!-- ════ РЕЗУЛЬТАТЫ + ПРЕДПРОСМОТР (Row 1, полноширинный мастер-деталь) ════ -->
+        <!-- ════ РЕЗУЛЬТАТЫ (предпросмотр — отдельное окно) ════ -->
         <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
                 Background="{DynamicResource BrushSurface1}"
                 BorderBrush="{DynamicResource BrushBorder}"
-                BorderThickness="1" CornerRadius="10"                 Padding="12"
+                BorderThickness="1" CornerRadius="10" Padding="12"
                 Margin="0,10,0,0"
-                MaxHeight="240"
+                MaxHeight="200"
                 Visibility="{Binding ShowResults, Converter={StaticResource BoolVis}}">
-          <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="300"/>   <!-- список файлов -->
-              <ColumnDefinition Width="1"/>     <!-- разделитель -->
-              <ColumnDefinition Width="*"/>     <!-- предпросмотр -->
-            </Grid.ColumnDefinitions>
+          <DockPanel>
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+              <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
+                      CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center"/>
+              <TextBlock Style="{StaticResource SectionTitle}" Margin="0">
+                <Run Text="РЕЗУЛЬТАТЫ"/>
+                <Run Text=" · " Foreground="{DynamicResource BrushText3}"/>
+                <Run Text="{Binding Results.Count, Mode=OneWay}"
+                     Foreground="{DynamicResource BrushText3}" FontWeight="Normal"/>
+              </TextBlock>
+              <Button Content="Предпросмотр"
+                      Style="{StaticResource BtnGhost}"
+                      Padding="10,5" FontSize="12" Margin="12,0,0,0"
+                      Command="{Binding OpenReceiptPreviewCommand}"
+                      ToolTip="Открыть предпросмотр выбранного чека в отдельном окне"/>
+            </StackPanel>
 
-            <!-- ── Левая панель: список результатов ── -->
-            <DockPanel Grid.Column="0" Margin="0,0,16,0">
+            <Button DockPanel.Dock="Bottom"
+                    Content="📂  Открыть папку с файлами"
+                    Style="{StaticResource BtnSecondary}"
+                    Margin="0,10,0,0" Padding="0,9"
+                    HorizontalAlignment="Stretch"
+                    Command="{Binding OpenFolderCommand}"/>
 
-              <!-- Заголовок -->
-              <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
-                <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
-                        CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                <TextBlock Style="{StaticResource SectionTitle}" Margin="0">
-                  <Run Text="РЕЗУЛЬТАТЫ"/>
-                  <Run Text=" · " Foreground="{DynamicResource BrushText3}"/>
-                  <Run Text="{Binding Results.Count, Mode=OneWay}"
-                       Foreground="{DynamicResource BrushText3}" FontWeight="Normal"/>
-                </TextBlock>
-              </StackPanel>
-
-              <!-- Кнопка внизу -->
-              <Button DockPanel.Dock="Bottom"
-                      Content="📂  Открыть папку с файлами"
-                      Style="{StaticResource BtnSecondary}"
-                      Margin="0,10,0,0" Padding="0,9"
-                      HorizontalAlignment="Stretch"
-                      Command="{Binding OpenFolderCommand}"/>
-
-              <!-- Список (прокручиваемый) -->
-              <ListBox ItemsSource="{Binding AllResultEntries}"
-                       SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
-                       Background="Transparent"
-                       BorderThickness="0"
-                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                       VirtualizingStackPanel.IsVirtualizing="False">
+            <ListBox ItemsSource="{Binding AllResultEntries}"
+                     SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     MouseDoubleClick="OnResultDoubleClick"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     VirtualizingStackPanel.IsVirtualizing="False">
                 <ListBox.ItemContainerStyle>
                   <Style TargetType="ListBoxItem">
                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -1078,66 +998,48 @@
                   </DataTemplate>
                 </ListBox.ItemTemplate>
               </ListBox>
-            </DockPanel>
-
-            <!-- ── Вертикальный разделитель ── -->
-            <Border Grid.Column="1" Background="{DynamicResource BrushBorder}" Margin="0,2"/>
-
-            <!-- ── Правая панель: предпросмотр выбранного чека ── -->
-            <DockPanel Grid.Column="2" Margin="16,0,0,0">
-              <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
-                <Border Width="3" Height="13" Background="{DynamicResource BrushAccent2}"
-                        CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                <TextBlock Text="ПРЕДПРОСМОТР ЧЕКА" Style="{StaticResource SectionTitle}" Margin="0"/>
-              </StackPanel>
-
-              <!-- Подсказка, если ничего не выбрано -->
-              <TextBlock DockPanel.Dock="Top"
-                         Text="Выберите чек из списка слева"
-                         FontSize="13" Foreground="{DynamicResource BrushText3}"
-                         HorizontalAlignment="Center" Margin="0,40,0,0">
-                <TextBlock.Style>
-                  <Style TargetType="TextBlock">
-                    <Setter Property="Visibility" Value="Collapsed"/>
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding SelectedEntry}" Value="{x:Null}">
-                        <Setter Property="Visibility" Value="Visible"/>
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </TextBlock.Style>
-              </TextBlock>
-
-              <!-- Кассовая лента -->
-              <Border Background="{DynamicResource BrushSurface2}"
-                      BorderBrush="{DynamicResource BrushBorder}"
-                      BorderThickness="1" CornerRadius="7" Padding="14">
-                <Border.Style>
-                  <Style TargetType="Border">
-                    <Setter Property="Visibility" Value="Visible"/>
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding SelectedEntry}" Value="{x:Null}">
-                        <Setter Property="Visibility" Value="Collapsed"/>
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </Border.Style>
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Auto">
-                  <TextBlock Text="{Binding SelectedReceiptPreview}"
-                             FontFamily="Courier New" FontSize="12.5"
-                             Foreground="{DynamicResource BrushText2}"
-                             TextWrapping="NoWrap" LineHeight="20"/>
-                </ScrollViewer>
-              </Border>
-            </DockPanel>
-          </Grid>
+          </DockPanel>
         </Border>
 
-        <!-- ════ 1С РЕАЛИЗАЦИИ — полноширинная таблица ════ -->
-        <views:OneCRealizationsView Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
-                                      Margin="0,14,0,0"
-                                      Visibility="{Binding ShowLoadedRealizations, Converter={StaticResource BoolVis}}"/>
+        <!-- ════ 1С РЕАЛИЗАЦИИ — компактная полоса, таблица в отдельном окне ════ -->
+        <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                Margin="0,14,0,0" Padding="14,10"
+                Background="{DynamicResource BrushSurface1}"
+                BorderBrush="{DynamicResource BrushBorder}"
+                BorderThickness="1" CornerRadius="10"
+                Visibility="{Binding ShowLoadedRealizationsInMain, Converter={StaticResource BoolVis}}">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Border Width="3" Height="13" Background="{DynamicResource BrushAccent}"
+                      CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center"/>
+              <TextBlock Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center">
+                <Run Text="РЕАЛИЗАЦИИ ИЗ 1С"/>
+              </TextBlock>
+              <TextBlock FontSize="12" Foreground="{DynamicResource BrushText3}" Margin="10,0,0,0"
+                         VerticalAlignment="Center" Text="{Binding OneCRealizationsSummary}"/>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+              <Button Content="Открыть таблицу"
+                      Style="{StaticResource BtnSecondary}"
+                      Padding="12,6" FontSize="12" Margin="0,0,8,0"
+                      Command="{Binding OpenOneCRealizationsWindowCommand}"/>
+              <Button Style="{StaticResource BtnPrimary}"
+                      Padding="12,6" FontSize="12"
+                      Command="{Binding AddSelectedToOrdersCommand}"
+                      IsEnabled="{Binding CanAddSelectedRealizations}">
+                <StackPanel Orientation="Horizontal">
+                  <TextBlock Text="➕  Добавить выбранные (" Margin="0"/>
+                  <TextBlock Text="{Binding SelectedOneCCount, Mode=OneWay}" FontWeight="Bold"/>
+                  <TextBlock Text=")" Margin="0"/>
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </Grid>
+        </Border>
 
       </Grid>
 
@@ -1149,6 +1051,11 @@
     <Grid Grid.Row="1" Grid.Column="1"
           Visibility="{Binding ShowObsidianWorkspace, Converter={StaticResource BoolVis}}">
       <views:ObsidianCasesView DataContext="{Binding ObsidianCases}"/>
+    </Grid>
+
+    <Grid Grid.Row="1" Grid.Column="1"
+          Visibility="{Binding ShowCorrectionWorkWorkspace, Converter={StaticResource BoolVis}}">
+      <views:CorrectionWorkView DataContext="{Binding CorrectionWork}"/>
     </Grid>
 
     <!-- ══════════ STATUS BAR ══════════ -->

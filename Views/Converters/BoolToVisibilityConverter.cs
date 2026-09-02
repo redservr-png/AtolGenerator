@@ -73,3 +73,17 @@ public sealed class NavMatchConverter : IMultiValueConverter
     public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+
+public sealed class BindingProxy : Freezable
+{
+    protected override Freezable CreateInstanceCore() => new BindingProxy();
+
+    public static readonly DependencyProperty DataProperty =
+        DependencyProperty.Register(nameof(Data), typeof(object), typeof(BindingProxy));
+
+    public object? Data
+    {
+        get => GetValue(DataProperty);
+        set => SetValue(DataProperty, value);
+    }
+}

@@ -39,6 +39,16 @@ public static class ReportReconciliationService
 
         var usedOfdKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        var uniqueDocumentDateByNumber = xmlChecks
+            .Select(x => (x.RealizationNumber, Date: ParseDocumentDate(x.BaseDate)))
+            .Where(x => !string.IsNullOrWhiteSpace(x.RealizationNumber) && x.Date.HasValue)
+            .GroupBy(x => x.RealizationNumber, StringComparer.OrdinalIgnoreCase)
+            .Select(g => (
+                Number: g.Key,
+                Dates: g.Select(x => x.Date!.Value.Date).Distinct().ToList()))
+            .Where(x => x.Dates.Count == 1)
+            .ToDictionary(x => x.Number, x => x.Dates[0], StringComparer.OrdinalIgnoreCase);
+
         var pairRealizations = xmlChecks
             .Where(IsSupportedOperation)
             .Where(x => !string.IsNullOrWhiteSpace(x.RealizationNumber))
@@ -95,10 +105,15 @@ public static class ReportReconciliationService
             var status = string.Equals(match.Source, "taxcom", StringComparison.OrdinalIgnoreCase)
                 ? "Готово · Такском"
                 : "Готово";
+            var documentDate = ParseDocumentDate(xml.BaseDate)
+                ?? (uniqueDocumentDateByNumber.TryGetValue(xml.RealizationNumber, out var sharedDate)
+                    ? sharedDate
+                    : null);
 
             result.Add(new OneCExportRow
             {
                 RealizationNumber = xml.RealizationNumber,
+                DocumentDate = documentDate,
                 CheckType = xml.Operation,
                 WriteMode = writeMode,
                 ExternalId = xml.ExternalId,
@@ -109,10 +124,22 @@ public static class ReportReconciliationService
                 OfdStatus = ofdStatus,
                 Status = status,
                 IsReady = true,
+                SourcePath = xml.SourcePath,
             });
         }
 
-        return result;
+        return CollapseRetryDuplicates(result);
+    }
+
+    public static string? GetPairXmlWarning(IReadOnlyCollection<XmlReportCheck> xmlChecks)
+    {
+        var hasRefund = xmlChecks.Any(x => x.Operation == "sell_refund");
+        var hasCorrection = xmlChecks.Any(x => x.Operation is "sell" or "sell_correction");
+        if (hasCorrection && !hasRefund)
+            return "Загружена только коррекция. Для пары исправления выберите оба XML (возврат и коррекцию) — иначе запись пойдёт как одиночная коррекция.";
+        if (hasRefund && !hasCorrection)
+            return "Загружен только возврат. Для пары исправления выберите оба XML: возврат и коррекцию.";
+        return null;
     }
 
     public static string? GetAtolCoverageWarning(
@@ -173,7 +200,7 @@ public static class ReportReconciliationService
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         var encoding = Encoding.GetEncoding(1251);
         using var writer = new StreamWriter(path, false, encoding);
-        writer.WriteLine("НомерРеализации;ТипЧека;РежимЗаписи;ExternalId;ФПД;НомерФД;ДатаЧека;Комментарий");
+        writer.WriteLine("НомерРеализации;ДатаРеализации;ТипЧека;РежимЗаписи;ExternalId;ФПД;НомерФД;ДатаЧека;Комментарий");
 
         foreach (var row in readyRows
                      .OrderBy(x => x.RealizationNumber, StringComparer.OrdinalIgnoreCase)
@@ -182,6 +209,7 @@ public static class ReportReconciliationService
             writer.WriteLine(string.Join(";", new[]
             {
                 Clean(row.RealizationNumber),
+                row.DocumentDate?.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture) ?? string.Empty,
                 Clean(row.CheckType),
                 Clean(row.WriteMode),
                 Clean(row.ExternalId),
@@ -368,15 +396,64 @@ public static class ReportReconciliationService
     private static string NormalizeDigits(string value) =>
         new(value.Where(char.IsDigit).ToArray());
 
+    private static List<OneCExportRow> CollapseRetryDuplicates(List<OneCExportRow> rows)
+    {
+        if (rows.Count <= 1) return rows;
+
+        var selected = new HashSet<int>();
+        var groups = rows
+            .Select((row, index) => (row, index))
+            .GroupBy(x => string.IsNullOrWhiteSpace(x.row.RealizationNumber)
+                ? $"#{x.index}"
+                : $"{x.row.RealizationNumber}|{x.row.CheckType}",
+                StringComparer.OrdinalIgnoreCase);
+
+        foreach (var group in groups)
+        {
+            var items = group.ToList();
+            var ready = items.Where(x => x.row.IsReady).ToList();
+            if (ready.Count > 0)
+            {
+                var best = ready
+                    .OrderByDescending(x => x.row.RegisteredAt ?? DateTime.MinValue)
+                    .ThenByDescending(x => x.index)
+                    .First();
+                selected.Add(best.index);
+            }
+            else
+            {
+                selected.Add(items[^1].index);
+            }
+        }
+
+        return rows.Where((_, index) => selected.Contains(index)).ToList();
+    }
+
     private static OneCExportRow ErrorRow(XmlReportCheck xml, string status) => new()
     {
         RealizationNumber = xml.RealizationNumber,
+        DocumentDate = ParseDocumentDate(xml.BaseDate),
         CheckType = xml.Operation,
         ExternalId = xml.ExternalId,
         Status = status,
         OfdStatus = string.Empty,
         IsReady = false,
+        SourcePath = xml.SourcePath,
     };
+
+    private static DateTime? ParseDocumentDate(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var text = value.Trim();
+        string[] formats = ["yyyy-MM-dd", "dd.MM.yyyy", "yyyy-MM-ddTHH:mm:ss"];
+        if (DateTime.TryParseExact(text, formats, CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var exact))
+            return exact.Date;
+        return DateTime.TryParse(text, CultureInfo.GetCultureInfo("ru-RU"),
+            DateTimeStyles.None, out var parsed)
+            ? parsed.Date
+            : null;
+    }
 
     private static string Clean(string value) =>
         value.Replace(';', ',').Replace('\r', ' ').Replace('\n', ' ').Trim();

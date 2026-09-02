@@ -1,4 +1,5 @@
 using AtolGenerator.Constants;
+using AtolGenerator.Helpers;
 using AtolGenerator.Models;
 
 namespace AtolGenerator.Services;
@@ -213,6 +214,8 @@ public static class CorrectionGeneratorService
         string tab = ResolveTab(o);
         var vatType = ResolveReceiptVatType(o, tab, isService, useOriginalItems);
         var items = BuildItems(o, amount, isService, tab, useOriginalItems, vatType);
+        if (items.Count > 0 && tab == "realization")
+            amount = Math.Round(items.Sum(i => i.Sum), 2);
 
         return new CheckData
         {
@@ -313,19 +316,18 @@ public static class CorrectionGeneratorService
 
         foreach (var raw in sourceItems.Where(i => !string.IsNullOrWhiteSpace(i.Name) && i.Sum > 0))
         {
-            var qty = raw.Quantity > 0 ? raw.Quantity : 1;
-            var sum = raw.Sum;
+            var (price, qty, alignedSum) = FiscalItemPricing.Align(raw.Quantity, raw.Sum);
             var vatType = VatRateCatalog.AlignLineWithCheck(raw.VatType, fallbackVatType);
             result.Add(new CheckItem
             {
                 Name          = raw.Name.Trim(),
-                Price         = Math.Round(sum / qty, 2),
+                Price         = price,
                 Quantity      = qty,
-                Sum           = sum,
+                Sum           = alignedSum,
                 PaymentMethod = paymentMethod,
                 PaymentObject = paymentObject,
                 VatType       = vatType,
-                VatSum        = CalcVat(sum, vatType),
+                VatSum        = CalcVat(alignedSum, vatType),
                 IsService     = isService,
             });
         }

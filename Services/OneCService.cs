@@ -1,4 +1,5 @@
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using AtolGenerator.Constants;
@@ -45,6 +46,16 @@ public class OneCRealizationItem
     public double Sum      { get; set; }
 }
 
+public enum RealizationCheckKind
+{
+    /// <summary>Нет ККМ, ФП и даты — нужен одиночный чек коррекции.</summary>
+    NoCheck,
+    /// <summary>Чек пробит в другой день — исправительная пара.</summary>
+    WrongDay,
+    /// <summary>Есть номер ККМ и/или ФП, но нет даты печати — проверить в 1С.</summary>
+    Incomplete,
+}
+
 public class OneCRealization
 {
     public string DocNumber      { get; set; } = string.Empty;  // т0000025218
@@ -56,10 +67,13 @@ public class OneCRealization
     public bool   IsService      { get; set; }  // агентский договор
     public bool   IsOwnService   { get; set; }
     public string City           { get; set; } = string.Empty;
-    public bool   HasCheck       { get; set; }  // чек уже пробит
+    public bool   HasCheck       { get; set; }  // чек пробит не в день реализации
+    public RealizationCheckKind CheckKind { get; set; } = RealizationCheckKind.NoCheck;
     public string CheckNumber    { get; set; } = string.Empty;
     public string CheckDate      { get; set; } = string.Empty;
     public string FiscalNumber   { get; set; } = string.Empty;  // ЧекНомерФП
+    /// <summary>UUID документа реализации для точной загрузки табличной части.</summary>
+    public string DocumentUuid   { get; set; } = string.Empty;
     public List<OneCRealizationItem> Items { get; set; } = new();
     public string ServiceType { get; set; } = string.Empty;
     public ServiceProvider? AgentInfo { get; set; }
@@ -131,11 +145,7 @@ public static class OneCService
     {
         dynamic? conn = null;
         dynamic? connector = null;
-        dynamic? query = null;
-        dynamic? queryResult = null;
-        dynamic? selection = null;
-        var result     = new List<OneCRealization>();
-        var skipped    = 0;
+        var state = new RealizationLoadState();
 
         Log($"=== LoadRealizations start: {from:dd.MM.yyyy} – {to:dd.MM.yyyy} ===");
         Log($"Подключение: сервер={s.Server}, база={s.Database}, пользователь={s.User}");
@@ -148,115 +158,33 @@ public static class OneCService
             Log("Подключаемся...");
             conn = connector.Connect(s.ConnectionString);
 
-            Log("Создаём запрос...");
-            query = conn.NewObject("Запрос");
             var usePropertyQuery = CorrectionPropertyRefs.TryResolve(
                 conn, out CorrectionPropertyRefs? correctionProps, out List<string> missingProps);
             if (usePropertyQuery)
-            {
-                Log("Свойства коррекции найдены — запрос с регистром свойств.");
-                query.Текст = BuildQueryWithProperties();
-                BindCorrectionPropertyParameters(query, correctionProps!);
-            }
+                Log("Свойства коррекции найдены — запросы с регистром свойств.");
             else
-            {
-                Log($"Свойства не найдены ({string.Join(", ", missingProps)}) — упрощённый запрос.");
-                query.Текст = BuildQueryLegacy();
-            }
-            query.УстановитьПараметр("НачалоПериода", from.Date);
-            query.УстановитьПараметр("КонецПериода",  to.Date.AddDays(1).AddSeconds(-1));
+                Log($"Свойства не найдены ({string.Join(", ", missingProps)}) — упрощённые запросы.");
 
-            Log("Выполняем запрос...");
             try
             {
-                queryResult = query.Выполнить();
+                ExecuteRealizationQueries(conn, from, to, usePropertyQuery, correctionProps, state);
             }
             catch (Exception ex) when (usePropertyQuery)
             {
-                Log($"Запрос со свойствами упал: {FormatComError(ex)} — повтор без регистра свойств.");
-                ReleaseComObject(query);
-                query = conn.NewObject("Запрос");
-                query.Текст = BuildQueryLegacy();
-                query.УстановитьПараметр("НачалоПериода", from.Date);
-                query.УстановитьПараметр("КонецПериода",  to.Date.AddDays(1).AddSeconds(-1));
-                usePropertyQuery = false;
-                queryResult = query.Выполнить();
-            }
-            selection   = queryResult.Выбрать();
-            Log("Запрос выполнен, читаем строки...");
-
-            int row = 0;
-            bool hasNext;
-            while (true)
-            {
-                try { hasNext = (bool)selection.Следующий(); }
-                catch (Exception ex)
-                {
-                    Log($"Ошибка при вызове Следующий() на строке {row}: {ex}");
-                    throw;
-                }
-                if (!hasNext) break;
-                row++;
-
-                try
-                {
-                    // Скалярные поля — строки и даты, никаких COM-объектов
-                    var docNumber = Str(selection.НомерДок);
-                    var docDate   = ToDateTime(selection.Дата);
-                    var orderNum  = Str(selection.НомерЗаказа);
-                    var orderDate = ToDateTime(selection.ДатаЗаказа);
-
-                    var effectiveCheckDt = usePropertyQuery
-                        ? ToDateTime(selection.ДатаПечатиЧекаЭффективная)
-                        : ToDateTime(selection.ДатаПечатиЧека);
-                    if (!IsMeaningfulDate(effectiveCheckDt))
-                    {
-                        skipped++;
-                        continue;
-                    }
-
-                    var checkNum = Str(selection.НомерЧекаККМ);
-                    if (usePropertyQuery && string.IsNullOrWhiteSpace(checkNum))
-                        checkNum = Str(selection.НомерЧекаККМСвойство);
-                    var fiscalNumber = Str(selection.ЧекНомерФП);
-                    if (usePropertyQuery && IsEmptyFp(fiscalNumber))
-                        fiscalNumber = Str(selection.ЧекНомерФПСвойство);
-                    var hasCheck = effectiveCheckDt > new DateTime(2000, 1, 1)
-                                   && (!string.IsNullOrWhiteSpace(checkNum) || !IsEmptyFp(fiscalNumber));
-
-                    var dogovor   = Str(selection.Договор);
-                    var isService = dogovor.IndexOf("агент", StringComparison.OrdinalIgnoreCase) >= 0;
-
-                    result.Add(new OneCRealization
-                    {
-                        DocNumber    = docNumber,
-                        DocDate      = IsMeaningfulDate(docDate)
-                                        ? docDate.ToString("dd.MM.yyyy")
-                                        : string.Empty,
-                        OrderNumber  = orderNum,
-                        OrderDate    = IsMeaningfulDate(orderDate)
-                                        ? orderDate.ToString("dd.MM.yyyy HH:mm:ss")
-                                        : string.Empty,
-                        CustomerName = Str(selection.Покупатель),
-                        Amount       = ToDouble(selection.СуммаДокумента),
-                        IsService    = isService,
-                        City         = Str(selection.Подразделение),
-                        HasCheck     = hasCheck,
-                        CheckNumber  = checkNum,
-                        FiscalNumber = fiscalNumber,
-                        CheckDate    = hasCheck
-                                        ? effectiveCheckDt.ToString("dd.MM.yyyy HH:mm:ss")
-                                        : string.Empty,
-                    });
-                }
-                catch (Exception rowEx)
-                {
-                    skipped++;
-                    Log($"Строка {row} пропущена: {rowEx.GetType().Name}: {rowEx.Message}{Environment.NewLine}{rowEx.StackTrace}");
-                }
+                Log($"Запрос со свойствами упал: {FormatComError(ex)} — новое подключение, запросы без регистра.");
+                ReleaseComObject(conn);
+                conn = connector.Connect(s.ConnectionString);
+                state.ClearPartial();
+                ExecuteRealizationQueries(conn, from, to, false, null, state);
             }
 
-            Log($"Готово: загружено {result.Count}, пропущено {skipped}");
+            Log($"Готово: 1С отдала {state.From1C}, загружено {state.Result.Count}" +
+                $", отсеяно классификацией {state.SkippedClassify}" +
+                $", «Пробит» в свойстве {state.SkippedProbit}" +
+                $", ошибки строк {state.SkippedError}" +
+                $", нет чека {state.Result.Count(x => x.CheckKind == RealizationCheckKind.NoCheck)}" +
+                $", другой день {state.Result.Count(x => x.CheckKind == RealizationCheckKind.WrongDay)}" +
+                $", без даты {state.Result.Count(x => x.CheckKind == RealizationCheckKind.Incomplete)}");
         }
         catch (Exception ex)
         {
@@ -265,22 +193,181 @@ public static class OneCService
         }
         finally
         {
-            ReleaseComObject(selection);
-            ReleaseComObject(queryResult);
-            ReleaseComObject(query);
             ReleaseComObject(conn);
             ReleaseComObject(connector);
         }
 
-        return result;
+        return state.Result;
     }
 
     /// <summary>
-    /// Загружает табличную часть (Товары или Услуги) документа реализации по номеру документа.
+    /// Два отдельных запроса: «чек в другой день» и «нет даты печати».
+    /// В одном WHERE УТ 10.3 обнуляет выборку, если смешать пустую дату и НАЧАЛОПЕРИОДА.
+    /// </summary>
+    private static void ExecuteRealizationQueries(
+        dynamic conn, DateTime from, DateTime to, bool withProperties,
+        CorrectionPropertyRefs? correctionProps, RealizationLoadState state)
+    {
+        ReadRealizationQuery(
+            conn, from, to, withProperties, correctionProps, state,
+            RealizationDateFilter.WrongDay);
+        ReadRealizationQuery(
+            conn, from, to, withProperties, correctionProps, state,
+            RealizationDateFilter.NoPrintDate);
+    }
+
+    private static void ReadRealizationQuery(
+        dynamic conn, DateTime from, DateTime to, bool withProperties,
+        CorrectionPropertyRefs? correctionProps, RealizationLoadState state,
+        RealizationDateFilter dateFilter)
+    {
+        dynamic? query = null;
+        dynamic? queryResult = null;
+        dynamic? selection = null;
+        var label = dateFilter == RealizationDateFilter.WrongDay
+            ? "другой день"
+            : "без даты печати";
+
+        try
+        {
+            query = conn.NewObject("Запрос");
+            query.Текст = BuildRealizationQuery(withProperties, dateFilter);
+            if (withProperties)
+                BindCorrectionPropertyParameters(query, correctionProps!);
+            BindSharedQueryParameters(query, from, to);
+
+            Log($"Выполняем запрос «{label}»...");
+            queryResult = query.Выполнить();
+            selection = queryResult.Выбрать();
+
+            int row = 0;
+            bool hasNext;
+            while (true)
+            {
+                try { hasNext = (bool)selection.Следующий(); }
+                catch (Exception ex)
+                {
+                    Log($"Ошибка при вызове Следующий() ({label}) на строке {row}: {ex}");
+                    throw;
+                }
+                if (!hasNext) break;
+                row++;
+                state.From1C++;
+
+                try
+                {
+                    AppendRealizationRow((object)conn, (object)selection, withProperties, state);
+                }
+                catch (Exception rowEx)
+                {
+                    state.SkippedError++;
+                    Log($"Строка {row} ({label}) пропущена: {rowEx.GetType().Name}: {rowEx.Message}");
+                }
+            }
+
+            Log($"Запрос «{label}»: 1С вернула {row} строк.");
+        }
+        finally
+        {
+            ReleaseComObject(selection);
+            ReleaseComObject(queryResult);
+            ReleaseComObject(query);
+        }
+    }
+
+    private static void AppendRealizationRow(
+        object connObj, object selectionRow, bool withProperties, RealizationLoadState state)
+    {
+        dynamic conn = connObj;
+        dynamic selection = selectionRow;
+
+        // COM-поля сначала в object: иначе dynamic «заражает» ClassifyCheckKind
+        // и kind.Value падает (RuntimeBinderException на enum без .Value).
+        string docNumber = Str((object?)selection.НомерДок);
+        DateTime docDate = ToDateTime((object?)selection.Дата);
+        var key = $"{docNumber}|{docDate:yyyyMMdd}";
+        if (!state.Seen.Add(key))
+            return;
+
+        if (withProperties)
+        {
+            string propComment = Str((object?)selection.КомментарийКорректировки);
+            if (propComment.Contains("Пробит", StringComparison.OrdinalIgnoreCase))
+            {
+                state.SkippedProbit++;
+                return;
+            }
+        }
+
+        string orderNum = Str((object?)selection.НомерЗаказа);
+        DateTime orderDate = ToDateTime((object?)selection.ДатаЗаказа);
+
+        DateTime effectiveCheckDt = ToDateTime((object?)selection.ДатаПечатиЧека);
+        if (!IsMeaningfulDate(effectiveCheckDt) && withProperties)
+            effectiveCheckDt = ToDateTime((object?)selection.ДатаПечатиЧекаСвойство);
+
+        string checkNum = Str((object?)selection.НомерЧекаККМ);
+        if (withProperties && IsEmptyFp(checkNum))
+            checkNum = Str((object?)selection.НомерЧекаККМСвойство);
+        if (IsEmptyFp(checkNum)) checkNum = string.Empty;
+
+        string fiscalNumber = Str((object?)selection.ЧекНомерФП);
+        if (withProperties && IsEmptyFp(fiscalNumber))
+            fiscalNumber = Str((object?)selection.ЧекНомерФПСвойство);
+        if (IsEmptyFp(fiscalNumber)) fiscalNumber = string.Empty;
+
+        RealizationCheckKind? kind = ClassifyCheckKind(
+            docDate, effectiveCheckDt, checkNum, fiscalNumber);
+        if (kind is null)
+        {
+            state.SkippedClassify++;
+            return;
+        }
+
+        RealizationCheckKind checkKind = kind.Value;
+        string dogovor = Str((object?)selection.Договор);
+        var isService = dogovor.IndexOf("агент", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        var documentUuid = string.Empty;
+        try
+        {
+            object docRef = selection.ДокСсылка;
+            documentUuid = TryReadDocumentUuid(conn, docRef) ?? string.Empty;
+        }
+        catch { /* поле ДокСсылка может отсутствовать в старом запросе */ }
+
+        state.Result.Add(new OneCRealization
+        {
+            DocNumber    = docNumber,
+            DocDate      = IsMeaningfulDate(docDate)
+                            ? docDate.ToString("dd.MM.yyyy")
+                            : string.Empty,
+            OrderNumber  = orderNum,
+            OrderDate    = IsMeaningfulDate(orderDate)
+                            ? orderDate.ToString("dd.MM.yyyy HH:mm:ss")
+                            : string.Empty,
+            CustomerName = Str((object?)selection.Покупатель),
+            Amount       = ToDouble((object?)selection.СуммаДокумента),
+            IsService    = isService,
+            City         = Str((object?)selection.Подразделение),
+            HasCheck     = checkKind == RealizationCheckKind.WrongDay,
+            CheckKind    = checkKind,
+            CheckNumber  = checkNum,
+            FiscalNumber = fiscalNumber,
+            CheckDate    = IsMeaningfulDate(effectiveCheckDt)
+                            ? effectiveCheckDt.ToString("dd.MM.yyyy HH:mm:ss")
+                            : string.Empty,
+            DocumentUuid = documentUuid,
+        });
+    }
+
+    /// <summary>
+    /// Загружает табличную часть (Товары или Услуги) документа реализации.
+    /// Сначала читает объект документа (то, что видно в форме 1С), затем — запрос.
     /// </summary>
     public static List<OneCRealizationItem> LoadRealizationItems(
         OneCConnectionSettings s, string docNumber, DateTime docDate, bool isService,
-        object? existingConnection = null)
+        object? existingConnection = null, string? documentUuid = null)
     {
         var ownsConnection = existingConnection is null;
         dynamic? conn = existingConnection;
@@ -303,12 +390,24 @@ public static class OneCService
             if (conn is null)
                 throw new InvalidOperationException("1С вернула пустое COM-соединение.");
 
+            dynamic docsManager = conn.Документы.РеализацияТоваровУслуг;
+            result = TryLoadRealizationItemsFromObject(
+                conn, docsManager, docNumber, docDate, documentUuid);
+            if (result.Count > 0)
+            {
+                Log($"LoadRealizationItems: из объекта документа загружено {result.Count} позиций");
+                return result;
+            }
+
+            Log("LoadRealizationItems: объект документа недоступен — запрос к табличной части");
             query = conn.NewObject("Запрос");
             query.Текст = """
                 ВЫБРАТЬ
-                    Строки.Номенклатура.Наименование КАК Наименование,
-                    Строки.Количество                КАК Количество,
-                    Строки.Сумма                     КАК Сумма
+                    Строки.НомерСтроки                    КАК НомерСтроки,
+                    Строки.Номенклатура.Наименование     КАК Наименование,
+                    Строки.Количество                    КАК Количество,
+                    Строки.Цена                          КАК Цена,
+                    Строки.Сумма                         КАК Сумма
                 ИЗ
                     Документ.РеализацияТоваровУслуг.Товары КАК Строки
                 ГДЕ
@@ -319,15 +418,20 @@ public static class OneCService
                 ОБЪЕДИНИТЬ ВСЕ
 
                 ВЫБРАТЬ
-                    Строки.Номенклатура.Наименование КАК Наименование,
-                    Строки.Количество                КАК Количество,
-                    Строки.Сумма                     КАК Сумма
+                    Строки.НомерСтроки,
+                    Строки.Номенклатура.Наименование,
+                    Строки.Количество,
+                    Строки.Цена,
+                    Строки.Сумма
                 ИЗ
                     Документ.РеализацияТоваровУслуг.Услуги КАК Строки
                 ГДЕ
                     Строки.Ссылка.Номер = &НомерДок
                     И Строки.Ссылка.Дата >= &НачалоДня
                     И Строки.Ссылка.Дата < &КонецДня
+
+                УПОРЯДОЧИТЬ ПО
+                    НомерСтроки
                 """;
             query.УстановитьПараметр("НомерДок", docNumber);
             query.УстановитьПараметр("НачалоДня", docDate.Date);
@@ -337,13 +441,12 @@ public static class OneCService
             selection   = queryResult.Выбрать();
 
             while ((bool)selection.Следующий())
+                AppendLineFromQuerySelection(result, selection);
+
+            if (result.Count == 0)
             {
-                result.Add(new OneCRealizationItem
-                {
-                    Name     = Str(selection.Наименование),
-                    Quantity = ToDouble(selection.Количество),
-                    Sum      = ToDouble(selection.Сумма),
-                });
+                Log("LoadRealizationItems: по дате строк нет — повтор за календарный год...");
+                result = LoadRealizationItemsByNumberYear(conn, docNumber, docDate.Year);
             }
 
             Log($"LoadRealizationItems: загружено {result.Count} позиций");
@@ -368,6 +471,284 @@ public static class OneCService
         return result;
     }
 
+    private static List<OneCRealizationItem> TryLoadRealizationItemsFromObject(
+        dynamic conn, dynamic docsManager, string docNumber, DateTime docDate, string? documentUuid)
+    {
+        var result = new List<OneCRealizationItem>();
+        object? docRef = null;
+
+        if (!string.IsNullOrWhiteSpace(documentUuid))
+        {
+            try
+            {
+                object uid = conn.NewObject("УникальныйИдентификатор", documentUuid);
+                docRef = ComInvoke((object)docsManager, ["GetRef", "ПолучитьСсылку"], uid);
+            }
+            catch (Exception ex)
+            {
+                Log($"LoadRealizationItems: UUID {documentUuid}: {ex.Message}");
+            }
+        }
+
+        if (docRef is null || IsEmptyOneCRef(docRef))
+        {
+            if (!TryFindRealizationForWrite(
+                    (object)conn, docNumber, docDate.Year,
+                    out docRef, out var foundDate, out _, out var findError))
+            {
+                Log($"LoadRealizationItems: документ не найден — {findError}");
+                return result;
+            }
+
+            if (IsMeaningfulDate(foundDate))
+                docDate = foundDate;
+        }
+
+        string failReasons;
+        var docObj = TryGetRealizationObject(
+            (object)conn, (object)docsManager, (object)docRef!, docNumber, docDate, out failReasons);
+        if (docObj is null)
+        {
+            Log($"LoadRealizationItems: ПолучитьОбъект — {failReasons}");
+            return result;
+        }
+
+        try
+        {
+            AppendTabularSectionItems(result, docObj, "Товары");
+            AppendTabularSectionItems(result, docObj, "Услуги");
+        }
+        finally
+        {
+            try { Marshal.ReleaseComObject(docObj); } catch { /* ignore */ }
+        }
+
+        return result;
+    }
+
+    private static void AppendTabularSectionItems(
+        List<OneCRealizationItem> target, dynamic docObj, string sectionName)
+    {
+        dynamic rows;
+        try { rows = docObj.GetType().InvokeMember(
+            sectionName, BindingFlags.GetProperty, null, docObj, null)!; }
+        catch { return; }
+
+        var count = ReadTabularRowCount(rows);
+        if (count <= 0) return;
+
+        for (var i = 0; i < count; i++)
+        {
+            object? rowObj = null;
+            try { rowObj = ComInvoke((object)rows, ["Get", "Получить"], i); }
+            catch { continue; }
+
+            if (rowObj is null) continue;
+
+            dynamic row = rowObj;
+            var name = ReadNomenclatureName(row);
+            var price = ToDouble(row.Цена);
+            var rawQty = ToQuantity(row.Количество);
+            var sum = ToDouble(row.Сумма);
+            if (string.IsNullOrWhiteSpace(name) || sum <= 0) continue;
+
+            var qty = ResolveLineQuantity(price, rawQty, sum);
+            target.Add(new OneCRealizationItem
+            {
+                Name     = name,
+                Quantity = qty,
+                Sum      = sum,
+            });
+            Log($"  · [{sectionName}] {name}: qty={qty}, price={price:F2}, sum={sum:F2}");
+        }
+    }
+
+    private static int ReadTabularRowCount(dynamic rows)
+    {
+        try
+        {
+            var count = ComInvoke((object)rows, ["Count", "Количество"]);
+            if (count is not null)
+                return Convert.ToInt32(count);
+        }
+        catch { /* dynamic fallback below */ }
+
+        try { return (int)rows.Количество(); }
+        catch { return 0; }
+    }
+
+    private static string ReadNomenclatureName(dynamic row)
+    {
+        try
+        {
+            dynamic nom = row.Номенклатура;
+            if (nom is null) return string.Empty;
+            try { return Str(nom.Наименование); }
+            catch { return Str(nom); }
+        }
+        catch { return string.Empty; }
+    }
+
+    private static void AppendLineFromQuerySelection(List<OneCRealizationItem> target, dynamic selection)
+    {
+        var price = ToDouble(selection.Цена);
+        var rawQty = ToQuantity(selection.Количество);
+        var sum = ToDouble(selection.Сумма);
+        var name = Str(selection.Наименование);
+        if (string.IsNullOrWhiteSpace(name) || sum <= 0) return;
+
+        var qty = ResolveLineQuantity(price, rawQty, sum);
+        target.Add(new OneCRealizationItem
+        {
+            Name     = name,
+            Quantity = qty,
+            Sum      = sum,
+        });
+        Log($"  · {name}: qty={qty}, price={price:F2}, sum={sum:F2}");
+    }
+
+    /// <summary>
+    /// Согласует количество с ценой и суммой строки реализации.
+    /// </summary>
+    private static double ResolveLineQuantity(double price, double quantity, double sum)
+    {
+        sum = Math.Round(sum, 2);
+        if (sum <= 0)
+            return quantity > 0 ? quantity : 1;
+
+        price = Math.Round(price, 2);
+        if (price > 0)
+        {
+            var qtyFromPrice = sum / price;
+            for (var decimals = 0; decimals <= 3; decimals++)
+            {
+                var factor = Math.Pow(10, decimals);
+                var rounded = Math.Round(qtyFromPrice * factor, MidpointRounding.AwayFromZero) / factor;
+                if (rounded <= 0) continue;
+                if (Math.Abs(Math.Round(price * rounded, 2) - sum) <= 0.01)
+                    return rounded;
+            }
+        }
+
+        if (quantity > 0 && price > 0 && Math.Abs(Math.Round(price * quantity, 2) - sum) <= 0.01)
+            return quantity;
+
+        return quantity > 0 ? quantity : 1;
+    }
+
+    private static List<OneCRealizationItem> LoadRealizationItemsByNumberYear(
+        dynamic conn, string docNumber, int year)
+    {
+        var result = new List<OneCRealizationItem>();
+        var query = conn.NewObject("Запрос");
+        query.Текст = """
+            ВЫБРАТЬ
+                Строки.НомерСтроки                    КАК НомерСтроки,
+                Строки.Номенклатура.Наименование     КАК Наименование,
+                Строки.Количество                    КАК Количество,
+                Строки.Цена                          КАК Цена,
+                Строки.Сумма                         КАК Сумма
+            ИЗ
+                Документ.РеализацияТоваровУслуг.Товары КАК Строки
+            ГДЕ
+                Строки.Ссылка.Номер = &НомерДок
+                И Строки.Ссылка.Дата >= &НачалоГода
+                И Строки.Ссылка.Дата < &КонецГода
+
+            ОБЪЕДИНИТЬ ВСЕ
+
+            ВЫБРАТЬ
+                Строки.НомерСтроки,
+                Строки.Номенклатура.Наименование,
+                Строки.Количество,
+                Строки.Цена,
+                Строки.Сумма
+            ИЗ
+                Документ.РеализацияТоваровУслуг.Услуги КАК Строки
+            ГДЕ
+                Строки.Ссылка.Номер = &НомерДок
+                И Строки.Ссылка.Дата >= &НачалоГода
+                И Строки.Ссылка.Дата < &КонецГода
+
+            УПОРЯДОЧИТЬ ПО
+                НомерСтроки
+            """;
+        var yearStart = new DateTime(year, 1, 1);
+        query.УстановитьПараметр("НомерДок", docNumber);
+        query.УстановитьПараметр("НачалоГода", yearStart);
+        query.УстановитьПараметр("КонецГода", yearStart.AddYears(1));
+
+        var selection = query.Выполнить().Выбрать();
+        while ((bool)selection.Следующий())
+            AppendLineFromQuerySelection(result, selection);
+
+        ReleaseComObject(selection);
+        ReleaseComObject(query);
+        return result;
+    }
+
+    /// <summary>
+    /// Перечитывает табличную часть реализации из 1С в позиции заказа перед формированием чека.
+    /// </summary>
+    public static void RefreshRealizationLineItems(OneCConnectionSettings settings, Models.OrderEntry order)
+    {
+        if (order.DocumentType != Models.SourceDocumentType.Realization)
+            return;
+
+        var docNumber = !string.IsNullOrWhiteSpace(order.CorrectionNumber)
+            ? order.CorrectionNumber
+            : order.OrderNum;
+        var dateRaw = !string.IsNullOrWhiteSpace(order.CorrectionDate)
+            ? order.CorrectionDate
+            : order.OrderDate;
+        if (!TryParseDocumentDate(dateRaw, out var docDate))
+            throw new InvalidOperationException(
+                $"{docNumber}: не определена дата реализации для загрузки табличной части.");
+
+        var realization = new OneCRealization
+        {
+            DocNumber = docNumber,
+            DocDate = docDate.ToString("dd.MM.yyyy"),
+            IsService = order.IsService,
+            DocumentUuid = order.DocumentUuid,
+        };
+        EnrichRealizationForReceipt(settings, realization);
+        order.Items = realization.Items.Select(x => new Models.OrderItem
+        {
+            Name = x.Name,
+            Quantity = x.Quantity,
+            Sum = x.Sum,
+        }).ToList();
+
+        if (order.Kind == Models.OrderKind.RefundCorrectionPair ||
+            order.OriginalItems.Count > 0 ||
+            !string.IsNullOrWhiteSpace(order.PlannedReverseOperation))
+        {
+            order.OriginalItems = order.Items.Select(x => new Models.OrderItem
+            {
+                Name = x.Name,
+                Quantity = x.Quantity,
+                Sum = x.Sum,
+                VatType = x.VatType,
+            }).ToList();
+        }
+    }
+
+    private static bool TryParseDocumentDate(string raw, out DateTime date)
+    {
+        if (DateTime.TryParseExact(raw, "dd.MM.yyyy HH:mm:ss",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out date))
+            return true;
+        if (DateTime.TryParseExact(raw, "dd.MM.yyyy",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out date))
+            return true;
+
+        date = default;
+        return false;
+    }
+
     public static void EnrichRealizationForReceipt(
         OneCConnectionSettings s, OneCRealization realization)
         => EnrichRealizationForReceipt(s, realization, null);
@@ -375,7 +756,7 @@ public static class OneCService
     private static void EnrichRealizationForReceipt(
         OneCConnectionSettings s, OneCRealization realization, object? existingConnection)
     {
-        if (realization.Items.Count == 0 && !string.IsNullOrWhiteSpace(realization.DocNumber))
+        if (!string.IsNullOrWhiteSpace(realization.DocNumber))
         {
             if (!DateTime.TryParseExact(realization.DocDate, "dd.MM.yyyy",
                     System.Globalization.CultureInfo.InvariantCulture,
@@ -383,8 +764,14 @@ public static class OneCService
                 throw new InvalidOperationException(
                     $"{realization.DocNumber}: не определена дата реализации для загрузки табличной части.");
 
+            // Всегда перечитываем из 1С: в чек идут строки реализации, не заказа покупателя.
             realization.Items = LoadRealizationItems(
-                s, realization.DocNumber, docDate, realization.IsService, existingConnection);
+                s,
+                realization.DocNumber,
+                docDate,
+                realization.IsService,
+                existingConnection,
+                string.IsNullOrWhiteSpace(realization.DocumentUuid) ? null : realization.DocumentUuid);
         }
 
         if (string.IsNullOrWhiteSpace(realization.ServiceType))
@@ -585,12 +972,14 @@ public static class OneCService
         public int Failed      { get; set; }
         public List<string> Errors         { get; set; } = new();
         public List<string> SkippedSamples { get; set; } = new();  // первые N пропусков с подробностями
+        public List<string> ProcessedNumbers { get; set; } = new(); // обновлённые и уже заполненные
         public string  CsvBackupPath       { get; set; } = string.Empty;   // путь к CSV для ручного импорта
     }
 
     public class PunchedRecord
     {
         public string RealizationNum { get; set; } = string.Empty;
+        public DateTime? DocumentDate { get; set; }
         public long?  FiscalDoc      { get; set; }
         public long?  FiscalSign     { get; set; }
         public string ReceiptDt      { get; set; } = string.Empty;
@@ -711,140 +1100,52 @@ public static class OneCService
                         }
                     }
 
-                    // 1. Находим документ запросом.
-                    //    Номера документов в УТ 10.3 — годовая нумерация: один номер может
-                    //    встречаться в разных годах. Поэтому фильтруем по дате (документ
-                    //    должен быть НЕ ПОЗЖЕ даты пробитого чека) и берём самый свежий.
-                    var query = conn.NewObject("Запрос");
-                    query.Текст = """
-                        ВЫБРАТЬ ПЕРВЫЕ 1
-                            Док.Ссылка       КАК ДокСсылка,
-                            Док.Дата         КАК ДатаДок,
-                            Док.ЧекНомерФП   КАК ЧекНомерФП
-                        ИЗ
-                            Документ.РеализацияТоваровУслуг КАК Док
-                        ГДЕ
-                            Док.Номер = &НомерДок
-                            И Док.ПометкаУдаления = ЛОЖЬ
-                            И Док.Дата <= &ДатаЧека
-                        УПОРЯДОЧИТЬ ПО
-                            Док.Дата УБЫВ
-                        """;
-                    query.УстановитьПараметр("НомерДок", rec.RealizationNum);
-                    query.УстановитьПараметр("ДатаЧека", checkDate);
-                    var qResult = query.Выполнить();
-                    var sel     = qResult.Выбрать();
-                    if (!(bool)sel.Следующий())
+                    lastStep = "query";
+                    object? foundRef;
+                    DateTime docDate;
+                    string fpRaw;
+                    string findError;
+                    if (!TryFindRealizationForWrite(
+                            (object)conn, rec.RealizationNum, DateTime.Now.Year,
+                            out foundRef, out docDate, out fpRaw, out findError))
                     {
                         res.Failed++;
-                        var msg = $"{rec.RealizationNum}: документ не найден (до {checkDate:dd.MM.yyyy})";
+                        res.Errors.Add(findError);
+                        Log("  " + findError);
+                        continue;
+                    }
+
+                    var docRef = foundRef;
+                    if (docRef is null)
+                    {
+                        res.Failed++;
+                        var msg = $"{rec.RealizationNum}: ссылка пустая";
                         res.Errors.Add(msg);
                         Log("  " + msg);
                         continue;
                     }
 
-                    var docDate         = ToDateTime(sel.ДатаДок);
-
-                    // Получаем «сырое» значение ЧекНомерФП с типом для диагностики
-                    dynamic rawFp = sel.ЧекНомерФП;
-                    string  fpTypeName = "null";
-                    string  fpRaw      = string.Empty;
-                    try
-                    {
-                        if (rawFp is not null)
-                        {
-                            fpTypeName = ((object)rawFp).GetType().FullName ?? "?";
-                            fpRaw      = (rawFp.ToString() ?? string.Empty).Trim();
-                        }
-                    }
-                    catch { /* игнорируем — оставим пустое */ }
-
-                    // 2. Проверяем skipFilled — поле считается заполненным, если значение
-                    //    не входит в список «пустых» представлений
-                    bool isFilled = !IsEmptyFp(fpRaw);
+                    var isFilled = !IsEmptyFp(fpRaw);
                     if (skipFilled && isFilled)
                     {
                         res.Skipped++;
-                        var detail = $"{rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ЧекНомерФП[{fpTypeName}] = «{fpRaw}»";
+                        var detail = $"{rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ЧекНомерФП = «{fpRaw}»";
                         Log($"  {detail} — пропуск");
                         if (res.SkippedSamples.Count < 15) res.SkippedSamples.Add(detail);
                         continue;
                     }
 
-                    Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} текущ.ФП[{fpTypeName}]=«{fpRaw}» → пишем ФПД={rec.FiscalSign}");
+                    Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} текущ.ФП=«{fpRaw}» → пишем ФПД={rec.FiscalSign}");
 
-                    // 3. Получаем объект через ссылку и пишем реквизиты — каждый шаг в try-catch
-                    //    для точной диагностики где падает.
-                    lastStep = "sel.ДокСсылка";
-                    var docRef = sel.ДокСсылка;
-                    if (docRef is null)
-                    {
-                        res.Failed++;
-                        var msg = $"{rec.RealizationNum}: ссылка пустая (sel.ДокСсылка == null)";
-                        res.Errors.Add(msg);
-                        Log("  " + msg);
-                        continue;
-                    }
-
-                    // Освобождаем курсор запроса ДО ПолучитьОбъект — на случай, если
-                    // удерживаемый курсор мешает платформе захватить блокировку документа.
-                    try { System.Runtime.InteropServices.Marshal.ReleaseComObject(sel); } catch { }
-                    try { System.Runtime.InteropServices.Marshal.ReleaseComObject(qResult); } catch { }
-                    try { System.Runtime.InteropServices.Marshal.ReleaseComObject(query); } catch { }
-
-                    // ПолучитьОбъект — две попытки:
-                    //   1) свежая ссылка через mgr.НайтиПоНомеру → .ПолучитьОбъект()
-                    //   2) исходная docRef.ПолучитьОбъект()
-                    dynamic? obj = null;
-                    string failReasons = string.Empty;
-
-                    try
-                    {
-                        lastStep = "mgr.НайтиПоНомеру → ПолучитьОбъект()";
-                        var freshRef = docsManager!.НайтиПоНомеру(rec.RealizationNum, checkDate);
-                        if (freshRef is not null && !(bool)freshRef.Пустая())
-                            obj = freshRef.ПолучитьОбъект();
-                    }
-                    catch (Exception ex1) { failReasons += $"[fresh: {ex1.Message}] "; }
-
-                    if (obj is null)
-                    {
-                        try
-                        {
-                            lastStep = "docRef.ПолучитьОбъект()";
-                            obj = docRef.ПолучитьОбъект();
-                        }
-                        catch (Exception ex2) { failReasons += $"[ref: {ex2.Message}] "; }
-                    }
-
-                    if (obj is null)
-                    {
-                        res.Failed++;
-                        var msg = $"{rec.RealizationNum}: оба способа ПолучитьОбъект упали. {failReasons}";
-                        res.Errors.Add(msg);
-                        Log("  ОШИБКА " + msg);
-                        continue;
-                    }
-
-
-                    // Пробуем писать ЧИСЛОВЫЕ значения (а не строки) — поле ЧекНомерФП в УТ
-                    // 10.3 имеет тип Число (видно по значениям типа 3155950491 в логе)
-                    lastStep = "set obj.ЧекНомерФП";
-                    obj.ЧекНомерФП = (double)rec.FiscalSign.Value;
-
-                    lastStep = "set obj.НомерЧекаККМ";
-                    obj.НомерЧекаККМ = (double)rec.FiscalDoc.Value;
-
-                    lastStep = "set obj.ДатаПечатиЧека";
-                    obj.ДатаПечатиЧека = checkDate;
-
-                    lastStep = "obj.Записать()";
-                    obj.Записать();
+                    lastStep = "ПолучитьОбъект";
+                    string failReasons;
+                    var obj = TryGetRealizationObject(
+                        (object)conn, (object)docsManager!, (object)docRef, rec.RealizationNum, docDate, out failReasons);
 
                     lastStep = "write properties";
                     string correctionComment = ReadPropertyString(conn, docRef, correctionProps.Comment);
                     var comment = $"{checkDate:dd.MM.yyyy} Пробит чек коррекции \"Приход\" ФП: {rec.FiscalSign!.Value}";
-                    WriteCheckPropertiesBundle(
+                    var propsChanged = WriteCheckPropertiesBundle(
                         conn,
                         docRef,
                         correctionProps,
@@ -855,11 +1156,41 @@ public static class OneCService
                         ref correctionComment,
                         appendComment: true);
 
-                    res.Updated++;
-                    Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ФПД={rec.FiscalSign} №ФД={rec.FiscalDoc} → реквизиты + свойства");
+                    var fieldsChanged = false;
+                    if (obj is not null)
+                    {
+                        lastStep = "set obj.ЧекНомерФП";
+                        obj.ЧекНомерФП = (double)rec.FiscalSign.Value;
 
-                    // Освобождаем COM-объект документа
-                    try { System.Runtime.InteropServices.Marshal.ReleaseComObject(obj); } catch { }
+                        lastStep = "set obj.НомерЧекаККМ";
+                        obj.НомерЧекаККМ = (double)rec.FiscalDoc.Value;
+
+                        lastStep = "set obj.ДатаПечатиЧека";
+                        obj.ДатаПечатиЧека = checkDate;
+
+                        lastStep = "obj.Записать()";
+                        obj.Записать();
+                        fieldsChanged = true;
+                        try { Marshal.ReleaseComObject(obj); } catch { }
+                    }
+                    else
+                    {
+                        Log($"  {rec.RealizationNum}: реквизиты документа не записаны ({failReasons}) — свойства " +
+                            (propsChanged ? "записаны" : "без изменений"));
+                    }
+
+                    if (!fieldsChanged && !propsChanged)
+                    {
+                        res.Failed++;
+                        var msg = $"{rec.RealizationNum}: ПолучитьОбъект упал. {failReasons}";
+                        res.Errors.Add(msg);
+                        Log("  ОШИБКА " + msg);
+                        continue;
+                    }
+
+                    res.Updated++;
+                    Log($"  {rec.RealizationNum}: дата={docDate:dd.MM.yyyy} ФПД={rec.FiscalSign} №ФД={rec.FiscalDoc}" +
+                        (fieldsChanged ? " → реквизиты + свойства" : " → только свойства"));
                 }
                 catch (Exception ex)
                 {
@@ -963,53 +1294,26 @@ public static class OneCService
                 try
                 {
                     lastStep = "query";
-                    var query = conn.NewObject("Запрос");
-                    query.Текст = """
-                        ВЫБРАТЬ ПЕРВЫЕ 1
-                            Док.Ссылка       КАК ДокСсылка,
-                            Док.Дата         КАК ДатаДок,
-                            Док.ЧекНомерФП   КАК ЧекНомерФП
-                        ИЗ
-                            Документ.РеализацияТоваровУслуг КАК Док
-                        ГДЕ
-                            Док.Номер = &НомерДок
-                            И Док.ПометкаУдаления = ЛОЖЬ
-                            И Док.Дата <= &ДатаЧека
-                        УПОРЯДОЧИТЬ ПО
-                            Док.Дата УБЫВ
-                        """;
-                    query.УстановитьПараметр("НомерДок", realizationNum);
-                    query.УстановитьПараметр("ДатаЧека", checkDate);
-                    var qResult = query.Выполнить();
-                    var sel = qResult.Выбрать();
-                    if (!(bool)sel.Следующий())
+                    object? foundRef;
+                    DateTime docDate;
+                    string fpRaw;
+                    string findError;
+                    if (!TryFindRealizationForWrite(
+                            (object)conn, realizationNum, DateTime.Now.Year,
+                            out foundRef, out docDate, out fpRaw, out findError))
                     {
                         res.Failed++;
-                        var msg = $"{realizationNum}: документ не найден (до {checkDate:dd.MM.yyyy})";
-                        res.Errors.Add(msg);
-                        Log("  " + msg);
+                        res.Errors.Add(findError);
+                        Log("  " + findError);
                         continue;
                     }
 
-                    var docDate = ToDateTime(sel.ДатаДок);
-                    dynamic rawFp = sel.ЧекНомерФП;
-                    var fpRaw = string.Empty;
-                    try
-                    {
-                        if (rawFp is not null)
-                            fpRaw = (rawFp.ToString() ?? string.Empty).Trim();
-                    }
-                    catch { /* ignore */ }
+                    var docRef = foundRef;
+                    Log($"  {realizationNum}: документ {docDate:dd.MM.yyyy} (поиск в {DateTime.Now.Year} г.)");
 
                     var isFilled = !IsEmptyFp(fpRaw);
                     if (!commentOnly && skipFilled && isFilled)
                         Log($"  {realizationNum}: ЧекНомерФП уже «{fpRaw}» — реквизиты не трогаем, свойства проверим");
-
-                    lastStep = "sel.ДокСсылка";
-                    var docRef = sel.ДокСсылка;
-                    try { Marshal.ReleaseComObject(sel); } catch { }
-                    try { Marshal.ReleaseComObject(qResult); } catch { }
-                    try { Marshal.ReleaseComObject(query); } catch { }
 
                     string correctionComment = ReadPropertyString(conn, docRef, correctionProps.Comment);
                     var changed = false;
@@ -1035,6 +1339,7 @@ public static class OneCService
                         if (!changed)
                         {
                             res.Skipped++;
+                            res.ProcessedNumbers.Add(realizationNum);
                             var detail = $"{realizationNum}: дата={docDate:dd.MM.yyyy} — свойства без изменений";
                             Log("  " + detail);
                             if (res.SkippedSamples.Count < 15) res.SkippedSamples.Add(detail);
@@ -1042,56 +1347,36 @@ public static class OneCService
                         }
 
                         res.Updated++;
+                        res.ProcessedNumbers.Add(realizationNum);
                         Log($"  {realizationNum}: дата={docDate:dd.MM.yyyy} mode=comment_only → {ordered.Count} чек(ов) в свойства");
                         continue;
                     }
 
-                    dynamic? obj = null;
-                    var failReasons = string.Empty;
-                    try
-                    {
-                        lastStep = "mgr.НайтиПоНомеру → ПолучитьОбъект()";
-                        var freshRef = docsManager!.НайтиПоНомеру(realizationNum, checkDate);
-                        if (freshRef is not null && !(bool)freshRef.Пустая())
-                            obj = freshRef.ПолучитьОбъект();
-                    }
-                    catch (Exception ex1) { failReasons += $"[fresh: {ex1.Message}] "; }
+                    string failReasons;
+                    dynamic? obj = TryGetRealizationObject(
+                        (object)conn, (object)docsManager!, (object)docRef, realizationNum, docDate, out failReasons);
 
-                    if (obj is null)
+                    var fieldsChanged = false;
+                    if (obj is not null)
                     {
-                        try
+                        if (updateRow is not null && !(skipFilled && isFilled))
                         {
-                            lastStep = "docRef.ПолучитьОбъект()";
-                            obj = docRef.ПолучитьОбъект();
+                            lastStep = "set fields";
+                            obj.ЧекНомерФП = (double)updateRow.FiscalSign!.Value;
+                            obj.НомерЧекаККМ = (double)updateRow.FiscalDocument!.Value;
+                            obj.ДатаПечатиЧека = updateRow.RegisteredAt ?? checkDate;
+                            lastStep = "obj.Записать()";
+                            obj.Записать();
+                            fieldsChanged = true;
+                            changed = true;
                         }
-                        catch (Exception ex2) { failReasons += $"[ref: {ex2.Message}] "; }
-                    }
 
-                    if (obj is null)
+                        try { Marshal.ReleaseComObject(obj); } catch { }
+                    }
+                    else
                     {
-                        res.Failed++;
-                        var msg = $"{realizationNum}: ПолучитьОбъект упал. {failReasons}";
-                        res.Errors.Add(msg);
-                        Log("  ОШИБКА " + msg);
-                        continue;
+                        Log($"  {realizationNum}: реквизиты документа недоступны ({failReasons})");
                     }
-
-                    if (updateRow is not null && !(skipFilled && isFilled))
-                    {
-                        lastStep = "set fields";
-                        obj.ЧекНомерФП = (double)updateRow.FiscalSign!.Value;
-                        obj.НомерЧекаККМ = (double)updateRow.FiscalDocument!.Value;
-                        obj.ДатаПечатиЧека = updateRow.RegisteredAt ?? checkDate;
-                        changed = true;
-                    }
-
-                    if (changed)
-                    {
-                        lastStep = "obj.Записать()";
-                        obj.Записать();
-                    }
-
-                    try { Marshal.ReleaseComObject(obj); } catch { }
 
                     if (updateRow is not null)
                     {
@@ -1112,6 +1397,7 @@ public static class OneCService
                     if (!changed)
                     {
                         res.Skipped++;
+                        res.ProcessedNumbers.Add(realizationNum);
                         var detail = $"{realizationNum}: дата={docDate:dd.MM.yyyy} — без изменений";
                         Log("  " + detail);
                         if (res.SkippedSamples.Count < 15) res.SkippedSamples.Add(detail);
@@ -1119,7 +1405,9 @@ public static class OneCService
                     }
 
                     res.Updated++;
-                    Log($"  {realizationNum}: дата={docDate:dd.MM.yyyy} mode=update_fields → реквизиты + свойства");
+                    res.ProcessedNumbers.Add(realizationNum);
+                    Log($"  {realizationNum}: дата={docDate:dd.MM.yyyy} mode=update_fields → " +
+                        (fieldsChanged ? "реквизиты + свойства" : "только свойства"));
                 }
                 catch (Exception ex)
                 {
@@ -1146,9 +1434,9 @@ public static class OneCService
 
         try
         {
-            Directory.CreateDirectory(FileHelper.OutputDir);
+            Directory.CreateDirectory(FileHelper.GetProcessedXmlDirectory(DateTime.Now));
             var csvPath = Path.Combine(
-                FileHelper.OutputDir,
+                FileHelper.GetProcessedXmlDirectory(DateTime.Now),
                 $"atol_to_1c_{DateTime.Now:yyyyMMdd_HHmmss}.csv");
             ReportReconciliationService.ExportOneCCsv(csvPath, ready);
             res.CsvBackupPath = csvPath;
@@ -1341,17 +1629,19 @@ public static class OneCService
     {
         if (order.DocumentType != Models.SourceDocumentType.Realization)
             return;
-        if (!DateTime.TryParseExact(order.OrderDate, "dd.MM.yyyy HH:mm:ss",
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out var documentDate) &&
-            !DateTime.TryParseExact(order.OrderDate, "dd.MM.yyyy",
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out documentDate))
+
+        var docNumber = !string.IsNullOrWhiteSpace(order.CorrectionNumber)
+            ? order.CorrectionNumber
+            : order.OrderNum;
+        var dateRaw = !string.IsNullOrWhiteSpace(order.CorrectionDate)
+            ? order.CorrectionDate
+            : order.OrderDate;
+        if (!TryParseDocumentDate(dateRaw, out var documentDate))
             return;
 
         var realization = new OneCRealization
         {
-            DocNumber = order.OrderNum,
+            DocNumber = docNumber,
             DocDate = documentDate.ToString("dd.MM.yyyy"),
             Amount = order.CorrectAmount ?? order.Amount,
             IsService = order.IsService,
@@ -1397,7 +1687,7 @@ public static class OneCService
             result.Add(new Models.OrderItem
             {
                 Name = Str(selection.Наименование),
-                Quantity = ToDouble(selection.Количество),
+                Quantity = ToQuantity(selection.Количество),
                 Sum = ToDouble(selection.Сумма),
             });
         }
@@ -1506,6 +1796,163 @@ public static class OneCService
             : error.Message;
     }
 
+    /// <summary>
+    /// C# dynamic часто падает NRE на кириллических методах 1С COM.
+    /// IDispatch через InvokeMember + английские алиасы (GetObject, FindByNumber).
+    /// </summary>
+    private static dynamic? TryGetRealizationObject(
+        object connObj, object docsManagerObj, object docRef, string number, DateTime periodDate, out string errors)
+    {
+        dynamic conn = connObj;
+        dynamic docsManager = docsManagerObj;
+        var reasons = new List<string>();
+        errors = string.Empty;
+
+        dynamic? FromRef(object reference, string tag)
+        {
+            var obj = ComInvoke(reference, ["GetObject", "ПолучитьОбъект"]);
+            if (obj is not null) return obj;
+            reasons.Add($"{tag}: нет объекта");
+            return null;
+        }
+
+        try
+        {
+            var uuid = TryReadDocumentUuid(conn, docRef);
+            if (!string.IsNullOrWhiteSpace(uuid))
+            {
+                object? uid = null;
+                try { uid = conn.NewObject("УникальныйИдентификатор", uuid); }
+                catch (Exception ex) { reasons.Add($"UUID: {ex.Message}"); }
+
+                if (uid is not null)
+                {
+                    var restored = ComInvoke(
+                        (object)docsManager, ["GetRef", "ПолучитьСсылку"], uid);
+                    if (restored is not null)
+                    {
+                        var obj = FromRef(restored, "uuid");
+                        if (obj is not null) return obj;
+                    }
+                }
+
+                try
+                {
+                    var xmlType = conn.XMLТипЗнч(docRef);
+                    var xml = Convert.ToString(conn.XMLСтрока(docRef));
+                    if (xmlType is not null && !string.IsNullOrWhiteSpace(xml))
+                    {
+                        object restoredXml = conn.XMLЗначение(xmlType, xml);
+                        var obj = FromRef(restoredXml, "xml");
+                        if (obj is not null) return obj;
+                    }
+                }
+                catch (Exception ex) { reasons.Add($"xml: {ex.Message}"); }
+            }
+        }
+        catch (Exception ex) { reasons.Add($"uuid-path: {ex.Message}"); }
+
+        try
+        {
+            var found = ComInvoke(
+                (object)docsManager,
+                ["FindByNumber", "НайтиПоНомеру"],
+                number, periodDate);
+            if (found is not null && !IsEmptyOneCRef(found))
+            {
+                var obj = FromRef(found, "номер");
+                if (obj is not null) return obj;
+            }
+            else
+            {
+                reasons.Add("номер: пустая ссылка");
+            }
+        }
+        catch (Exception ex) { reasons.Add($"номер: {ex.Message}"); }
+
+        try
+        {
+            var obj = FromRef(docRef, "ref");
+            if (obj is not null) return obj;
+        }
+        catch (Exception ex) { reasons.Add($"ref: {ex.Message}"); }
+
+        errors = string.Join("; ", reasons);
+        return null;
+    }
+
+    private static string? TryReadDocumentUuid(dynamic conn, object docRef)
+    {
+        try
+        {
+            var xml = Convert.ToString(conn.XMLСтрока(docRef));
+            if (!string.IsNullOrWhiteSpace(xml) && xml.Length >= 32)
+                return xml.Trim();
+        }
+        catch { /* English alias next */ }
+
+        try
+        {
+            var xml = Convert.ToString(conn.XMLString(docRef));
+            if (!string.IsNullOrWhiteSpace(xml) && xml.Length >= 32)
+                return xml.Trim();
+        }
+        catch { /* UUID method next */ }
+
+        try
+        {
+            var uid = ComInvoke(docRef, ["UUID", "УникальныйИдентификатор"]);
+            var text = uid?.ToString();
+            if (!string.IsNullOrWhiteSpace(text))
+                return text.Trim();
+        }
+        catch { /* ignore */ }
+
+        return null;
+    }
+
+    private static object? ComInvoke(object target, string[] names, params object?[] args)
+    {
+        var flags = BindingFlags.InvokeMethod | BindingFlags.Public;
+        foreach (var name in names)
+        {
+            try
+            {
+                var result = target.GetType().InvokeMember(
+                    name,
+                    flags,
+                    binder: null,
+                    target: target,
+                    args: args.Length == 0 ? null : args);
+                if (result is not null)
+                    return result;
+            }
+            catch
+            {
+                /* следующий алиас */
+            }
+        }
+
+        foreach (var name in names)
+        {
+            try
+            {
+                dynamic d = target;
+                if (args.Length == 0)
+                {
+                    if (name is "GetObject") return d.GetObject();
+                    if (name is "ПолучитьОбъект") return d.ПолучитьОбъект();
+                }
+            }
+            catch
+            {
+                /* следующий алиас */
+            }
+        }
+
+        return null;
+    }
+
     private static string Str(dynamic? v)
     {
         try { return v?.ToString() ?? string.Empty; }
@@ -1521,10 +1968,48 @@ public static class OneCService
     private static bool IsMeaningfulDate(DateTime value) =>
         value.Year is >= 2000 and <= 2100;
 
+    private static RealizationCheckKind? ClassifyCheckKind(
+        DateTime docDate, DateTime checkDate, string checkNumber, string fiscalNumber)
+    {
+        var hasDate = IsMeaningfulDate(checkDate);
+        var hasKkm = !IsEmptyFp(checkNumber);
+        var hasFp = !IsEmptyFp(fiscalNumber);
+
+        if (!hasDate && !hasKkm && !hasFp)
+            return RealizationCheckKind.NoCheck;
+
+        if (!hasDate)
+            return RealizationCheckKind.Incomplete;
+
+        if (IsMeaningfulDate(docDate) && docDate.Date == checkDate.Date)
+            return null;
+
+        return RealizationCheckKind.WrongDay;
+    }
+
     private static double ToDouble(dynamic? v)
     {
-        try { return v is null ? 0.0 : (double)v; }
+        if (v is null) return 0.0;
+        try
+        {
+            if (v is double d) return d;
+            if (v is float f) return f;
+            if (v is decimal m) return (double)m;
+            if (v is int i) return i;
+            if (v is long l) return l;
+            var text = Str(v).Replace(" ", string.Empty).Replace(',', '.');
+            if (double.TryParse(text, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out double parsed))
+                return parsed;
+            return Convert.ToDouble(v);
+        }
         catch { return 0.0; }
+    }
+
+    private static double ToQuantity(dynamic? v)
+    {
+        var qty = ToDouble(v);
+        return qty > 0 ? qty : 0;
     }
 
     // ── String helpers (same logic as ExcelImportService) ────────────────────
@@ -1616,7 +2101,9 @@ public static class OneCService
         {
             try
             {
-                var reference = plan.НайтиПоНаименованию(name);
+                var reference = plan.НайтиПоНаименованию(name, true);
+                if (IsEmptyOneCRef(reference))
+                    reference = plan.НайтиПоНаименованию(name);
                 if (IsEmptyOneCRef(reference))
                 {
                     missing.Add(name);
@@ -1648,6 +2135,104 @@ public static class OneCService
         query.УстановитьПараметр("СвойствоНомерЧекаККМ", props.CheckNumber);
         query.УстановитьПараметр("СвойствоЧекНомерФП", props.FiscalSign);
     }
+
+    private static void BindSharedQueryParameters(dynamic query, DateTime from, DateTime to)
+    {
+        query.УстановитьПараметр("НачалоПериода", from.Date);
+        query.УстановитьПараметр("КонецПериода", to.Date.AddDays(1).AddSeconds(-1));
+    }
+
+    /// <summary>
+    /// Номер реализации в УТ 10.3 уникален в пределах года — ищем только в указанном году.
+    /// </summary>
+    private static bool TryFindRealizationForWrite(
+        object connObj, string number, int year,
+        out object? docRef, out DateTime docDate, out string fpRaw, out string error)
+    {
+        docRef = null;
+        docDate = DateTime.MinValue;
+        fpRaw = string.Empty;
+        error = string.Empty;
+
+        var yearStart = new DateTime(year, 1, 1);
+        var yearEnd = yearStart.AddYears(1);
+
+        dynamic conn = connObj;
+        dynamic? query = null;
+        dynamic? queryResult = null;
+        dynamic? selection = null;
+        try
+        {
+            query = conn.NewObject("Запрос");
+            query.Текст = """
+                ВЫБРАТЬ ПЕРВЫЕ 1
+                    Док.Ссылка     КАК ДокСсылка,
+                    Док.Дата       КАК ДатаДок,
+                    Док.ЧекНомерФП КАК ЧекНомерФП
+                ИЗ
+                    Документ.РеализацияТоваровУслуг КАК Док
+                ГДЕ
+                    Док.Номер = &НомерДок
+                    И Док.ПометкаУдаления = ЛОЖЬ
+                    И Док.Дата >= &НачалоГода
+                    И Док.Дата < &КонецГода
+                """;
+            query.УстановитьПараметр("НомерДок", number);
+            query.УстановитьПараметр("НачалоГода", yearStart);
+            query.УстановитьПараметр("КонецГода", yearEnd);
+            queryResult = query.Выполнить();
+            selection = queryResult.Выбрать();
+            if (!(bool)selection.Следующий())
+            {
+                error = $"{number}: нет реализации в {year} году";
+                return false;
+            }
+
+            object liveRef = selection.ДокСсылка;
+            docDate = ToDateTime((object?)selection.ДатаДок);
+            try
+            {
+                var rawFp = selection.ЧекНомерФП;
+                if (rawFp is not null)
+                    fpRaw = (rawFp.ToString() ?? string.Empty).Trim();
+            }
+            catch { /* ignore */ }
+
+            if (liveRef is null)
+            {
+                error = $"{number}: пустая ссылка в {year} году";
+                return false;
+            }
+
+            var uuid = TryReadDocumentUuid(conn, liveRef);
+            if (!string.IsNullOrWhiteSpace(uuid))
+            {
+                try
+                {
+                    object uid = conn.NewObject("УникальныйИдентификатор", uuid);
+                    object mgr = conn.Документы.РеализацияТоваровУслуг;
+                    docRef = ComInvoke(mgr, ["GetRef", "ПолучитьСсылку"], uid) ?? liveRef;
+                }
+                catch
+                {
+                    docRef = liveRef;
+                }
+            }
+            else
+            {
+                docRef = liveRef;
+            }
+
+            return true;
+        }
+        finally
+        {
+            ReleaseComObject(selection);
+            ReleaseComObject(queryResult);
+            ReleaseComObject(query);
+        }
+    }
+
 
     private static string ReadPropertyString(dynamic conn, dynamic docRef, dynamic propertyRef)
     {
@@ -1690,6 +2275,12 @@ public static class OneCService
             manager.Свойство = propertyRef;
             manager.Значение = value;
             manager.Записать();
+            Log($"  свойство записано ({(value is DateTime dt ? dt.ToString("dd.MM.yyyy") : value)})");
+        }
+        catch (Exception ex)
+        {
+            Log($"  ошибка записи свойства: {FormatComError(ex)}");
+            throw;
         }
         finally
         {
@@ -1749,69 +2340,43 @@ public static class OneCService
     }
 
     // ── Запрос к УТ 10.3 ─────────────────────────────────────────────────────
-    private static string BuildQueryLegacy() => """
-        ВЫБРАТЬ
-            РеализацияТоваровУслуг.Номер                                            КАК НомерДок,
-            РеализацияТоваровУслуг.Дата                                             КАК Дата,
-            РеализацияТоваровУслуг.Сделка.Номер                                     КАК НомерЗаказа,
-            РеализацияТоваровУслуг.Сделка.Дата                                      КАК ДатаЗаказа,
-            РеализацияТоваровУслуг.Сделка.КонтактноеЛицоКонтрагента.Наименование   КАК Покупатель,
-            РеализацияТоваровУслуг.СуммаДокумента                                   КАК СуммаДокумента,
-            РеализацияТоваровУслуг.ДоговорКонтрагента.Наименование                  КАК Договор,
-            РеализацияТоваровУслуг.Подразделение.Наименование                       КАК Подразделение,
-            РеализацияТоваровУслуг.НомерЧекаККМ                                     КАК НомерЧекаККМ,
-            РеализацияТоваровУслуг.ЧекНомерФП                                       КАК ЧекНомерФП,
-            РеализацияТоваровУслуг.ДатаПечатиЧека                                   КАК ДатаПечатиЧека
-        ИЗ
-            Документ.РеализацияТоваровУслуг КАК РеализацияТоваровУслуг
-        ГДЕ
-            РеализацияТоваровУслуг.ПометкаУдаления = ЛОЖЬ
-            И РеализацияТоваровУслуг.Проведен = ИСТИНА
-            И РеализацияТоваровУслуг.ЭтоРекламация = ЛОЖЬ
-            И РеализацияТоваровУслуг.Дата МЕЖДУ &НачалоПериода И &КонецПериода
-            И РеализацияТоваровУслуг.Подразделение.Наименование <> "OZON"
-            И РеализацияТоваровУслуг.Подразделение.Наименование <> "Вологда ОПТ"
-            И РеализацияТоваровУслуг.Подразделение.Наименование <> "Новодвинск"
-            И РеализацияТоваровУслуг.Подразделение.Наименование <> "Интернет-магазин (продажи)"
-            И РеализацияТоваровУслуг.Сделка.Контрагент.Наименование = "Розничный покупатель"
-            И РеализацияТоваровУслуг.СуммаДокумента > 0
-            И РеализацияТоваровУслуг.ДатаПечатиЧека >= ДАТАВРЕМЯ(2000, 1, 1)
-            И НАЧАЛОПЕРИОДА(РеализацияТоваровУслуг.Дата, ДЕНЬ) <> НАЧАЛОПЕРИОДА(РеализацияТоваровУслуг.ДатаПечатиЧека, ДЕНЬ)
-            И (РеализацияТоваровУслуг.Комментарий ЕСТЬ NULL
-                    ИЛИ РеализацияТоваровУслуг.Комментарий = ""
-                    ИЛИ НЕ РеализацияТоваровУслуг.Комментарий ПОДОБНО "%Пробит%")
-        УПОРЯДОЧИТЬ ПО
-            РеализацияТоваровУслуг.Подразделение.Наименование,
-            РеализацияТоваровУслуг.Дата
-        """;
+    private enum RealizationDateFilter
+    {
+        WrongDay,
+        NoPrintDate,
+    }
 
-    private static string BuildQueryWithProperties() => """
-        ВЫБРАТЬ
-            РеализацияТоваровУслуг.Ссылка                                              КАК Ссылка,
-            РеализацияТоваровУслуг.Номер                                               КАК НомерДок,
-            РеализацияТоваровУслуг.Дата                                                КАК Дата,
-            РеализацияТоваровУслуг.Сделка.Номер                                        КАК НомерЗаказа,
-            РеализацияТоваровУслуг.Сделка.Дата                                         КАК ДатаЗаказа,
-            РеализацияТоваровУслуг.Сделка.КонтактноеЛицоКонтрагента.Наименование      КАК Покупатель,
-            РеализацияТоваровУслуг.СуммаДокумента                                      КАК СуммаДокумента,
-            РеализацияТоваровУслуг.ДоговорКонтрагента.Наименование                     КАК Договор,
-            РеализацияТоваровУслуг.Подразделение.Наименование                          КАК Подразделение,
-            РеализацияТоваровУслуг.НомерЧекаККМ                                        КАК НомерЧекаККМ,
-            РеализацияТоваровУслуг.ЧекНомерФП                                          КАК ЧекНомерФП,
-            РеализацияТоваровУслуг.ДатаПечатиЧека                                      КАК ДатаПечатиЧека,
+    private sealed class RealizationLoadState
+    {
+        public List<OneCRealization> Result { get; } = new();
+        public HashSet<string> Seen { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public int From1C;
+        public int SkippedClassify;
+        public int SkippedProbit;
+        public int SkippedError;
+
+        public void ClearPartial()
+        {
+            Result.Clear();
+            Seen.Clear();
+            From1C = 0;
+            SkippedClassify = 0;
+            SkippedProbit = 0;
+            SkippedError = 0;
+        }
+    }
+
+    private static string BuildRealizationQuery(bool withProperties, RealizationDateFilter dateFilter)
+    {
+        var propertyFields = withProperties ? """
+            ,
             ЗначКомментарийКорр.Значение                                               КАК КомментарийКорректировки,
             ЗначНомерЧека.Значение                                                     КАК НомерЧекаККМСвойство,
             ЗначЧекФП.Значение                                                         КАК ЧекНомерФПСвойство,
-            ЗначДатаПечати.Значение                                                    КАК ДатаПечатиЧекаСвойство,
-            ВЫБОР
-                КОГДА РеализацияТоваровУслуг.ДатаПечатиЧека >= ДАТАВРЕМЯ(2000, 1, 1)
-                    ТОГДА РеализацияТоваровУслуг.ДатаПечатиЧека
-                КОГДА ЗначДатаПечати.Значение >= ДАТАВРЕМЯ(2000, 1, 1)
-                    ТОГДА ЗначДатаПечати.Значение
-                ИНАЧЕ ДАТАВРЕМЯ(1, 1, 1)
-            КОНЕЦ                                                                      КАК ДатаПечатиЧекаЭффективная
-        ИЗ
-            Документ.РеализацияТоваровУслуг КАК РеализацияТоваровУслуг
+            ЗначДатаПечати.Значение                                                    КАК ДатаПечатиЧекаСвойство
+            """ : "";
+
+        var propertyJoins = withProperties ? """
                 ЛЕВОЕ СОЕДИНЕНИЕ РегистрСведений.ЗначенияСвойствОбъектов КАК ЗначКомментарийКорр
                 ПО ЗначКомментарийКорр.Объект = РеализацияТоваровУслуг.Ссылка
                     И ЗначКомментарийКорр.Свойство = &СвойствоКомментарийКорректировки
@@ -1824,27 +2389,50 @@ public static class OneCService
                 ЛЕВОЕ СОЕДИНЕНИЕ РегистрСведений.ЗначенияСвойствОбъектов КАК ЗначЧекФП
                 ПО ЗначЧекФП.Объект = РеализацияТоваровУслуг.Ссылка
                     И ЗначЧекФП.Свойство = &СвойствоЧекНомерФП
-        ГДЕ
-            РеализацияТоваровУслуг.ПометкаУдаления = ЛОЖЬ
-            И РеализацияТоваровУслуг.Проведен = ИСТИНА
-            И РеализацияТоваровУслуг.ЭтоРекламация = ЛОЖЬ
-            И РеализацияТоваровУслуг.Дата МЕЖДУ &НачалоПериода И &КонецПериода
-            И РеализацияТоваровУслуг.Подразделение.Наименование <> "OZON"
-            И РеализацияТоваровУслуг.Подразделение.Наименование <> "Вологда ОПТ"
-            И РеализацияТоваровУслуг.Подразделение.Наименование <> "Новодвинск"
-            И РеализацияТоваровУслуг.Подразделение.Наименование <> "Интернет-магазин (продажи)"
-            И РеализацияТоваровУслуг.Сделка.Контрагент.Наименование = "Розничный покупатель"
-            И РеализацияТоваровУслуг.СуммаДокумента > 0
+            """ : "";
+
+        var dateWhere = dateFilter == RealizationDateFilter.WrongDay
+            ? """
             И РеализацияТоваровУслуг.ДатаПечатиЧека >= ДАТАВРЕМЯ(2000, 1, 1)
             И НАЧАЛОПЕРИОДА(РеализацияТоваровУслуг.Дата, ДЕНЬ) <> НАЧАЛОПЕРИОДА(РеализацияТоваровУслуг.ДатаПечатиЧека, ДЕНЬ)
-            И (РеализацияТоваровУслуг.Комментарий ЕСТЬ NULL
-                    ИЛИ РеализацияТоваровУслуг.Комментарий = ""
-                    ИЛИ НЕ РеализацияТоваровУслуг.Комментарий ПОДОБНО "%Пробит%")
-            И (ЗначКомментарийКорр.Значение ЕСТЬ NULL
-                    ИЛИ ВЫРАЗИТЬ(ЗначКомментарийКорр.Значение КАК СТРОКА(500)) = ""
-                    ИЛИ НЕ ВЫРАЗИТЬ(ЗначКомментарийКорр.Значение КАК СТРОКА(500)) ПОДОБНО "%Пробит%")
-        УПОРЯДОЧИТЬ ПО
-            РеализацияТоваровУслуг.Подразделение.Наименование,
-            РеализацияТоваровУслуг.Дата
-        """;
+            """
+            : """
+            И РеализацияТоваровУслуг.ДатаПечатиЧека < ДАТАВРЕМЯ(2000, 1, 1)
+            """;
+
+        return $"""
+            ВЫБРАТЬ
+                РеализацияТоваровУслуг.Ссылка                                          КАК ДокСсылка,
+                РеализацияТоваровУслуг.Номер                                            КАК НомерДок,
+                РеализацияТоваровУслуг.Дата                                             КАК Дата,
+                РеализацияТоваровУслуг.Сделка.Номер                                     КАК НомерЗаказа,
+                РеализацияТоваровУслуг.Сделка.Дата                                      КАК ДатаЗаказа,
+                РеализацияТоваровУслуг.Сделка.КонтактноеЛицоКонтрагента.Наименование   КАК Покупатель,
+                РеализацияТоваровУслуг.СуммаДокумента                                   КАК СуммаДокумента,
+                РеализацияТоваровУслуг.ДоговорКонтрагента.Наименование                  КАК Договор,
+                РеализацияТоваровУслуг.Подразделение.Наименование                       КАК Подразделение,
+                РеализацияТоваровУслуг.НомерЧекаККМ                                     КАК НомерЧекаККМ,
+                РеализацияТоваровУслуг.ЧекНомерФП                                       КАК ЧекНомерФП,
+                РеализацияТоваровУслуг.ДатаПечатиЧека                                   КАК ДатаПечатиЧека{propertyFields}
+            ИЗ
+                Документ.РеализацияТоваровУслуг КАК РеализацияТоваровУслуг
+            {propertyJoins}
+            ГДЕ
+                РеализацияТоваровУслуг.ПометкаУдаления = ЛОЖЬ
+                И РеализацияТоваровУслуг.Проведен = ИСТИНА
+                И РеализацияТоваровУслуг.ЭтоРекламация = ЛОЖЬ
+                И РеализацияТоваровУслуг.Дата МЕЖДУ &НачалоПериода И &КонецПериода
+                И РеализацияТоваровУслуг.Подразделение.Наименование <> "OZON"
+                И РеализацияТоваровУслуг.Подразделение.Наименование <> "Вологда ОПТ"
+                И РеализацияТоваровУслуг.Подразделение.Наименование <> "Новодвинск"
+                И РеализацияТоваровУслуг.Подразделение.Наименование <> "Интернет-магазин (продажи)"
+                И РеализацияТоваровУслуг.Сделка.Контрагент.Наименование = "Розничный покупатель"
+                И РеализацияТоваровУслуг.СуммаДокумента > 0
+            {dateWhere}
+                И НЕ РеализацияТоваровУслуг.Комментарий ПОДОБНО "%Пробит%"
+            УПОРЯДОЧИТЬ ПО
+                РеализацияТоваровУслуг.Подразделение.Наименование,
+                РеализацияТоваровУслуг.Дата
+            """;
+    }
 }

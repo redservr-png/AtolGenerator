@@ -49,7 +49,8 @@ public static class CheckGeneratorService
                 {
                     var memoTs = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff")[..17];
                     var memoSafeNum = FileHelper.SafeFilename(order.OrderNum ?? string.Empty);
-                    var docxPath = Path.Combine(p.OutputDir, $"{memoTs}_{memoSafeNum}_служебка.docx");
+                    var docxPath = FileHelper.GetServiceNotePath(
+                        $"{memoTs}_{memoSafeNum}_служебка.docx", DateTime.Now, p.OutputDir);
                     GenerateCorrectionMemo(order, p, order.Amount, checks.Last().OperationType, docxPath);
                     foreach (var r in orderResults)
                         r.DocxPath = docxPath;
@@ -107,9 +108,8 @@ public static class CheckGeneratorService
 
                     foreach (var raw in sourceItems)
                     {
-                        var qty   = raw.Quantity > 0 ? raw.Quantity : 1;
-                        var s     = raw.Sum;
-                        var price = Math.Round(s / qty, 2);
+                        var s = raw.Sum;
+                        var (price, qty, alignedSum) = FiscalItemPricing.Align(raw.Quantity, s);
                         bool isService = orderIsService;
                         var serviceVatType = ServiceClassificationService.ResolveVatType(
                             order.IsOwnService, agentInfo, "realization");
@@ -118,14 +118,17 @@ public static class CheckGeneratorService
                             Name          = raw.Name,
                             Price         = price,
                             Quantity      = qty,
-                            Sum           = s,
+                            Sum           = alignedSum,
                             PaymentMethod = "full_payment",
                             PaymentObject = isService ? "service" : "commodity",
                             VatType       = isService ? serviceVatType : "vat22",
-                            VatSum        = isService ? CalcServiceVat(s, serviceVatType) : CalcVat22(s),
+                            VatSum        = isService ? CalcServiceVat(alignedSum, serviceVatType) : CalcVat22(alignedSum),
                             IsService     = isService,
                         });
                     }
+
+                    if (items.Count > 0)
+                        amount = Math.Round(items.Sum(i => i.Sum), 2);
                 }
             }
 
@@ -196,7 +199,8 @@ public static class CheckGeneratorService
             // ── DOCX (только для коррекций, всегда отдельный файл) ──
             if (isCorrection)
             {
-                var docxPath = Path.Combine(p.OutputDir, $"{baseName}_служебка.docx");
+                var docxPath = FileHelper.GetServiceNotePath(
+                    $"{baseName}_служебка.docx", DateTime.Now, p.OutputDir);
 
                 var orderInfoStr = orderNum;
                 if (!string.IsNullOrEmpty(order.OrderDate))
@@ -277,7 +281,8 @@ public static class CheckGeneratorService
                 var operationLabel = operations.Count == 1
                     ? operations[0]!
                     : (group.Key ? "corrections" : "receipts");
-                var xmlPath = Path.Combine(p.OutputDir, $"{stamp}_{batch.Count}чеков_{operationLabel}.xml");
+                var xmlPath = FileHelper.GetPendingXmlPath(
+                    $"{stamp}_{batch.Count}чеков_{operationLabel}.xml", DateTime.Now, p.OutputDir);
                 XmlGeneratorService.GenerateFile(batch.Select(r => r.CheckData!), xmlPath);
                 foreach (var r in batch) r.XmlPath = xmlPath;
             }
@@ -287,7 +292,8 @@ public static class CheckGeneratorService
             // Отдельный XML для каждого чека
             foreach (var r in results)
             {
-                var xmlPath = Path.Combine(p.OutputDir, $"{r.BaseName}.xml");
+                var xmlPath = FileHelper.GetPendingXmlPath(
+                    $"{r.BaseName}.xml", DateTime.Now, p.OutputDir);
                 XmlGeneratorService.GenerateFile(new[] { r.CheckData! }, xmlPath);
                 r.XmlPath = xmlPath;
             }

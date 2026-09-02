@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AtolGenerator.Constants;
+using AtolGenerator.Helpers;
 using AtolGenerator.Models;
 
 namespace AtolGenerator.Services;
@@ -300,31 +301,32 @@ public static class AtolApiService
 
     private static object BuildReceiptItem(
         string name, double quantity, double sum, string paymentMethod,
-        string paymentObject, string vatType, double vatSum, ServiceProvider? agent)
+        string paymentObject, string vatType, ServiceProvider? agent)
     {
-        var qty = quantity > 0 ? quantity : 1.0;
-        var price = Math.Round(sum / qty, 2);
+        var (price, qty, alignedSum) = FiscalItemPricing.Align(quantity, sum);
+        var alignedVat = VatRateCatalog.CalculateFiscalSum(alignedSum, vatType);
 
         return new
         {
             name,
             price,
             quantity = qty,
-            sum,
+            sum = alignedSum,
             payment_method = paymentMethod,
             payment_object = paymentObject,
             agent_info = agent is not null ? BuildAgentInfo(agent) : null,
             supplier_info = BuildSupplierInfo(agent),
-            vat = new { type = vatType, sum = vatSum },
+            vat = new { type = vatType, sum = alignedVat },
         };
     }
 
-    private static List<object> BuildReceiptItems(OrderEntry order, string checkType, string tab)
+    private static (List<object> Items, double Total) BuildReceiptItems(OrderEntry order, string checkType, string tab)
     {
         var items = new List<object>();
         var paymentMethod = GetPaymentMethod(tab, order.IsService);
         var paymentObject = GetPaymentObject(tab, order.IsService);
         var itemAgent = order.IsService && !order.IsOwnService ? order.AgentInfo : null;
+        var total = 0.0;
 
         if (tab == "realization" && order.Items.Count > 0)
         {
@@ -335,10 +337,12 @@ public static class AtolApiService
                     ? $"{(order.IsService ? "Услуга" : "Товар")} по реализации {GetRealizationNumber(order, tab, checkType)}"
                     : raw.Name;
                 var vat = CalcVat(order, checkType, tab, sum);
-                items.Add(BuildReceiptItem(itemName, raw.Quantity, sum, paymentMethod, paymentObject,
-                    vat.Type, vat.Sum, itemAgent));
+                var item = BuildReceiptItem(itemName, raw.Quantity, sum, paymentMethod, paymentObject,
+                    vat.Type, itemAgent);
+                items.Add(item);
+                total += FiscalItemPricing.Align(raw.Quantity, sum).Sum;
             }
-            return items;
+            return (items, Math.Round(total, 2));
         }
 
         var name = tab == "payment"
@@ -346,8 +350,8 @@ public static class AtolApiService
             : $"{(order.IsService ? "Услуга" : "Товар")} по реализации {GetRealizationNumber(order, tab, checkType)}";
         var totalVat = CalcVat(order, checkType, tab, order.Amount);
         items.Add(BuildReceiptItem(name, 1.0, order.Amount, paymentMethod, paymentObject,
-            totalVat.Type, totalVat.Sum, itemAgent));
-        return items;
+            totalVat.Type, itemAgent));
+        return (items, order.Amount);
     }
 
     // ── Проверка group_code через фиктивный запрос статуса ──────────────────
@@ -533,8 +537,8 @@ public static class AtolApiService
             return new AtolPunchResult { Error = $"Нет токена: {tokenErr}" };
 
         var realizationNum = GetRealizationNumber(order, tab, checkType);
-        var receiptItems = BuildReceiptItems(order, checkType, tab);
-        var totalVat = CalcVat(order, checkType, tab, order.Amount);
+        var (receiptItems, receiptTotal) = BuildReceiptItems(order, checkType, tab);
+        var totalVat = CalcVat(order, checkType, tab, receiptTotal);
         var vatType = totalVat.Type;
         var vatSum  = totalVat.Sum;
 
@@ -609,9 +613,9 @@ public static class AtolApiService
                         payment_address = AppConstants.PaymentAddress,
                     },
                     items = receiptItems,
-                    payments = new[] { new { type = payType, sum = order.Amount } },
+                    payments = new[] { new { type = payType, sum = receiptTotal } },
                     vats     = new[] { new { type = vatType, sum = vatSum } },
-                    total    = order.Amount,
+                    total    = receiptTotal,
                     cashier  = cashierName,
                     additional_check_props = checkType == "sell_refund" && !string.IsNullOrWhiteSpace(order.OriginalFiscalNumber)
                         ? order.OriginalFiscalNumber
@@ -658,7 +662,7 @@ public static class AtolApiService
 
             var poll = await PollStatusAsync(creds.GroupCode, endpoint, result.Uuid, token,
                 $"{checkType}/{order.OrderNum}");
-            LogPunch(checkType, order.OrderNum, realizationNum, order.Amount, poll, cashierName);
+            LogPunch(checkType, order.OrderNum, realizationNum, receiptTotal, poll, cashierName);
             return poll;
         }
         catch (Exception ex)

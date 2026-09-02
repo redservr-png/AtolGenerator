@@ -278,7 +278,7 @@ public sealed class CorrectionWorkViewModel : BaseViewModel
         RemoveCommand = new RelayCommand(item => Remove(item as CorrectionWorkItemViewModel));
         ClearCommand = new RelayCommand(Clear);
         BackCommand = new RelayCommand(() => BackRequested?.Invoke());
-        OpenFolderCommand = new RelayCommand(() => FileHelper.OpenFolder(FileHelper.OutputDir));
+        OpenFolderCommand = new RelayCommand(() => FileHelper.OpenFolder(FileHelper.GetPendingXmlDirectory()));
         OpenXmlUploadCommand = new RelayCommand(OpenLastXmlUpload, () => HasCorrectionXml);
         SelectAllCommand = new RelayCommand(() => SetAllSelected(true));
         DeselectAllCommand = new RelayCommand(() => SetAllSelected(false));
