@@ -941,30 +941,93 @@ public static class OneCService
 
                 try
                 {
+                    var hasDate = TryParseDocumentDate(order.OrderDate, out var orderDate);
                     var query = conn.NewObject("Запрос");
-                    query.Текст = """
-                        ВЫБРАТЬ ПЕРВЫЕ 1
-                            Заказ.Подразделение.Наименование КАК Подразделение,
-                            Заказ.ДоговорКонтрагента.Наименование КАК Договор,
-                            Заказ.КонтактноеЛицоКонтрагента.Наименование КАК Покупатель
-                        ИЗ
-                            Документ.ЗаказПокупателя КАК Заказ
-                        ГДЕ
-                            Заказ.Номер = &НомерЗаказа
-                            И Заказ.ПометкаУдаления = ЛОЖЬ
-                        """;
-                    query.УстановитьПараметр("НомерЗаказа", order.OrderNum);
+                    if (hasDate)
+                    {
+                        // Номера заказов в УТ 10.3 переиспользуются по годам —
+                        // без даты «ПЕРВЫЕ 1» часто берёт старый документ.
+                        query.Текст = """
+                            ВЫБРАТЬ ПЕРВЫЕ 1
+                                Заказ.Подразделение.Наименование КАК Подразделение,
+                                Заказ.ДоговорКонтрагента.Наименование КАК Договор,
+                                Заказ.КонтактноеЛицоКонтрагента.Наименование КАК Покупатель,
+                                Заказ.Дата КАК ДатаЗаказа
+                            ИЗ
+                                Документ.ЗаказПокупателя КАК Заказ
+                            ГДЕ
+                                Заказ.Номер = &НомерЗаказа
+                                И Заказ.ПометкаУдаления = ЛОЖЬ
+                                И Заказ.Дата >= &НачалоДня
+                                И Заказ.Дата < &КонецДня
+                            УПОРЯДОЧИТЬ ПО
+                                Заказ.Дата УБЫВ
+                            """;
+                        query.УстановитьПараметр("НомерЗаказа", order.OrderNum);
+                        query.УстановитьПараметр("НачалоДня", orderDate.Date);
+                        query.УстановитьПараметр("КонецДня", orderDate.Date.AddDays(1));
+                    }
+                    else
+                    {
+                        query.Текст = """
+                            ВЫБРАТЬ ПЕРВЫЕ 1
+                                Заказ.Подразделение.Наименование КАК Подразделение,
+                                Заказ.ДоговорКонтрагента.Наименование КАК Договор,
+                                Заказ.КонтактноеЛицоКонтрагента.Наименование КАК Покупатель,
+                                Заказ.Дата КАК ДатаЗаказа
+                            ИЗ
+                                Документ.ЗаказПокупателя КАК Заказ
+                            ГДЕ
+                                Заказ.Номер = &НомерЗаказа
+                                И Заказ.ПометкаУдаления = ЛОЖЬ
+                            УПОРЯДОЧИТЬ ПО
+                                Заказ.Дата УБЫВ
+                            """;
+                        query.УстановитьПараметр("НомерЗаказа", order.OrderNum);
+                    }
 
                     var result    = query.Выполнить();
                     var selection = result.Выбрать();
+                    if (!(bool)selection.Следующий() && hasDate)
+                    {
+                        // Точный день не найден — пробуем весь календарный год.
+                        Log($"  {order.OrderNum}: нет заказа на {orderDate:dd.MM.yyyy}, ищем в {orderDate.Year} г.");
+                        query = conn.NewObject("Запрос");
+                        query.Текст = """
+                            ВЫБРАТЬ ПЕРВЫЕ 1
+                                Заказ.Подразделение.Наименование КАК Подразделение,
+                                Заказ.ДоговорКонтрагента.Наименование КАК Договор,
+                                Заказ.КонтактноеЛицоКонтрагента.Наименование КАК Покупатель,
+                                Заказ.Дата КАК ДатаЗаказа
+                            ИЗ
+                                Документ.ЗаказПокупателя КАК Заказ
+                            ГДЕ
+                                Заказ.Номер = &НомерЗаказа
+                                И Заказ.ПометкаУдаления = ЛОЖЬ
+                                И Заказ.Дата >= &НачалоГода
+                                И Заказ.Дата < &КонецГода
+                            УПОРЯДОЧИТЬ ПО
+                                Заказ.Дата УБЫВ
+                            """;
+                        var yearStart = new DateTime(orderDate.Year, 1, 1);
+                        query.УстановитьПараметр("НомерЗаказа", order.OrderNum);
+                        query.УстановитьПараметр("НачалоГода", yearStart);
+                        query.УстановитьПараметр("КонецГода", yearStart.AddYears(1));
+                        result = query.Выполнить();
+                        selection = result.Выбрать();
+                    }
+
                     if (!(bool)selection.Следующий())
                     {
-                        Log($"  {order.OrderNum}: заказ в 1С не найден");
+                        Log(hasDate
+                            ? $"  {order.OrderNum}: заказ в 1С не найден за {orderDate:dd.MM.yyyy} / {orderDate.Year}"
+                            : $"  {order.OrderNum}: заказ в 1С не найден");
                         continue;
                     }
 
                     var city      = Str(selection.Подразделение);
                     var customer  = Str(selection.Покупатель);
+                    DateTime foundDate = ToDateTime((object?)selection.ДатаЗаказа);
 
                     if (!string.IsNullOrEmpty(city))
                         order.City = city;
@@ -979,7 +1042,8 @@ public static class OneCService
                     {
                         try
                         {
-                            var ownServiceItems = LoadBuyerOrderItems(conn, order.OrderNum);
+                            DateTime? itemsDate = foundDate != DateTime.MinValue ? foundDate : null;
+                            var ownServiceItems = LoadBuyerOrderItems(conn, order.OrderNum, itemsDate);
                             if (order.Items.Count == 0) order.Items = ownServiceItems;
                             if (ServiceClassificationService.ApplyOwnDeliveryRule(order))
                             {
@@ -998,9 +1062,9 @@ public static class OneCService
                     {
                         order.AgentInfo = ResolveServiceProvider(order.City, order.ServiceType);
                         if (order.AgentInfo is not null)
-                            Log($"  {order.OrderNum}: город={order.City}, услуга={order.ServiceType}, агент={order.AgentInfo.Name}");
+                            Log($"  {order.OrderNum}: дата={foundDate:dd.MM.yyyy}, город={order.City}, услуга={order.ServiceType}, агент={order.AgentInfo.Name}");
                         else
-                            Log($"  {order.OrderNum}: город={order.City}, услуга={order.ServiceType} — агент не найден в списке");
+                            Log($"  {order.OrderNum}: дата={foundDate:dd.MM.yyyy}, город={order.City}, услуга={order.ServiceType} — агент не найден в списке");
                     }
                     else if (order.IsService)
                     {
@@ -1727,21 +1791,44 @@ public static class OneCService
         order.AgentInfo = realization.AgentInfo;
     }
 
-    private static List<Models.OrderItem> LoadBuyerOrderItems(dynamic connection, string orderNumber)
+    private static List<Models.OrderItem> LoadBuyerOrderItems(
+        dynamic connection, string orderNumber, DateTime? orderDate = null)
     {
         var query = connection.NewObject("Запрос");
-        query.Текст = """
-            ВЫБРАТЬ
-                Строки.Номенклатура.Наименование КАК Наименование,
-                Строки.Количество                КАК Количество,
-                Строки.Сумма                     КАК Сумма
-            ИЗ
-                Документ.ЗаказПокупателя.Товары КАК Строки
-            ГДЕ
-                Строки.Ссылка.Номер = &НомерЗаказа
-                И Строки.Ссылка.ПометкаУдаления = ЛОЖЬ
-            """;
-        query.УстановитьПараметр("НомерЗаказа", orderNumber);
+        if (orderDate.HasValue)
+        {
+            query.Текст = """
+                ВЫБРАТЬ
+                    Строки.Номенклатура.Наименование КАК Наименование,
+                    Строки.Количество                КАК Количество,
+                    Строки.Сумма                     КАК Сумма
+                ИЗ
+                    Документ.ЗаказПокупателя.Товары КАК Строки
+                ГДЕ
+                    Строки.Ссылка.Номер = &НомерЗаказа
+                    И Строки.Ссылка.ПометкаУдаления = ЛОЖЬ
+                    И Строки.Ссылка.Дата >= &НачалоДня
+                    И Строки.Ссылка.Дата < &КонецДня
+                """;
+            query.УстановитьПараметр("НомерЗаказа", orderNumber);
+            query.УстановитьПараметр("НачалоДня", orderDate.Value.Date);
+            query.УстановитьПараметр("КонецДня", orderDate.Value.Date.AddDays(1));
+        }
+        else
+        {
+            query.Текст = """
+                ВЫБРАТЬ
+                    Строки.Номенклатура.Наименование КАК Наименование,
+                    Строки.Количество                КАК Количество,
+                    Строки.Сумма                     КАК Сумма
+                ИЗ
+                    Документ.ЗаказПокупателя.Товары КАК Строки
+                ГДЕ
+                    Строки.Ссылка.Номер = &НомерЗаказа
+                    И Строки.Ссылка.ПометкаУдаления = ЛОЖЬ
+                """;
+            query.УстановитьПараметр("НомерЗаказа", orderNumber);
+        }
 
         var result = new List<Models.OrderItem>();
         var selection = query.Выполнить().Выбрать();
