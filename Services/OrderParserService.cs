@@ -9,9 +9,9 @@ public static class OrderParserService
     // Номер заказа
     private static readonly Regex RxNum = new(@"[тТ](\d{10})", RegexOptions.Compiled);
 
-    // Дата: "от ДД.ММ.ГГГГ [ЧЧ:ММ:СС]" — время необязательно
+    // Дата: "от ДД.ММ.ГГГГ [ЧЧ:ММ:СС]" — время необязательно, час может быть одной цифрой
     private static readonly Regex RxDate = new(
-        @"от\s+(\d{2}\.\d{2}\.\d{4})(?:\s+(\d{2}:\d{2}:\d{2}))?",
+        @"от\s+(\d{2}\.\d{2}\.\d{4})(?:\s+(\d{1,2}:\d{2}:\d{2}))?",
         RegexOptions.Compiled);
 
     // Сумма
@@ -72,7 +72,10 @@ public static class OrderParserService
             // Дата (время необязательно)
             var mDate = RxDate.Match(part);
             if (!mDate.Success) continue;
-            var timeStr = mDate.Groups[2].Success ? mDate.Groups[2].Value : "00:00:00";
+            var timeStr = "00:00:00";
+            if (mDate.Groups[2].Success &&
+                TimeSpan.TryParse(mDate.Groups[2].Value, out var parsedTime))
+                timeStr = parsedTime.ToString(@"hh\:mm\:ss");
             var orderDate = $"{mDate.Groups[1].Value} {timeStr}";
 
             // Сумма

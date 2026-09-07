@@ -988,7 +988,8 @@ public static class OneCService
 
                     var result    = query.Выполнить();
                     var selection = result.Выбрать();
-                    if (!(bool)selection.Следующий() && hasDate)
+                    var found = (bool)selection.Следующий();
+                    if (!found && hasDate)
                     {
                         // Точный день не найден — пробуем весь календарный год.
                         Log($"  {order.OrderNum}: нет заказа на {orderDate:dd.MM.yyyy}, ищем в {orderDate.Year} г.");
@@ -1015,9 +1016,10 @@ public static class OneCService
                         query.УстановитьПараметр("КонецГода", yearStart.AddYears(1));
                         result = query.Выполнить();
                         selection = result.Выбрать();
+                        found = (bool)selection.Следующий();
                     }
 
-                    if (!(bool)selection.Следующий())
+                    if (!found)
                     {
                         Log(hasDate
                             ? $"  {order.OrderNum}: заказ в 1С не найден за {orderDate:dd.MM.yyyy} / {orderDate.Year}"
