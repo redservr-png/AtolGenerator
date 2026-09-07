@@ -86,6 +86,10 @@ public class OrderEntry
     /// <summary>Удобное свойство для UI: true = строка является исправительной.</summary>
     public bool IsCorrection => Kind != OrderKind.Regular;
 
+    /// <summary>Показывать предупреждение «выберите сценарий» только для исправлений.</summary>
+    public bool NeedsScenarioSelection =>
+        Kind != OrderKind.Regular && CorrectionScenario == CorrectionScenario.Unknown;
+
     public string AgentVatDisplay => IsOwnService
         ? "Без агента / НДС 22%"
         : AgentInfo is null

@@ -48,6 +48,14 @@ public class AsyncRelayCommand : ICommand
         _isRunning = true;
         CommandManager.InvalidateRequerySuggested();
         try   { await _execute(); }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                ex.Message,
+                "Ошибка операции",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
         finally
         {
             _isRunning = false;

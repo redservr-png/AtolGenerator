@@ -715,11 +715,11 @@
                                      Margin="0,2,0,0" FontStyle="Italic"
                                      Text="{Binding CorrectionScenario, Converter={StaticResource ScenarioLabel}, StringFormat='→ {0}'}"
                                      Visibility="{Binding Kind, Converter={StaticResource KindVis}}"/>
-                          <!-- Предупреждение для Unknown сценариев -->
+                          <!-- Предупреждение только для исправительных строк без сценария -->
                           <TextBlock Text="⚠ Сценарий не определён — XML не сформируется. Выберите тип коррекции вручную."
                                      FontSize="10" Foreground="#FF6644" FontWeight="SemiBold"
                                      Margin="0,2,0,0" TextWrapping="Wrap"
-                                     Visibility="{Binding CorrectionScenario, Converter={StaticResource UnknownVis}}"/>
+                                     Visibility="{Binding NeedsScenarioSelection, Converter={StaticResource BoolVis}}"/>
                         </StackPanel>
                         <TextBlock Grid.Column="3"
                                    FontWeight="Bold" FontSize="14"

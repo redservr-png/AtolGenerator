@@ -930,8 +930,18 @@ public class MainViewModel : BaseViewModel
             {
                 var oneCSettings = BuildOneCSettings();
                 await Task.Run(() => OneCService.EnrichOrdersFromOneC(oneCSettings, serviceOrdersWithoutAgent));
+                var stillWithout = serviceOrdersWithoutAgent.Count(o => o.AgentInfo is null && !o.IsOwnService);
+                if (stillWithout > 0)
+                {
+                    var sample = serviceOrdersWithoutAgent.First(o => o.AgentInfo is null && !o.IsOwnService);
+                    var city = string.IsNullOrWhiteSpace(sample.City) ? "не загружено" : sample.City;
+                    ShowToast($"Агент не найден для {stillWithout} услуг (пример: {sample.OrderNum}, «{city}»)", true);
+                }
             }
-            catch { /* если 1С недоступна — продолжаем без обогащения */ }
+            catch (Exception ex)
+            {
+                ShowToast($"Не удалось загрузить подразделение из 1С: {ex.Message}", true);
+            }
             StatusText = "Готов к работе";
         }
 
@@ -1413,8 +1423,7 @@ public class MainViewModel : BaseViewModel
                 }
                 catch (Exception ex)
                 {
-                    ShowToast($"Не удалось перечитать позиции из 1С: {ex.Message}", true);
-                    return;
+                    ShowToast($"Позиции из 1С не обновлены: {ex.Message}. Открываю редактор с текущими данными.", true);
                 }
             }
 
@@ -1453,8 +1462,7 @@ public class MainViewModel : BaseViewModel
                 }
                 catch (Exception ex)
                 {
-                    ShowToast($"Не удалось перечитать позиции из 1С: {ex.Message}", true);
-                    return;
+                    ShowToast($"Позиции из 1С не обновлены: {ex.Message}. Открываю редактор с текущими данными.", true);
                 }
             }
 
@@ -1482,7 +1490,7 @@ public class MainViewModel : BaseViewModel
         StatusText = "Не удалось открыть редактор исправления";
         ShowToast(StatusText, true);
         MessageBox.Show(
-            $"Редактор не смог открыть выбранный чек.\n\n{ex.Message}",
+            $"Редактор не смог открыть выбранный чек.\n\n{ex.GetType().Name}: {ex.Message}",
             "Редактирование исправления",
             MessageBoxButton.OK,
             MessageBoxImage.Error);
@@ -1732,6 +1740,9 @@ public class MainViewModel : BaseViewModel
 
     private static OrderEntry BuildCorrectionOrderFromRealization(OneCRealizationViewModel r)
     {
+        var vat = r.Source.IsOwnService
+            ? "vat122"
+            : VatRateCatalog.Normalize(r.Source.AgentInfo?.VatType, "vat122");
         var entry = new OrderEntry
         {
             OrderNum         = r.DocNumber,
@@ -1748,11 +1759,15 @@ public class MainViewModel : BaseViewModel
             City             = r.City,
             DocumentType     = SourceDocumentType.Realization,
             CorrectAmount    = r.Amount,
+            CorrectVatType   = vat,
+            OriginalVatType  = vat,
+            PlannedVatType   = vat,
             Items            = r.Source.Items.Select(i => new OrderItem
             {
                 Name     = i.Name,
                 Quantity = i.Quantity,
                 Sum      = i.Sum,
+                VatType  = vat,
             }).ToList(),
             Notes            = string.IsNullOrWhiteSpace(r.OrderNumber)
             ? "Реализация из 1С без фискального чека — формируется чек коррекции"
@@ -1770,6 +1785,7 @@ public class MainViewModel : BaseViewModel
                 Name     = i.Name,
                 Quantity = i.Quantity,
                 Sum      = i.Sum,
+                VatType  = i.VatType,
             }).ToList();
             entry.Notes                = string.IsNullOrWhiteSpace(r.OrderNumber)
                 ? "Реализация из 1С пробита не в день реализации — исправительный комплект"
@@ -2347,14 +2363,17 @@ public class MainViewModel : BaseViewModel
             if (existing.Contains(key)) continue;
 
             var entry = BuildCorrectionOrderFromRealization(r);
-            try
+            if (entry.Items.Count == 0)
             {
-                OneCService.RefreshRealizationLineItems(settings, entry);
-            }
-            catch (Exception ex)
-            {
-                ShowToast($"Не удалось загрузить позиции {r.DocNumber}: {ex.Message}", true);
-                continue;
+                try
+                {
+                    OneCService.RefreshRealizationLineItems(settings, entry);
+                }
+                catch (Exception ex)
+                {
+                    ShowToast($"Не удалось загрузить позиции {r.DocNumber}: {ex.Message}", true);
+                    continue;
+                }
             }
             addedCorrect++;
 

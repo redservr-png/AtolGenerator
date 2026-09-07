@@ -31,10 +31,10 @@ public partial class CorrectionEditorWindow : Window
         Entry = entry ?? throw new ArgumentNullException(nameof(entry));
         _initializing = true;
         InitializeComponent();
-        DataContext = Entry;
         RebuildOfficialPlan();
         EnsureVatSelections();
         EnsureReceiptItems();
+        DataContext = Entry;
         RefreshLayoutMode();
         _initializing = false;
         RefreshTotals();

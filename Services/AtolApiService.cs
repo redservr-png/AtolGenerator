@@ -518,10 +518,16 @@ public static class AtolApiService
         if (order.IsService && !order.IsOwnService)
         {
             if (order.AgentInfo is null)
+            {
+                var city = string.IsNullOrWhiteSpace(order.City) ? "не загружено" : order.City;
+                var service = string.IsNullOrWhiteSpace(order.ServiceType) ? "не определена" : order.ServiceType;
                 return new AtolPunchResult
                 {
-                    Error = $"Для услуги {order.OrderNum} не найден агент/поставщик. Проверьте подразделение и номенклатуру в 1С."
+                    Error = $"Для услуги {order.OrderNum} не найден агент/поставщик. " +
+                            $"Подразделение: «{city}», услуга: «{service}». " +
+                            "Проверьте Настройки → Агенты или отметьте агента вручную."
                 };
+            }
 
             if (string.IsNullOrWhiteSpace(order.AgentInfo.Name) ||
                 string.IsNullOrWhiteSpace(order.AgentInfo.Inn) ||

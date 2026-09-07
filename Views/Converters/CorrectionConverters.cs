@@ -19,7 +19,7 @@ public class OrderKindLabelConverter : IValueConverter
         } : string.Empty;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotImplementedException();
+        => Binding.DoNothing;
 }
 
 /// <summary>CorrectionScenario → русское название.</summary>
@@ -30,7 +30,7 @@ public class CorrectionScenarioLabelConverter : IValueConverter
         => value is CorrectionScenario s ? s.ToDisplayString() : string.Empty;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotImplementedException();
+        => Binding.DoNothing;
 }
 
 /// <summary>OrderKind → цвет полосы слева у карточки.</summary>
@@ -52,7 +52,7 @@ public class OrderKindToBrushConverter : IValueConverter
         } : Brushes.Transparent;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotImplementedException();
+        => Binding.DoNothing;
 }
 
 /// <summary>OrderKind → видимость (Visible если коррекция).</summary>
@@ -65,7 +65,7 @@ public class OrderKindToVisibilityConverter : IValueConverter
             : System.Windows.Visibility.Collapsed;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotImplementedException();
+        => Binding.DoNothing;
 }
 
 /// <summary>SourceDocumentType → короткая русская подпись (для чипа в карточке).</summary>
@@ -86,7 +86,7 @@ public class SourceDocumentTypeLabelConverter : IValueConverter
         } : string.Empty;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotImplementedException();
+        => Binding.DoNothing;
 }
 
 /// <summary>SourceDocumentType → Visible если ≠ Unknown (нужен чтобы не показывать пустые чипы).</summary>
@@ -99,7 +99,7 @@ public class SourceDocumentTypeVisibilityConverter : IValueConverter
             : System.Windows.Visibility.Collapsed;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotImplementedException();
+        => Binding.DoNothing;
 }
 
 /// <summary>CorrectionScenario == Unknown → Visible (для предупреждения «выберите сценарий»).</summary>
@@ -112,7 +112,7 @@ public class UnknownScenarioVisibilityConverter : IValueConverter
             : System.Windows.Visibility.Collapsed;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotImplementedException();
+        => Binding.DoNothing;
 }
 
 [ValueConversion(typeof(string), typeof(string))]
@@ -122,7 +122,7 @@ public class VatRateLabelConverter : IValueConverter
         VatRateCatalog.LabelFor(value as string);
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
-        throw new NotSupportedException();
+        Binding.DoNothing;
 }
 
 [ValueConversion(typeof(string), typeof(string))]
@@ -132,5 +132,5 @@ public class AgentTypeLabelConverter : IValueConverter
         AgentTypeCatalog.LabelFor(value as string);
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
-        throw new NotSupportedException();
+        Binding.DoNothing;
 }

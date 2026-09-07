@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Threading;
 using AtolGenerator.Constants;
 using AtolGenerator.Helpers;
 using AtolGenerator.Models;
@@ -375,6 +376,7 @@ public static class OneCService
         dynamic? query = null;
         dynamic? queryResult = null;
         dynamic? selection = null;
+        dynamic? docsManager = null;
         var result = new List<OneCRealizationItem>();
 
         Log($"=== LoadRealizationItems: docNumber={docNumber}, docDate={docDate:dd.MM.yyyy}, isService={isService} ===");
@@ -390,15 +392,24 @@ public static class OneCService
             if (conn is null)
                 throw new InvalidOperationException("1С вернула пустое COM-соединение.");
 
-            dynamic docsManager = conn.Документы.РеализацияТоваровУслуг;
+            object? documents = conn.Документы;
+            try
+            {
+                docsManager = ((dynamic)documents).РеализацияТоваровУслуг;
+            }
+            finally
+            {
+                ReleaseComObject(documents);
+            }
+
             result = TryLoadRealizationItemsFromObject(
                 conn, docsManager, docNumber, docDate, documentUuid);
             if (result.Count > 0)
             {
                 Log($"LoadRealizationItems: из объекта документа загружено {result.Count} позиций");
-                return result;
             }
-
+            else
+            {
             Log("LoadRealizationItems: объект документа недоступен — запрос к табличной части");
             query = conn.NewObject("Запрос");
             query.Текст = """
@@ -450,6 +461,7 @@ public static class OneCService
             }
 
             Log($"LoadRealizationItems: загружено {result.Count} позиций");
+            }
         }
         catch (Exception ex)
         {
@@ -461,6 +473,7 @@ public static class OneCService
             ReleaseComObject(selection);
             ReleaseComObject(queryResult);
             ReleaseComObject(query);
+            ReleaseComObject(docsManager);
             if (ownsConnection)
             {
                 ReleaseComObject(conn);
@@ -475,91 +488,111 @@ public static class OneCService
         dynamic conn, dynamic docsManager, string docNumber, DateTime docDate, string? documentUuid)
     {
         var result = new List<OneCRealizationItem>();
+        object? uid = null;
         object? docRef = null;
-
-        if (!string.IsNullOrWhiteSpace(documentUuid))
-        {
-            try
-            {
-                object uid = conn.NewObject("УникальныйИдентификатор", documentUuid);
-                docRef = ComInvoke((object)docsManager, ["GetRef", "ПолучитьСсылку"], uid);
-            }
-            catch (Exception ex)
-            {
-                Log($"LoadRealizationItems: UUID {documentUuid}: {ex.Message}");
-            }
-        }
-
-        if (docRef is null || IsEmptyOneCRef(docRef))
-        {
-            if (!TryFindRealizationForWrite(
-                    (object)conn, docNumber, docDate.Year,
-                    out docRef, out var foundDate, out _, out var findError))
-            {
-                Log($"LoadRealizationItems: документ не найден — {findError}");
-                return result;
-            }
-
-            if (IsMeaningfulDate(foundDate))
-                docDate = foundDate;
-        }
-
-        string failReasons;
-        var docObj = TryGetRealizationObject(
-            (object)conn, (object)docsManager, (object)docRef!, docNumber, docDate, out failReasons);
-        if (docObj is null)
-        {
-            Log($"LoadRealizationItems: ПолучитьОбъект — {failReasons}");
-            return result;
-        }
+        object? docObj = null;
 
         try
         {
+            if (!string.IsNullOrWhiteSpace(documentUuid))
+            {
+                try
+                {
+                    uid = conn.NewObject("УникальныйИдентификатор", documentUuid);
+                    docRef = ComInvoke((object)docsManager, ["GetRef", "ПолучитьСсылку"], uid);
+                }
+                catch (Exception ex)
+                {
+                    Log($"LoadRealizationItems: UUID {documentUuid}: {ex.Message}");
+                }
+            }
+
+            if (docRef is null || IsEmptyOneCRef(docRef))
+            {
+                if (!TryFindRealizationForWrite(
+                        (object)conn, docNumber, docDate.Year,
+                        out docRef, out var foundDate, out _, out var findError))
+                {
+                    Log($"LoadRealizationItems: документ не найден — {findError}");
+                    return result;
+                }
+
+                if (IsMeaningfulDate(foundDate))
+                    docDate = foundDate;
+            }
+
+            string failReasons;
+            docObj = TryGetRealizationObject(
+                (object)conn, (object)docsManager, (object)docRef!, docNumber, docDate, out failReasons);
+            if (docObj is null)
+            {
+                Log($"LoadRealizationItems: ПолучитьОбъект — {failReasons}");
+                return result;
+            }
+
             AppendTabularSectionItems(result, docObj, "Товары");
             AppendTabularSectionItems(result, docObj, "Услуги");
+            return result;
         }
         finally
         {
-            try { Marshal.ReleaseComObject(docObj); } catch { /* ignore */ }
+            ReleaseComObject(docObj);
+            ReleaseComObject(docRef);
+            ReleaseComObject(uid);
         }
-
-        return result;
     }
 
     private static void AppendTabularSectionItems(
         List<OneCRealizationItem> target, dynamic docObj, string sectionName)
     {
-        dynamic rows;
-        try { rows = docObj.GetType().InvokeMember(
-            sectionName, BindingFlags.GetProperty, null, docObj, null)!; }
-        catch { return; }
-
-        var count = ReadTabularRowCount(rows);
-        if (count <= 0) return;
-
-        for (var i = 0; i < count; i++)
+        object? rowsObj = null;
+        try
         {
-            object? rowObj = null;
-            try { rowObj = ComInvoke((object)rows, ["Get", "Получить"], i); }
-            catch { continue; }
-
-            if (rowObj is null) continue;
-
-            dynamic row = rowObj;
-            var name = ReadNomenclatureName(row);
-            var price = ToDouble(row.Цена);
-            var rawQty = ToQuantity(row.Количество);
-            var sum = ToDouble(row.Сумма);
-            if (string.IsNullOrWhiteSpace(name) || sum <= 0) continue;
-
-            var qty = ResolveLineQuantity(price, rawQty, sum);
-            target.Add(new OneCRealizationItem
+            try
             {
-                Name     = name,
-                Quantity = qty,
-                Sum      = sum,
-            });
-            Log($"  · [{sectionName}] {name}: qty={qty}, price={price:F2}, sum={sum:F2}");
+                rowsObj = docObj.GetType().InvokeMember(
+                    sectionName, BindingFlags.GetProperty, null, docObj, null);
+            }
+            catch { return; }
+
+            if (rowsObj is null) return;
+            dynamic rows = rowsObj;
+            var count = ReadTabularRowCount(rows);
+            if (count <= 0) return;
+
+            for (var i = 0; i < count; i++)
+            {
+                object? rowObj = null;
+                try
+                {
+                    rowObj = ComInvoke((object)rows, ["Get", "Получить"], i);
+                    if (rowObj is null) continue;
+
+                    dynamic row = rowObj;
+                    var name = ReadNomenclatureName(row);
+                    var price = ToDouble(row.Цена);
+                    var rawQty = ToQuantity(row.Количество);
+                    var sum = ToDouble(row.Сумма);
+                    if (string.IsNullOrWhiteSpace(name) || sum <= 0) continue;
+
+                    var qty = ResolveLineQuantity(price, rawQty, sum);
+                    target.Add(new OneCRealizationItem
+                    {
+                        Name     = name,
+                        Quantity = qty,
+                        Sum      = sum,
+                    });
+                    Log($"  · [{sectionName}] {name}: qty={qty}, price={price:F2}, sum={sum:F2}");
+                }
+                finally
+                {
+                    ReleaseComObject(rowObj);
+                }
+            }
+        }
+        finally
+        {
+            ReleaseComObject(rowsObj);
         }
     }
 
@@ -579,14 +612,17 @@ public static class OneCService
 
     private static string ReadNomenclatureName(dynamic row)
     {
+        object? nomObj = null;
         try
         {
-            dynamic nom = row.Номенклатура;
-            if (nom is null) return string.Empty;
+            nomObj = row.Номенклатура;
+            if (nomObj is null) return string.Empty;
+            dynamic nom = nomObj;
             try { return Str(nom.Наименование); }
             catch { return Str(nom); }
         }
         catch { return string.Empty; }
+        finally { ReleaseComObject(nomObj); }
     }
 
     private static void AppendLineFromQuerySelection(List<OneCRealizationItem> target, dynamic selection)
@@ -695,6 +731,11 @@ public static class OneCService
         if (order.DocumentType != Models.SourceDocumentType.Realization)
             return;
 
+        RunComSta(() => RefreshRealizationLineItemsCore(settings, order));
+    }
+
+    private static void RefreshRealizationLineItemsCore(OneCConnectionSettings settings, Models.OrderEntry order)
+    {
         var docNumber = !string.IsNullOrWhiteSpace(order.CorrectionNumber)
             ? order.CorrectionNumber
             : order.OrderNum;
@@ -788,9 +829,15 @@ public static class OneCService
         OneCConnectionSettings settings,
         IReadOnlyCollection<OneCRealization> realizations)
     {
-        var errors = new List<OneCRealizationEnrichmentError>();
-        if (realizations.Count == 0) return errors;
+        if (realizations.Count == 0) return new List<OneCRealizationEnrichmentError>();
+        return RunComSta(() => EnrichRealizationsForReceiptCore(settings, realizations));
+    }
 
+    private static List<OneCRealizationEnrichmentError> EnrichRealizationsForReceiptCore(
+        OneCConnectionSettings settings,
+        IReadOnlyCollection<OneCRealization> realizations)
+    {
+        var errors = new List<OneCRealizationEnrichmentError>();
         dynamic? connector = null;
         dynamic? connection = null;
         try
@@ -872,7 +919,12 @@ public static class OneCService
         OneCConnectionSettings s, List<Models.OrderEntry> orders)
     {
         if (orders.Count == 0) return;
+        RunComSta(() => EnrichOrdersFromOneCCore(s, orders));
+    }
 
+    private static void EnrichOrdersFromOneCCore(
+        OneCConnectionSettings s, List<Models.OrderEntry> orders)
+    {
         dynamic? conn      = null;
         dynamic? connector = null;
 
@@ -905,10 +957,13 @@ public static class OneCService
 
                     var result    = query.Выполнить();
                     var selection = result.Выбрать();
-                    if (!(bool)selection.Следующий()) continue;
+                    if (!(bool)selection.Следующий())
+                    {
+                        Log($"  {order.OrderNum}: заказ в 1С не найден");
+                        continue;
+                    }
 
                     var city      = Str(selection.Подразделение);
-                    var dogovor   = Str(selection.Договор);
                     var customer  = Str(selection.Покупатель);
 
                     if (!string.IsNullOrEmpty(city))
@@ -916,6 +971,9 @@ public static class OneCService
                     if (string.IsNullOrEmpty(order.CustomerName) && !string.IsNullOrEmpty(customer))
                         order.CustomerName = customer;
                     // IsService не меняем — метод вызывается только для уже помеченных услуг
+
+                    if (string.IsNullOrWhiteSpace(order.ServiceType))
+                        order.ServiceType = DetectServiceType(order.Items.Select(i => i.Name));
 
                     if (ServiceClassificationService.IsOwnDeliveryDepartmentName(order.City))
                     {
@@ -940,9 +998,13 @@ public static class OneCService
                     {
                         order.AgentInfo = ResolveServiceProvider(order.City, order.ServiceType);
                         if (order.AgentInfo is not null)
-                            Log($"  {order.OrderNum}: город={order.City}, агент={order.AgentInfo.Name}");
-                        if (order.AgentInfo is null)
-                            Log($"  {order.OrderNum}: город={order.City} — агент не найден в списке");
+                            Log($"  {order.OrderNum}: город={order.City}, услуга={order.ServiceType}, агент={order.AgentInfo.Name}");
+                        else
+                            Log($"  {order.OrderNum}: город={order.City}, услуга={order.ServiceType} — агент не найден в списке");
+                    }
+                    else if (order.IsService)
+                    {
+                        Log($"  {order.OrderNum}: подразделение в заказе 1С пустое");
                     }
                 }
                 catch (Exception ex)
@@ -954,10 +1016,11 @@ public static class OneCService
         catch (Exception ex)
         {
             Log($"EnrichOrdersFromOneC ERROR: {ex.Message}");
+            throw;
         }
         finally
         {
-            if (conn      is not null) Marshal.ReleaseComObject(conn);
+            if (conn is not null) Marshal.ReleaseComObject(conn);
             if (connector is not null) Marshal.ReleaseComObject(connector);
         }
 
@@ -1768,6 +1831,35 @@ public static class OneCService
         if (v.StartsWith("System.", StringComparison.Ordinal)) return true;
         return false;
     }
+
+    private static T RunComSta<T>(Func<T> action)
+    {
+        if (Thread.CurrentThread.GetApartmentState() == ApartmentState.STA)
+            return action();
+
+        T result = default!;
+        Exception? error = null;
+        var thread = new Thread(() =>
+        {
+            try { result = action(); }
+            catch (Exception ex) { error = ex; }
+        });
+        thread.Name = "1C-COM-STA";
+        thread.IsBackground = true;
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+        if (error is not null)
+            throw new InvalidOperationException(FormatComError(error), error);
+        return result;
+    }
+
+    private static void RunComSta(Action action) =>
+        RunComSta(() =>
+        {
+            action();
+            return 0;
+        });
 
     private static dynamic CreateConnector()
     {
