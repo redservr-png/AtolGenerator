@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using AtolGenerator.Helpers;
 using AtolGenerator.Services;
 
 namespace AtolGenerator;
@@ -9,10 +10,20 @@ public partial class App : Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
+        EventManager.RegisterClassHandler(
+            typeof(Window),
+            Window.LoadedEvent,
+            new RoutedEventHandler(OnWindowLoaded));
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
         ThemeService.ApplyTheme(ApplicationSettingsStore.Current.ThemeKey);
         base.OnStartup(e);
+    }
+
+    private static void OnWindowLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Window window)
+            WindowFit.ToWorkArea(window);
     }
 
     private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

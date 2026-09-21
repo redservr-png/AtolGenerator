@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:cv="clr-namespace:AtolGenerator.Views.Converters"
         Title="Редактирование коррекции"
-        Width="1380" Height="780" MinWidth="1040" MinHeight="600"
+        Width="1180" Height="700" MinWidth="860" MinHeight="540"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize" ShowInTaskbar="False"
         Background="{DynamicResource BrushBg}"
@@ -16,6 +16,7 @@
         <cv:SourceDocumentTypeLabelConverter    x:Key="DocTypeLabel"/>
         <cv:BoolToVisibilityConverter           x:Key="BoolVis"/>
         <cv:VatRateLabelConverter               x:Key="VatLabel"/>
+        <cv:MoneyRuConverter                    x:Key="MoneyRu"/>
 
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="FontSize"   Value="12"/>
@@ -252,8 +253,8 @@
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0">
                                                 <TextBlock Text="Сумма старого чека, ₽" Style="{StaticResource FieldLabel}"/>
-                                                <TextBox Text="{Binding OriginalCheckAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
-                                                         ToolTip="Итоговая сумма возвратного чека"/>
+                                                <TextBox Text="{Binding OriginalCheckAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue='', Converter={StaticResource MoneyRu}}"
+                                                         ToolTip="Итоговая сумма возвратного чека. Копейки: запятая или точка"/>
                                             </StackPanel>
                                             <StackPanel Grid.Column="2">
                                                 <TextBlock Text="ФП старого чека" Style="{StaticResource FieldLabel}"/>
@@ -310,11 +311,11 @@
                                                                     Width="*"
                                                                     ElementStyle="{StaticResource EditorCellText}"/>
                                                 <DataGridTextColumn Header="Кол-во"
-                                                                    Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}"
+                                                                    Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource MoneyRu}}"
                                                                     Width="90"
                                                                     ElementStyle="{StaticResource EditorCellText}"/>
                                                 <DataGridTextColumn Header="Сумма, ₽"
-                                                                    Binding="{Binding Sum, UpdateSourceTrigger=PropertyChanged}"
+                                                                    Binding="{Binding Sum, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource MoneyRu}}"
                                                                     Width="110"
                                                                     ElementStyle="{StaticResource EditorCellText}"/>
                                                 <DataGridTemplateColumn Header="НДС" Width="145">
@@ -351,8 +352,8 @@
                                         </TextBlock>
 
                                         <TextBlock Text="Исправленная сумма, ₽" Style="{StaticResource FieldLabel}"/>
-                                        <TextBox Text="{Binding CorrectAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
-                                                 ToolTip="Итог правильного чека после исправления"/>
+                                        <TextBox Text="{Binding CorrectAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue='', Converter={StaticResource MoneyRu}}"
+                                                 ToolTip="Итог правильного чека после исправления. Копейки: запятая или точка"/>
 
                                         <Grid Margin="0,12,0,0">
                                             <Grid.ColumnDefinitions>
@@ -403,11 +404,11 @@
                                                                         Width="*"
                                                                         ElementStyle="{StaticResource EditorCellText}"/>
                                                     <DataGridTextColumn Header="Кол-во"
-                                                                        Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}"
+                                                                        Binding="{Binding Quantity, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource MoneyRu}}"
                                                                         Width="90"
                                                                         ElementStyle="{StaticResource EditorCellText}"/>
                                                     <DataGridTextColumn Header="Сумма, ₽"
-                                                                        Binding="{Binding Sum, UpdateSourceTrigger=PropertyChanged}"
+                                                                        Binding="{Binding Sum, UpdateSourceTrigger=PropertyChanged, Converter={StaticResource MoneyRu}}"
                                                                         Width="110"
                                                                         ElementStyle="{StaticResource EditorCellText}"/>
                                                     <DataGridTemplateColumn Header="НДС" Width="145">
@@ -497,14 +498,14 @@
 
                             <StackPanel Grid.Row="0" Grid.Column="0">
                                 <TextBlock Text="Сумма правильная (из 1С), ₽" Style="{StaticResource FieldLabel}"/>
-                                <TextBox Text="{Binding CorrectAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
-                                         ToolTip="Сумма документа из 1С — используется в чеке коррекции"/>
+                                <TextBox Text="{Binding CorrectAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue='', Converter={StaticResource MoneyRu}}"
+                                         ToolTip="Сумма документа из 1С — используется в чеке коррекции. Копейки: запятая или точка"/>
                             </StackPanel>
 
                             <StackPanel Grid.Row="0" Grid.Column="2">
                                 <TextBlock Text="Сумма в чеке (ошибочная), ₽" Style="{StaticResource FieldLabel}"/>
-                                <TextBox Text="{Binding OriginalCheckAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
-                                         ToolTip="Сумма, которая была в ошибочно пробитом чеке"/>
+                                <TextBox Text="{Binding OriginalCheckAmount, UpdateSourceTrigger=PropertyChanged, TargetNullValue='', Converter={StaticResource MoneyRu}}"
+                                         ToolTip="Сумма, которая была в ошибочно пробитом чеке. Копейки: запятая или точка"/>
                             </StackPanel>
 
                             <StackPanel Grid.Row="2" Grid.ColumnSpan="3">

@@ -20,7 +20,6 @@ public class MainViewModel : BaseViewModel
     private bool _startupInitialized;
     private Views.OneCRealizationsWindow? _oneCRealizationsWindow;
     private Views.ReceiptPreviewWindow? _receiptPreviewWindow;
-    private bool _showManualEntryOnCorrections;
     private string _oneCCityFilter = "Все";
     private RealizationCheckKind _oneCActiveKind = RealizationCheckKind.NoCheck;
     private string _oneCSearchText = string.Empty;
@@ -36,18 +35,14 @@ public class MainViewModel : BaseViewModel
     public bool IsRefundsNav => _activeNav == "refunds";
     public bool IsPaymentNav => _activeNav == "payment";
     public bool IsRealizationCorrectionsNav => _activeNav == "realizationCorrections";
-    public bool ShowCheckTypeCard => IsRefundsNav || IsPaymentNav;
+    public bool ShowCheckTypeCard => IsRefundsNav || IsPaymentNav || IsRealizationCorrectionsNav;
     public bool ShowRefundCheckType => IsRefundsNav;
     public bool ShowSellCheckType => IsPaymentNav;
     public bool ShowCorrectionCheckTypes => IsRealizationCorrectionsNav;
     public bool ShowBulkInputCard => IsRefundsNav || IsPaymentNav;
     public bool ShowOneCLoadCard => IsRealizationCorrectionsNav;
     public bool ShowLeftInputCard => ShowBulkInputCard || ShowOneCLoadCard;
-    public bool ShowManualEntryToggle => IsRealizationCorrectionsNav;
-    public bool ShowManualOrderSection =>
-        IsRefundsNav || IsPaymentNav || (IsRealizationCorrectionsNav && _showManualEntryOnCorrections);
-    public string ManualEntryToggleLabel =>
-        _showManualEntryOnCorrections ? "Скрыть ручной ввод" : "Ввести реализацию вручную";
+    public bool ShowManualOrderSection => IsRefundsNav || IsPaymentNav || IsRealizationCorrectionsNav;
     public string HeaderTitle => _activeNav switch
     {
         "reports" => "Отчёты",
@@ -64,7 +59,7 @@ public class MainViewModel : BaseViewModel
         "obsidian" => "Очередь расхождений 1С и фискальных данных",
         "correctionWork" => "Сформировать и пробить исправительные чеки",
         "refunds" => "Обычный возврат прихода без тега 1192",
-        "realizationCorrections" => "Исправительные XML по реализациям 1С",
+        "realizationCorrections" => "Выгрузка из 1С или чек вручную: тип, оплата, номер и сумма",
         "payment" => "Редкий приход через АТОЛ API",
         _ => "Чеки, исправления и сверка фискальных данных",
     };
@@ -111,7 +106,7 @@ public class MainViewModel : BaseViewModel
         }
     }
     public bool IsCorrection         => CheckType is "sell_correction" or "buy_correction";
-    public bool ShowCorrectionBox    => IsCorrection;
+    public bool ShowCorrectionBox => IsCorrection || IsRealizationCorrectionsNav;
 
     /// <summary>В списке есть исправления: возвраты после формирования идут в API, коррекции — в XML.</summary>
     public bool HasXmlOnlyCorrection =>
@@ -146,7 +141,7 @@ public class MainViewModel : BaseViewModel
 
     /// <summary>Показывать ли подсказку про невозможность пробития через API.</summary>
     public bool ShowCorrectionPunchHint => IsCorrection || HasXmlOnlyCorrection;
-    public bool ShowPaymentType   => IsPaymentNav;
+    public bool ShowPaymentType => IsRefundsNav || IsPaymentNav || IsRealizationCorrectionsNav;
     public bool ShowBuyRefundOption => IsRealizationTab;
     public bool ShowItemsSection  => IsRealizationTab && !IsCorrection;
 
@@ -302,6 +297,8 @@ public class MainViewModel : BaseViewModel
     {
         get
         {
+            if (TotalOneCLoaded == 0)
+                return "Реализации ещё не загружены — чек можно ввести вручную слева";
             var text = $"{TotalOneCLoaded} записей";
             if (OneCFiltersActive)
                 text += $" · видно: {VisibleOneCCount}";
@@ -505,7 +502,6 @@ public class MainViewModel : BaseViewModel
     public ICommand ClearOneCFiltersCommand    { get; }
     public ICommand OpenOneCRealizationsWindowCommand { get; }
     public ICommand OpenReceiptPreviewCommand { get; }
-    public ICommand ToggleManualEntryCommand { get; }
     public ICommand DeselectAllOneCCommand     { get; }
     public ICommand AddSelectedToOrdersCommand { get; }
     public ICommand ToggleAtolPanelCommand     { get; }
@@ -575,12 +571,6 @@ public class MainViewModel : BaseViewModel
         ClearOneCFiltersCommand    = new RelayCommand(_ => ClearOneCFilters());
         OpenOneCRealizationsWindowCommand = new RelayCommand(_ => OpenOneCRealizationsWindow(), _ => ShowLoadedRealizations);
         OpenReceiptPreviewCommand = new RelayCommand(_ => OpenReceiptPreviewWindow(), _ => ShowResults);
-        ToggleManualEntryCommand = new RelayCommand(_ =>
-        {
-            _showManualEntryOnCorrections = !_showManualEntryOnCorrections;
-            OnPropertyChanged(nameof(ShowManualOrderSection));
-            OnPropertyChanged(nameof(ManualEntryToggleLabel));
-        });
         AddSelectedToOrdersCommand = new AsyncRelayCommand(AddSelectedToOrdersAsync);
         ToggleAtolPanelCommand     = new RelayCommand(_ => ShowAtolPanel = !ShowAtolPanel);
         SaveAtolSettingsCommand    = new RelayCommand(_ => SaveAtolSettings());
@@ -790,9 +780,9 @@ public class MainViewModel : BaseViewModel
         OnPropertyChanged(nameof(ShowBulkInputCard));
         OnPropertyChanged(nameof(ShowOneCLoadCard));
         OnPropertyChanged(nameof(ShowLeftInputCard));
-        OnPropertyChanged(nameof(ShowManualEntryToggle));
         OnPropertyChanged(nameof(ShowManualOrderSection));
         OnPropertyChanged(nameof(ShowPaymentType));
+        OnPropertyChanged(nameof(ShowCorrectionBox));
         OnPropertyChanged(nameof(OneCPanelVisible));
         OnPropertyChanged(nameof(ShowLoadedRealizationsInMain));
     }
@@ -989,11 +979,10 @@ public class MainViewModel : BaseViewModel
 
     private void ApplyCorrectionFields(OrderEntry o)
     {
-        if (IsCorrection)
-        {
-            o.CorrectionDate   = CorrectionDate;
-            o.CorrectionNumber = CorrectionNumber;
-        }
+        if (!ShowCorrectionBox)
+            return;
+        o.CorrectionDate = CorrectionDate;
+        o.CorrectionNumber = CorrectionNumber;
     }
 
     private void DeleteOrder(OrderEntry? order)
