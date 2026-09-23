@@ -548,6 +548,8 @@ public class MainViewModel : BaseViewModel
             (Reports.OfdReportPath, Reports.OfdChecks.ToList());
         ObsidianCases.OnlineOfdRowsImported = Reports.AddOnlineOfdReceipts;
         ObsidianCases.SendToWorkRequested += AddObsidianCasesToWork;
+        ObsidianCases.OpenReportMatchingRequested += OpenReportMatchingFromCases;
+        ObsidianCases.OpenOneCWriteRequested += OpenOneCWriteFromCases;
         CorrectionWork.BackRequested += LeaveCorrectionWork;
         CorrectionWork.EditRequested += EditCorrectionWorkItem;
         CorrectionWork.Generated += results =>
@@ -679,6 +681,37 @@ public class MainViewModel : BaseViewModel
     }
 
     // ── Logic ─────────────────────────────────────────────────────────────────
+
+    private void OpenReportMatchingFromCases()
+    {
+        ShowReportsLoadTab();
+        Reports.BuildMatches(false);
+        StatusText = Reports.CanBuildMatches
+            ? "Сопоставление XML с отчётом"
+            : "Для сопоставления загрузите XML и отчёт АТОЛ или архив Такском";
+    }
+
+    private void OpenOneCWriteFromCases()
+    {
+        ShowReportsLoadTab();
+        if (!Reports.CanExport)
+        {
+            StatusText = "Сначала сопоставьте XML и отчёт на вкладке «Загрузка в 1С»";
+            return;
+        }
+
+        StatusText = "Запись сопоставленных чеков в 1С";
+        _ = Reports.WriteMatchedToOneCAsync();
+    }
+
+    private void ShowReportsLoadTab()
+    {
+        SetNav("reports");
+        SetWorkspace("reports");
+        ShowOfdToolsPanel = false;
+        CloseOneCRealizationsWindow();
+        Reports.SelectedTabIndex = 3;
+    }
 
     private void OpenWorkspace(string? target)
     {

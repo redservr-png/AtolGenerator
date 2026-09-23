@@ -11,6 +11,86 @@
       <Setter Property="Padding" Value="14,8"/>
       <Setter Property="FontSize" Value="14"/>
     </Style>
+    <Style x:Key="ToolbarMenu" TargetType="Menu">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="VerticalAlignment" Value="Top"/>
+      <Setter Property="Margin" Value="0,0,8,8"/>
+    </Style>
+    <Style x:Key="ToolbarSubItem" TargetType="MenuItem">
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
+      <Setter Property="Padding" Value="10,8"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="MenuItem">
+            <Border x:Name="item" Background="Transparent" CornerRadius="4"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="item" Property="Background" Value="{DynamicResource BrushSurface3}"/>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="item" Property="Background" Value="{DynamicResource BrushSurface3}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.45"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="ToolbarRootItem" TargetType="MenuItem">
+      <Setter Property="FontFamily" Value="Segoe UI"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Foreground" Value="{DynamicResource BrushText2}"/>
+      <Setter Property="Background" Value="{DynamicResource BrushSurface2}"/>
+      <Setter Property="Padding" Value="14,8"/>
+      <Setter Property="ItemContainerStyle" Value="{StaticResource ToolbarSubItem}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="MenuItem">
+            <Grid>
+              <Border x:Name="brd" Background="{TemplateBinding Background}"
+                      BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                      CornerRadius="6" Padding="{TemplateBinding Padding}"
+                      MinHeight="40" SnapsToDevicePixels="True">
+                <StackPanel Orientation="Horizontal">
+                  <ContentPresenter ContentSource="Header" VerticalAlignment="Center"
+                                    RecognizesAccessKey="True"/>
+                  <TextBlock Text=" ▾" VerticalAlignment="Center"/>
+                </StackPanel>
+              </Border>
+              <Popup x:Name="PART_Popup" Placement="Bottom"
+                     IsOpen="{TemplateBinding IsSubmenuOpen}"
+                     AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+                <Border Background="{DynamicResource BrushSurface1}"
+                        BorderBrush="{DynamicResource BrushBorder}" BorderThickness="1"
+                        CornerRadius="6" Padding="4" MinWidth="260" Margin="0,4,0,0">
+                  <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                </Border>
+              </Popup>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="brd" Property="Background" Value="{DynamicResource BrushSurface3}"/>
+                <Setter Property="Foreground" Value="{DynamicResource BrushText}"/>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="brd" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+              </Trigger>
+              <Trigger Property="IsSubmenuOpen" Value="True">
+                <Setter TargetName="brd" Property="BorderBrush" Value="{DynamicResource BrushAccent}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="SelectableText" TargetType="TextBox">
       <Setter Property="IsReadOnly" Value="True"/>
       <Setter Property="IsReadOnlyCaretVisible" Value="True"/>
@@ -209,15 +289,48 @@
                   Margin="0,0,8,8" Command="{Binding SyncCommand}"/>
           <Button Content="Выбрать видимые" Style="{StaticResource WorkflowButton}"
                   Margin="0,0,8,8" Command="{Binding SelectAllVisibleCommand}"/>
-          <Button Content="Отметить выполненными" Style="{StaticResource WorkflowButton}"
-                  Margin="0,0,8,8" Command="{Binding MarkAwaitingReportCompletedCommand}"
-                  ToolTip="Закрывает только отмеченные строки со статусом «Ожидается отчёт». Сверка с отчётом не выполняется."
-                  ToolTipService.ShowOnDisabled="True"/>
-          <Button Content="Загрузить данные 1С" Style="{StaticResource WorkflowButton}"
-                  Margin="0,0,8,8" Command="{Binding FetchOneCDataCommand}"/>
-          <Button Content="Найти чеки по ФП" Style="{StaticResource WorkflowButton}"
-                  Margin="0,0,8,8" Command="{Binding LoadSourceOfdReportCommand}"
-                  ToolTip="Сначала проверить локальный архив, затем найти отсутствующие чеки в Такскоме"/>
+          <Menu Style="{StaticResource ToolbarMenu}">
+            <MenuItem Header="Отчёт" Style="{StaticResource ToolbarRootItem}"
+                      AutomationProperties.Name="Действия с отчётом">
+              <MenuItem Header="Проверить чек по отчёту"
+                        Command="{Binding VerifyReportCommand}"
+                        ToolTip="Сверяет отмеченные строки с загруженным отчётом АТОЛ или ОФД"/>
+              <MenuItem Header="Найти чеки по ФП"
+                        Command="{Binding LoadSourceOfdReportCommand}"
+                        ToolTip="Сначала локальный архив, затем отсутствующие чеки в Такскоме"/>
+              <MenuItem Header="Сопоставить с отчётом"
+                        Command="{Binding OpenReportMatchingCommand}"
+                        ToolTip="Открывает вкладку «Загрузка в 1С» и сопоставляет XML с журналом АТОЛ или архивом Такском"/>
+            </MenuItem>
+          </Menu>
+          <Menu Style="{StaticResource ToolbarMenu}">
+            <MenuItem Header="1С" Style="{StaticResource ToolbarRootItem}"
+                      AutomationProperties.Name="Действия с 1С">
+              <MenuItem Header="Загрузить данные 1С"
+                        Command="{Binding FetchOneCDataCommand}"/>
+              <MenuItem Header="Записать в 1С"
+                        Command="{Binding OpenOneCWriteCommand}"
+                        ToolTip="Открывает вкладку «Загрузка в 1С». Запись начинается, если сопоставление уже готово"/>
+              <MenuItem Header="Запись в 1С подтверждена"
+                        Command="{Binding MarkOneCRecordedCommand}"
+                        ToolTip="Отмечает пояснение записанным. Строка закроется, когда чек и служебка тоже подтверждены"/>
+            </MenuItem>
+          </Menu>
+          <Menu Style="{StaticResource ToolbarMenu}">
+            <MenuItem Header="Закрыть" Style="{StaticResource ToolbarRootItem}"
+                      AutomationProperties.Name="Закрытие строк">
+              <MenuItem Header="Отметить выполненными"
+                        Command="{Binding MarkAwaitingReportCompletedCommand}"
+                        ToolTip="Закрывает отмеченные строки со статусом «Ожидается отчёт» или «Запись в 1С». Отчёт и запись в 1С для этого не нужны"
+                        ToolTipService.ShowOnDisabled="True"/>
+              <MenuItem Header="Проверить служебки"
+                        Command="{Binding VerifyMemosCommand}"/>
+              <MenuItem Header="Служебка проверена вручную"
+                        Command="{Binding MarkMemoVerifiedCommand}"/>
+              <MenuItem Header="Открыть служебку"
+                        Command="{Binding OpenServiceNoteCommand}"/>
+            </MenuItem>
+          </Menu>
           <Button Content="Открыть пробитие исправлений" Style="{StaticResource BtnPrimary}"
                   MinHeight="40" Margin="0,0,0,8" Command="{Binding SendToWorkCommand}"/>
         </WrapPanel>
@@ -454,21 +567,6 @@
               <TextBlock Text="Пояснение в 1С"/>
               <TextBlock Grid.Column="1" Text="{Binding SelectedCase.OneCStatus}" FontWeight="SemiBold"/>
             </Grid>
-
-            <Button Content="Проверить чек по отчёту..." Style="{StaticResource BtnPrimary}"
-                    Command="{Binding VerifyReportCommand}"/>
-            <Button Content="Проверить служебки" Style="{StaticResource BtnSecondary}"
-                    Margin="0,7,0,0" Command="{Binding VerifyMemosCommand}"/>
-            <Button Content="Служебка проверена вручную" Style="{StaticResource BtnGhost}"
-                    Margin="0,7,0,0" Command="{Binding MarkMemoVerifiedCommand}"/>
-            <Button Content="Запись в 1С подтверждена" Style="{StaticResource BtnSecondary}"
-                    Margin="0,7,0,0" Command="{Binding MarkOneCRecordedCommand}"/>
-            <Button Content="Отметить выполненным" Style="{StaticResource BtnSecondary}"
-                    Margin="0,7,0,0" Command="{Binding MarkAwaitingReportCompletedCommand}"
-                    ToolTip="Закрывает отмеченные строки со статусом «Ожидается отчёт» без сверки с отчётом"
-                    ToolTipService.ShowOnDisabled="True"/>
-            <Button Content="Открыть служебку" Style="{StaticResource BtnGhost}"
-                    Margin="0,7,0,0" Command="{Binding OpenServiceNoteCommand}"/>
 
             <TextBox Text="{Binding SelectedCase.LastMessage, Mode=OneWay}" Style="{StaticResource SelectableText}"
                      Foreground="{DynamicResource BrushText3}" FontSize="11" Margin="0,14,0,0"/>

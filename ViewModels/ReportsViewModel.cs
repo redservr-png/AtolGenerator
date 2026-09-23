@@ -1053,6 +1053,8 @@ public sealed class ReportsViewModel : BaseViewModel
         }
     }
 
+    public Task WriteMatchedToOneCAsync() => ApplyExportToOneCAsync();
+
     private async Task ApplyExportToOneCAsync()
     {
         if (!CanExport)
