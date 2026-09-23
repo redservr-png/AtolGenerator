@@ -52,3 +52,18 @@ public class OneCRealizationViewModel : BaseViewModel
         OnPropertyChanged(nameof(FiscalNumber));
     }
 }
+
+public sealed class OneCCityOption
+{
+    public OneCCityOption(string name, string label)
+    {
+        Name = name;
+        Label = label;
+    }
+
+    public string Name { get; }
+    public string Label { get; }
+
+    // Шаблон ComboBox показывает текст объекта, а не DisplayMemberPath.
+    public override string ToString() => Label;
+}

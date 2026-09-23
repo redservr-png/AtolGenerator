@@ -268,7 +268,10 @@ public class MainViewModel : BaseViewModel
 
     // ── 1C staging table ─────────────────────────────────────────────────────
     public ObservableCollection<OneCRealizationViewModel> LoadedRealizations { get; } = new();
-    public ObservableCollection<string> OneCCityOptions { get; } = new() { "Все" };
+    public ObservableCollection<OneCCityOption> OneCCityOptions { get; } = new()
+    {
+        new OneCCityOption("Все", "Все — 0"),
+    };
     public ICollectionView LoadedRealizationsView { get; }
     private bool _showLoadedRealizations;
     public bool ShowLoadedRealizations
@@ -282,14 +285,14 @@ public class MainViewModel : BaseViewModel
     }
     public bool ShowLoadedRealizationsInMain => ShowLoadedRealizations && IsRealizationTab;
     // Все выбранные строки из запроса 1С.
-    public int SelectedOneCCount => LoadedRealizations.Count(r => r.IsSelected && r.CheckKind == OneCActiveKind);
+    public int SelectedOneCCount => LoadedRealizations.Count(CanAddOneCRealization);
     public int SelectedNoCheckCount => LoadedRealizations.Count(r => r.IsSelected && r.CheckKind == RealizationCheckKind.NoCheck);
     public int SelectedHasCheckCount => LoadedRealizations.Count(r => r.IsSelected && r.CheckKind == RealizationCheckKind.WrongDay);
     public int TotalOneCLoaded => LoadedRealizations.Count;
     public int VisibleOneCCount => LoadedRealizationsView.Cast<object>().Count();
-    public int NoCheckCount => LoadedRealizations.Count(r => r.CheckKind == RealizationCheckKind.NoCheck);
-    public int WrongDayCount => LoadedRealizations.Count(r => r.CheckKind == RealizationCheckKind.WrongDay);
-    public int IncompleteCount => LoadedRealizations.Count(r => r.CheckKind == RealizationCheckKind.Incomplete);
+    public int NoCheckCount => CountOneCKind(RealizationCheckKind.NoCheck);
+    public int WrongDayCount => CountOneCKind(RealizationCheckKind.WrongDay);
+    public int IncompleteCount => CountOneCKind(RealizationCheckKind.Incomplete);
     public string TabNoCheckLabel => $"Нет чека — коррекция ({NoCheckCount})";
     public string TabWrongDayLabel => $"Другой день — пара ({WrongDayCount})";
     public string TabIncompleteLabel => $"ФП без даты ({IncompleteCount})";
@@ -299,10 +302,26 @@ public class MainViewModel : BaseViewModel
         {
             if (TotalOneCLoaded == 0)
                 return "Реализации ещё не загружены — чек можно ввести вручную слева";
-            var text = $"{TotalOneCLoaded} записей";
             if (OneCFiltersActive)
-                text += $" · видно: {VisibleOneCCount}";
+                return $"{VisibleOneCCount} по отбору · выбрано: {SelectedOneCCount}";
+            var text = $"{TotalOneCLoaded} записей";
             return $"{text} · выбрано: {SelectedOneCCount}";
+        }
+    }
+    public string OneCCityShareText
+    {
+        get
+        {
+            if (string.Equals(OneCCityFilter, "Все", StringComparison.OrdinalIgnoreCase) ||
+                LoadedRealizations.Count == 0)
+                return string.Empty;
+
+            var total = LoadedRealizations.Sum(r => Math.Abs(r.Amount));
+            if (total <= 0) return string.Empty;
+            var citySum = LoadedRealizations
+                .Where(r => string.Equals(r.City, OneCCityFilter, StringComparison.OrdinalIgnoreCase))
+                .Sum(r => Math.Abs(r.Amount));
+            return $"{citySum / total * 100:0.#}% от общей суммы";
         }
     }
     public bool OneCFiltersActive =>
@@ -315,6 +334,7 @@ public class MainViewModel : BaseViewModel
         set
         {
             if (!Set(ref _oneCCityFilter, value ?? "Все")) return;
+            OnPropertyChanged(nameof(OneCCityShareText));
             RefreshOneCRealizationsView();
         }
     }
@@ -339,8 +359,7 @@ public class MainViewModel : BaseViewModel
         set { if (value) SetOneCActiveKind(RealizationCheckKind.Incomplete); }
     }
 
-    public bool CanAddSelectedRealizations =>
-        SelectedOneCCount > 0 && _oneCActiveKind != RealizationCheckKind.Incomplete;
+    public bool CanAddSelectedRealizations => SelectedOneCCount > 0;
 
     public string OneCSearchText
     {
@@ -499,6 +518,7 @@ public class MainViewModel : BaseViewModel
     public ICommand TestOneCCommand            { get; }
     public ICommand LoadFromOneCCommand        { get; }
     public ICommand SelectAllOneCCommand       { get; }
+    public ICommand SelectVisibleOneCCommand   { get; }
     public ICommand ClearOneCFiltersCommand    { get; }
     public ICommand OpenOneCRealizationsWindowCommand { get; }
     public ICommand OpenReceiptPreviewCommand { get; }
@@ -566,8 +586,9 @@ public class MainViewModel : BaseViewModel
         LoadedRealizationsView = CollectionViewSource.GetDefaultView(LoadedRealizations);
         LoadedRealizationsView.Filter = FilterOneCRealization;
 
-        SelectAllOneCCommand       = new RelayCommand(_ => SetAllOneCSelected(true));
-        DeselectAllOneCCommand     = new RelayCommand(_ => SetAllOneCSelected(false));
+        SelectAllOneCCommand       = new RelayCommand(_ => SelectOneCKind(true));
+        SelectVisibleOneCCommand   = new RelayCommand(_ => SelectVisibleOneC());
+        DeselectAllOneCCommand     = new RelayCommand(_ => ClearAllOneCSelection());
         ClearOneCFiltersCommand    = new RelayCommand(_ => ClearOneCFilters());
         OpenOneCRealizationsWindowCommand = new RelayCommand(_ => OpenOneCRealizationsWindow(), _ => ShowLoadedRealizations);
         OpenReceiptPreviewCommand = new RelayCommand(_ => OpenReceiptPreviewWindow(), _ => ShowResults);
@@ -2146,10 +2167,27 @@ public class MainViewModel : BaseViewModel
             OpenOneCRealizationsWindow();
     }
 
-    private void SetAllOneCSelected(bool value)
+    private void SelectOneCKind(bool value)
     {
-        foreach (OneCRealizationViewModel r in LoadedRealizationsView)
-            r.IsSelected = value;
+        foreach (var row in LoadedRealizations)
+        {
+            if (row.CheckKind == OneCActiveKind)
+                row.IsSelected = value;
+        }
+        NotifyOneCSelectionChanged();
+    }
+
+    private void SelectVisibleOneC()
+    {
+        foreach (OneCRealizationViewModel row in LoadedRealizationsView)
+            row.IsSelected = true;
+        NotifyOneCSelectionChanged();
+    }
+
+    private void ClearAllOneCSelection()
+    {
+        foreach (var row in LoadedRealizations)
+            row.IsSelected = false;
         NotifyOneCSelectionChanged();
     }
 
@@ -2252,13 +2290,21 @@ public class MainViewModel : BaseViewModel
     private void RefreshOneCCityOptions()
     {
         OneCCityOptions.Clear();
-        OneCCityOptions.Add("Все");
-        foreach (var city in LoadedRealizations
-                     .Select(r => r.City)
-                     .Where(c => !string.IsNullOrWhiteSpace(c))
-                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                     .OrderBy(c => c, StringComparer.OrdinalIgnoreCase))
-            OneCCityOptions.Add(city);
+        OneCCityOptions.Add(new OneCCityOption("Все", $"Все — {LoadedRealizations.Count}"));
+        foreach (var group in LoadedRealizations
+                     .Where(r => !string.IsNullOrWhiteSpace(r.City))
+                     .GroupBy(r => r.City, StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            OneCCityOptions.Add(new OneCCityOption(group.Key, $"{group.Key} — {group.Count()}"));
+        }
+
+        if (!OneCCityOptions.Any(x => string.Equals(x.Name, _oneCCityFilter, StringComparison.OrdinalIgnoreCase)))
+        {
+            _oneCCityFilter = "Все";
+            OnPropertyChanged(nameof(OneCCityFilter));
+        }
+        OnPropertyChanged(nameof(OneCCityShareText));
     }
 
     private void RefreshOneCRealizationsView()
@@ -2266,7 +2312,7 @@ public class MainViewModel : BaseViewModel
         LoadedRealizationsView.Refresh();
         OnPropertyChanged(nameof(VisibleOneCCount));
         OnPropertyChanged(nameof(OneCFiltersActive));
-        OnPropertyChanged(nameof(OneCRealizationsSummary));
+        NotifyOneCSelectionChanged();
     }
 
     private void NotifyOneCSelectionChanged()
@@ -2288,10 +2334,15 @@ public class MainViewModel : BaseViewModel
     private bool FilterOneCRealization(object obj)
     {
         if (obj is not OneCRealizationViewModel row) return false;
+        if (row.CheckKind != OneCActiveKind) return false;
+        return MatchesOneCCityAndSearch(row);
+    }
 
-        if (row.CheckKind != OneCActiveKind)
-            return false;
+    private int CountOneCKind(RealizationCheckKind kind) =>
+        LoadedRealizations.Count(r => r.CheckKind == kind && MatchesOneCCityAndSearch(r));
 
+    private bool MatchesOneCCityAndSearch(OneCRealizationViewModel row)
+    {
         if (!string.Equals(OneCCityFilter, "Все", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(row.City, OneCCityFilter, StringComparison.OrdinalIgnoreCase))
             return false;
@@ -2310,20 +2361,20 @@ public class MainViewModel : BaseViewModel
         !string.IsNullOrEmpty(source) &&
         source.Contains(query, StringComparison.OrdinalIgnoreCase);
 
+    private static bool CanAddOneCRealization(OneCRealizationViewModel row) =>
+        row.IsSelected &&
+        row.CheckKind is RealizationCheckKind.NoCheck or RealizationCheckKind.WrongDay;
+
     private async Task AddSelectedToOrdersAsync()
     {
-        if (_oneCActiveKind == RealizationCheckKind.Incomplete)
-        {
-            ShowToast("Строки «ФП без даты» в XML не добавляются. Проставьте дату печати в 1С и загрузите снова.", true);
-            return;
-        }
-
-        var selected = LoadedRealizations
-            .Where(r => r.IsSelected && r.CheckKind == OneCActiveKind)
-            .ToList();
+        var selected = LoadedRealizations.Where(CanAddOneCRealization).ToList();
         if (selected.Count == 0)
         {
-            ShowToast("Нет выбранных реализаций для добавления", true);
+            ShowToast(
+                _oneCActiveKind == RealizationCheckKind.Incomplete
+                    ? "Строки «ФП без даты» в XML не добавляются. Проставьте дату печати в 1С и загрузите снова."
+                    : "Нет выбранных реализаций для добавления",
+                true);
             return;
         }
 

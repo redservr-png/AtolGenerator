@@ -15,6 +15,7 @@ public static class ReportReconciliationService
         public string Operation { get; init; } = string.Empty;
         public double Amount { get; init; }
         public string Source { get; init; } = string.Empty;
+        public string Search { get; init; } = string.Empty;
     }
 
     public static List<OneCExportRow> Build(
@@ -28,9 +29,13 @@ public static class ReportReconciliationService
             .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.RegisteredAt).First(), StringComparer.OrdinalIgnoreCase);
 
         var ofdByRealization = ofdRows
-            .Where(x => !string.IsNullOrWhiteSpace(x.AdditionalUserPropValue))
-            .GroupBy(x => x.AdditionalUserPropValue, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.OrdinalIgnoreCase);
+            .Select(x => (Key: CanonRealization(x.AdditionalUserPropValue), Row: x))
+            .Where(x => x.Key.Length > 0)
+            .GroupBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(x => x.Row).ToList(),
+                StringComparer.OrdinalIgnoreCase);
 
         var ofdByFiscalSign = ofdRows
             .Where(x => x.FiscalSign.HasValue)
@@ -38,6 +43,12 @@ public static class ReportReconciliationService
             .ToDictionary(g => g.Key, g => g.ToList());
 
         var usedOfdKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pairOriginalFiscalSign = xmlChecks
+            .Where(x => x.Operation == "sell_refund" &&
+                        !string.IsNullOrWhiteSpace(x.RealizationNumber) &&
+                        !string.IsNullOrWhiteSpace(x.OriginalFiscalSign))
+            .GroupBy(x => x.RealizationNumber, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().OriginalFiscalSign, StringComparer.OrdinalIgnoreCase);
 
         var uniqueDocumentDateByNumber = xmlChecks
             .Select(x => (x.RealizationNumber, Date: ParseDocumentDate(x.BaseDate)))
@@ -79,7 +90,15 @@ public static class ReportReconciliationService
                 continue;
             }
 
-            if (!TryResolveFiscalMatch(xml, atolByExternalId, ofdByRealization, ofdRows, usedOfdKeys, out var match, out var matchError))
+            var originalFiscalSign = xml.OriginalFiscalSign;
+            if (string.IsNullOrWhiteSpace(originalFiscalSign) &&
+                xml.Operation == "sell_correction" &&
+                pairOriginalFiscalSign.TryGetValue(xml.RealizationNumber, out var siblingFiscalSign))
+                originalFiscalSign = siblingFiscalSign;
+
+            if (!TryResolveFiscalMatch(
+                    xml, originalFiscalSign, atolChecks, atolByExternalId, ofdByRealization, ofdRows, usedOfdKeys,
+                    out var match, out var matchError))
             {
                 result.Add(ErrorRow(xml, matchError));
                 continue;
@@ -102,9 +121,7 @@ public static class ReportReconciliationService
             var writeMode = isPair ? "comment_only" : "update_fields";
             var comment = BuildComment(xml.Operation, match.RegisteredAt, match.FiscalSign, isPair);
             var ofdStatus = BuildOfdStatus(match, ofdRows.Count, ofdByFiscalSign);
-            var status = string.Equals(match.Source, "taxcom", StringComparison.OrdinalIgnoreCase)
-                ? "Готово · Такском"
-                : "Готово";
+            var status = $"Готово · {match.Search}";
             var documentDate = ParseDocumentDate(xml.BaseDate)
                 ?? (uniqueDocumentDateByNumber.TryGetValue(xml.RealizationNumber, out var sharedDate)
                     ? sharedDate
@@ -223,6 +240,8 @@ public static class ReportReconciliationService
 
     private static bool TryResolveFiscalMatch(
         XmlReportCheck xml,
+        string originalFiscalSign,
+        IReadOnlyCollection<AtolJournalReportRow> atolChecks,
         IReadOnlyDictionary<string, AtolJournalReportRow> atolByExternalId,
         IReadOnlyDictionary<string, List<OfdReportRow>> ofdByRealization,
         IReadOnlyCollection<OfdReportRow> ofdRows,
@@ -241,15 +260,14 @@ public static class ReportReconciliationService
                 return false;
             }
 
-            match = new FiscalMatch
-            {
-                RegisteredAt = atol.RegisteredAt.Value,
-                FiscalSign = atol.FiscalSign.Value,
-                FiscalDocument = atol.FiscalDocument.Value,
-                Operation = atol.Operation,
-                Amount = atol.Amount,
-                Source = "atol",
-            };
+            match = FromAtol(atol, "АТОЛ по External Id");
+            return true;
+        }
+
+        var atolByNumber = FindAtolByNumber(xml, atolChecks);
+        if (atolByNumber is not null)
+        {
+            match = FromAtol(atolByNumber, "АТОЛ по номеру и сумме");
             return true;
         }
 
@@ -261,7 +279,7 @@ public static class ReportReconciliationService
             return false;
         }
 
-        var ofd = FindOfdMatch(xml, ofdByRealization, ofdRows, usedOfdKeys);
+        var ofd = FindOfdMatch(xml, originalFiscalSign, ofdByRealization, ofdRows, usedOfdKeys, out var search);
         if (ofd is null)
         {
             error = atolByExternalId.Count > 0
@@ -277,60 +295,209 @@ public static class ReportReconciliationService
         }
 
         usedOfdKeys.Add(BuildOfdKey(ofd));
+        var operation = ResolveOfdOperation(ofd);
+        if (string.IsNullOrWhiteSpace(operation) ||
+            search.StartsWith("Такском: один", StringComparison.Ordinal))
+            operation = xml.Operation;
         match = new FiscalMatch
         {
             RegisteredAt = ofd.RegisteredAt.Value,
             FiscalSign = ofd.FiscalSign.Value,
             FiscalDocument = ofd.FiscalDocument.Value,
-            Operation = ResolveOfdOperation(ofd),
+            Operation = operation,
             Amount = ofd.Amount,
             Source = "taxcom",
+            Search = search,
         };
         return true;
     }
 
+    private static FiscalMatch FromAtol(AtolJournalReportRow atol, string search) => new()
+    {
+        RegisteredAt = atol.RegisteredAt!.Value,
+        FiscalSign = atol.FiscalSign!.Value,
+        FiscalDocument = atol.FiscalDocument!.Value,
+        Operation = atol.Operation,
+        Amount = atol.Amount,
+        Source = "atol",
+        Search = search,
+    };
+
+    private static AtolJournalReportRow? FindAtolByNumber(
+        XmlReportCheck xml,
+        IReadOnlyCollection<AtolJournalReportRow> atolChecks)
+    {
+        var number = CanonRealization(xml.RealizationNumber);
+        if (number.Length == 0) return null;
+
+        return atolChecks
+            .Where(x => x.FiscalSign.HasValue && x.FiscalDocument.HasValue && x.RegisteredAt.HasValue)
+            .Where(x => AmountMatches(x.Amount, xml.Amount))
+            .Where(x => string.Equals(x.Operation, xml.Operation, StringComparison.OrdinalIgnoreCase))
+            .Where(x => CanonRealization(x.BaseNumber) == number ||
+                        TextHasRealization(x.ExternalId, number) ||
+                        TextHasRealization(x.IncomingJson, number))
+            .OrderBy(x => DateDistance(x.RegisteredAt, xml.GeneratedAt))
+            .FirstOrDefault();
+    }
+
     private static OfdReportRow? FindOfdMatch(
         XmlReportCheck xml,
+        string originalFiscalSign,
         IReadOnlyDictionary<string, List<OfdReportRow>> ofdByRealization,
         IReadOnlyCollection<OfdReportRow> ofdRows,
-        HashSet<string> usedOfdKeys)
+        HashSet<string> usedOfdKeys,
+        out string search)
     {
-        var candidates = new List<OfdReportRow>();
-        if (ofdByRealization.TryGetValue(xml.RealizationNumber, out var byRealization))
-            candidates.AddRange(byRealization);
-        else if (xml.Operation == "sell_correction")
-            candidates.AddRange(ofdRows);
+        search = string.Empty;
+        var foundBy = string.Empty;
+        var unused = ofdRows.Where(row => !usedOfdKeys.Contains(BuildOfdKey(row))).ToList();
+        if (unused.Count == 0) return null;
 
-        foreach (var ofd in candidates
-                     .OrderBy(x => x.RegisteredAt ?? DateTime.MaxValue)
-                     .ThenBy(x => x.FiscalDocument ?? long.MaxValue))
+        var number = CanonRealization(xml.RealizationNumber);
+        OfdReportRow? Take(IEnumerable<OfdReportRow> rows, string label)
         {
-            if (usedOfdKeys.Contains(BuildOfdKey(ofd))) continue;
-            if (!AmountMatches(ofd.Amount, xml.Amount)) continue;
-            if (!OperationMatches(ofd, xml.Operation)) continue;
+            var hit = rows
+                .OrderBy(row => DateDistance(row.RegisteredAt, xml.GeneratedAt))
+                .FirstOrDefault();
+            if (hit is null) return null;
+            foundBy = label;
+            return hit;
+        }
 
-            if (xml.Operation == "sell_correction")
-            {
-                if (!ofd.Document.Contains("коррекции", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                if (!string.IsNullOrWhiteSpace(xml.OriginalFiscalSign) &&
-                    !string.IsNullOrWhiteSpace(ofd.AdditionalCheckProps) &&
-                    !string.Equals(
-                        NormalizeDigits(xml.OriginalFiscalSign),
-                        NormalizeDigits(ofd.AdditionalCheckProps),
-                        StringComparison.OrdinalIgnoreCase))
-                    continue;
-            }
-            else if (ofdByRealization.ContainsKey(xml.RealizationNumber) &&
-                     !string.Equals(ofd.AdditionalUserPropValue, xml.RealizationNumber, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
+        var byNumber = new List<OfdReportRow>();
+        if (number.Length > 0 &&
+            ofdByRealization.TryGetValue(number, out var indexed))
+            byNumber.AddRange(indexed.Where(row => unused.Contains(row)));
 
-            return ofd;
+        var hitByNumber = Take(
+            byNumber.Where(row => OperationMatches(row, xml.Operation) && AmountMatches(row.Amount, xml.Amount)),
+            "Такском по номеру и сумме");
+        if (hitByNumber is not null)
+        {
+            search = foundBy;
+            return hitByNumber;
+        }
+
+        if (!string.IsNullOrWhiteSpace(originalFiscalSign))
+        {
+            var byFiscalSign = Take(
+                unused.Where(row =>
+                    OperationMatches(row, xml.Operation) &&
+                    SameDigits(row.AdditionalCheckProps, originalFiscalSign)),
+                "Такском по ФП исходного чека");
+            if (byFiscalSign is not null)
+            {
+                search = foundBy;
+                return byFiscalSign;
+            }
+        }
+
+        if (number.Length > 0)
+        {
+            var byText = Take(
+                unused.Where(row =>
+                    OperationMatches(row, xml.Operation) &&
+                    AmountMatches(row.Amount, xml.Amount) &&
+                    RowMentionsRealization(row, number)),
+                "Такском по номеру в тексте чека");
+            if (byText is not null)
+            {
+                search = foundBy;
+                return byText;
+            }
+        }
+
+        if (xml.GeneratedAt.HasValue)
+        {
+            var byDate = Take(
+                unused.Where(row =>
+                    OperationMatches(row, xml.Operation) &&
+                    AmountMatches(row.Amount, xml.Amount) &&
+                    row.RegisteredAt.HasValue &&
+                    Math.Abs((row.RegisteredAt.Value - xml.GeneratedAt.Value).TotalDays) <= 7),
+                "Такском по дате и сумме");
+            if (byDate is not null)
+            {
+                search = foundBy;
+                return byDate;
+            }
+        }
+
+        var sameOperation = unused
+            .Where(row => OperationMatches(row, xml.Operation) && AmountMatches(row.Amount, xml.Amount))
+            .ToList();
+        if (sameOperation.Count == 1)
+        {
+            search = "Такском: одна сумма и операция";
+            return sameOperation[0];
+        }
+
+        if (number.Length > 0)
+        {
+            var sameNumber = unused
+                .Where(row => AmountMatches(row.Amount, xml.Amount) &&
+                              (CanonRealization(row.AdditionalUserPropValue) == number ||
+                               RowMentionsRealization(row, number)))
+                .ToList();
+            if (sameNumber.Count == 1)
+            {
+                search = "Такском: один номер и сумма";
+                return sameNumber[0];
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(originalFiscalSign))
+        {
+            var sameFiscalSign = unused
+                .Where(row => AmountMatches(row.Amount, xml.Amount) &&
+                              SameDigits(row.AdditionalCheckProps, originalFiscalSign))
+                .ToList();
+            if (sameFiscalSign.Count == 1)
+            {
+                search = "Такском: один ФП и сумма";
+                return sameFiscalSign[0];
+            }
         }
 
         return null;
+    }
+
+    private static bool RowMentionsRealization(OfdReportRow row, string number) =>
+        TextHasRealization(row.Document, number) ||
+        TextHasRealization(row.AdditionalUserPropValue, number) ||
+        TextHasRealization(row.AdditionalUserPropName, number) ||
+        TextHasRealization(row.AdditionalCheckProps, number) ||
+        TextHasRealization(row.CalculationMethod, number);
+
+    private static bool TextHasRealization(string? text, string number)
+    {
+        if (string.IsNullOrWhiteSpace(text) || number.Length == 0) return false;
+        return CanonRealization(text).Contains(number, StringComparison.OrdinalIgnoreCase) ||
+               text.Contains(number, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string CanonRealization(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        var text = ReportImportService.NormalizeRealizationNumber(value)
+            .Replace(" ", string.Empty)
+            .Replace('T', 'т')
+            .Replace('t', 'т');
+        return text;
+    }
+
+    private static bool SameDigits(string? left, string? right)
+    {
+        var a = NormalizeDigits(left ?? string.Empty);
+        var b = NormalizeDigits(right ?? string.Empty);
+        return a.Length > 0 && a == b;
+    }
+
+    private static double DateDistance(DateTime? registeredAt, DateTime? generatedAt)
+    {
+        if (!registeredAt.HasValue || !generatedAt.HasValue) return 10_000;
+        return Math.Abs((registeredAt.Value - generatedAt.Value).TotalHours);
     }
 
     private static bool IsSupportedOperation(XmlReportCheck check) =>
@@ -378,13 +545,23 @@ public static class ReportReconciliationService
     private static string ResolveOfdOperation(OfdReportRow ofd)
     {
         var operation = ofd.Operation.Trim().ToLowerInvariant();
-        if (operation.Length > 0) return operation;
+        if (operation is "sell" or "sell_refund" or "sell_correction" or "buy" or "buy_refund" or "buy_correction")
+            return operation;
 
-        if (ofd.Document.Contains("коррекции", StringComparison.OrdinalIgnoreCase))
-            return "sell_correction";
-        if (ofd.Document.Contains("возврат", StringComparison.OrdinalIgnoreCase))
-            return "sell_refund";
-        return "sell";
+        var text = $"{operation} {ofd.Document}".ToLowerInvariant();
+        var isCorrection = text.Contains("коррек", StringComparison.Ordinal);
+        var isRefund = text.Contains("возврат", StringComparison.Ordinal);
+        var isExpense = text.Contains("расход", StringComparison.Ordinal) &&
+                        !text.Contains("приход", StringComparison.Ordinal);
+
+        if (isCorrection && isExpense) return "buy_correction";
+        if (isCorrection && isRefund) return "buy_refund";
+        if (isCorrection) return "sell_correction";
+        if (isRefund && isExpense) return "buy_refund";
+        if (isRefund) return "sell_refund";
+        if (isExpense) return "buy";
+        if (text.Contains("приход", StringComparison.Ordinal) || operation == "sell") return "sell";
+        return operation;
     }
 
     private static bool AmountMatches(double left, double right) =>

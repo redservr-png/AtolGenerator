@@ -209,6 +209,10 @@
                   Margin="0,0,8,8" Command="{Binding SyncCommand}"/>
           <Button Content="Выбрать видимые" Style="{StaticResource WorkflowButton}"
                   Margin="0,0,8,8" Command="{Binding SelectAllVisibleCommand}"/>
+          <Button Content="Отметить выполненными" Style="{StaticResource WorkflowButton}"
+                  Margin="0,0,8,8" Command="{Binding MarkAwaitingReportCompletedCommand}"
+                  ToolTip="Закрывает только отмеченные строки со статусом «Ожидается отчёт». Сверка с отчётом не выполняется."
+                  ToolTipService.ShowOnDisabled="True"/>
           <Button Content="Загрузить данные 1С" Style="{StaticResource WorkflowButton}"
                   Margin="0,0,8,8" Command="{Binding FetchOneCDataCommand}"/>
           <Button Content="Найти чеки по ФП" Style="{StaticResource WorkflowButton}"
@@ -459,6 +463,10 @@
                     Margin="0,7,0,0" Command="{Binding MarkMemoVerifiedCommand}"/>
             <Button Content="Запись в 1С подтверждена" Style="{StaticResource BtnSecondary}"
                     Margin="0,7,0,0" Command="{Binding MarkOneCRecordedCommand}"/>
+            <Button Content="Отметить выполненным" Style="{StaticResource BtnSecondary}"
+                    Margin="0,7,0,0" Command="{Binding MarkAwaitingReportCompletedCommand}"
+                    ToolTip="Закрывает отмеченные строки со статусом «Ожидается отчёт» без сверки с отчётом"
+                    ToolTipService.ShowOnDisabled="True"/>
             <Button Content="Открыть служебку" Style="{StaticResource BtnGhost}"
                     Margin="0,7,0,0" Command="{Binding OpenServiceNoteCommand}"/>
 

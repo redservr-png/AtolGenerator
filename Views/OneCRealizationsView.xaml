@@ -42,17 +42,24 @@
           <Button Content="Выбрать все"
                   Style="{StaticResource BtnGhost}"
                   Padding="10,5" FontSize="12" Margin="0,0,6,0"
-                  Command="{Binding SelectAllOneCCommand}"/>
+                  Command="{Binding SelectAllOneCCommand}"
+                  ToolTip="Отметить все строки текущей вкладки, без учёта города и поиска"/>
+          <Button Content="Выбрать видные"
+                  Style="{StaticResource BtnGhost}"
+                  Padding="10,5" FontSize="12" Margin="0,0,6,0"
+                  Command="{Binding SelectVisibleOneCCommand}"
+                  ToolTip="Отметить только строки, которые сейчас видны с учётом города и поиска"/>
           <Button Content="Снять все"
                   Style="{StaticResource BtnGhost}"
                   Padding="10,5" FontSize="12" Margin="0,0,6,0"
-                  Command="{Binding DeselectAllOneCCommand}"/>
+                  Command="{Binding DeselectAllOneCCommand}"
+                  ToolTip="Снять отметки на всех вкладках: нет чека, другой день и ФП без даты"/>
           <Button Style="{StaticResource BtnPrimary}"
                   Padding="12,5" FontSize="12"
                   Command="{Binding AddSelectedToOrdersCommand}"
                   IsEnabled="{Binding CanAddSelectedRealizations}"
                   AutomationProperties.Name="Добавить выбранные реализации"
-                  ToolTip="Добавляет выбранные реализации в список исправлений. XML формируется отдельно.">
+                  ToolTip="Добавляет отмеченные реализации с вкладок «Нет чека» и «Другой день». XML формируется отдельно.">
             <StackPanel Orientation="Horizontal">
               <TextBlock Text="Добавить выбранные (" Margin="0"/>
               <TextBlock Text="{Binding SelectedOneCCount, Mode=OneWay}" FontWeight="Bold"/>
@@ -65,9 +72,21 @@
       <WrapPanel Grid.Row="1" Margin="0,0,0,10" Orientation="Horizontal">
         <TextBlock Text="Город:" FontSize="12" Foreground="{DynamicResource BrushText3}"
                    VerticalAlignment="Center" Margin="0,0,6,0"/>
-        <ComboBox Width="170" FontSize="12" Margin="0,0,14,0"
+        <ComboBox MinWidth="220" FontSize="12" Margin="0,0,8,0"
                   ItemsSource="{Binding OneCCityOptions}"
-                  SelectedItem="{Binding OneCCityFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                  SelectedValue="{Binding OneCCityFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                  SelectedValuePath="Name"
+                  ToolTip="Число — сколько реализаций загружено по этому подразделению">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Label}" FontSize="12"/>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock Text="{Binding OneCCityShareText}"
+                   FontSize="12" Foreground="{DynamicResource BrushText2}"
+                   VerticalAlignment="Center" Margin="0,0,14,0"
+                   ToolTip="Доля суммы выбранного подразделения от суммы всех загруженных реализаций"/>
         <TextBlock Text="Поиск:" FontSize="12" Foreground="{DynamicResource BrushText3}"
                    VerticalAlignment="Center" Margin="0,0,6,0"/>
         <TextBox Width="220" FontSize="12"

@@ -96,6 +96,17 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
             ? "Не определён по пояснению"
             : "Определён по пояснению";
 
+    public bool AwaitsReport
+    {
+        get
+        {
+            if (IsCompleted) return false;
+            if (State.CheckConfirmed && State.ServiceNoteVerified && !State.OneCRecorded) return false;
+            if (State.CheckConfirmed && !State.ServiceNoteVerified) return false;
+            return State.ExpectedChecks.Count > 0;
+        }
+    }
+
     public string StateLabel
     {
         get
@@ -103,7 +114,7 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
             if (IsCompleted) return "Закрыта";
             if (State.CheckConfirmed && State.ServiceNoteVerified && !State.OneCRecorded) return "Запись в 1С";
             if (State.CheckConfirmed && !State.ServiceNoteVerified) return "Проверить служебку";
-            if (State.ExpectedChecks.Count > 0) return "Ожидается отчёт";
+            if (AwaitsReport) return "Ожидается отчёт";
             if (State.SentToWork) return "В работе";
             return "Новая";
         }
@@ -166,6 +177,7 @@ public sealed class ObsidianCaseItemViewModel : BaseViewModel
     public void Refresh()
     {
         _plan = CorrectionPlanService.Build(Record.PrimaryDocument, State.OriginalReceipt, DateTime.Today);
+        OnPropertyChanged(nameof(AwaitsReport));
         OnPropertyChanged(nameof(StateLabel));
         OnPropertyChanged(nameof(CheckStatus));
         OnPropertyChanged(nameof(MemoStatus));
@@ -329,6 +341,8 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         FetchOneCDataCommand = new AsyncRelayCommand(FetchOneCDataAsync);
         LoadSourceOfdReportCommand = new RelayCommand(LoadSourceOfdReport);
         MarkOneCRecordedCommand = new RelayCommand(MarkOneCRecorded, HasSelectedActive);
+        MarkAwaitingReportCompletedCommand = new RelayCommand(
+            MarkAwaitingReportCompleted, HasSelectedAwaitingReport);
         SaveProblemCommand = new RelayCommand(SaveProblem, () => SelectedCase?.CanEdit == true);
         OpenServiceNoteCommand = new RelayCommand(OpenServiceNote, () =>
             SelectedCase is not null && File.Exists(SelectedCase.State.ServiceNotePath));
@@ -356,6 +370,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
     public ICommand FetchOneCDataCommand { get; }
     public ICommand LoadSourceOfdReportCommand { get; }
     public ICommand MarkOneCRecordedCommand { get; }
+    public ICommand MarkAwaitingReportCompletedCommand { get; }
     public ICommand SaveProblemCommand { get; }
     public ICommand OpenServiceNoteCommand { get; }
     public ICommand SelectAllVisibleCommand { get; }
@@ -1158,6 +1173,41 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         Status = $"Запись в 1С подтверждена: {selected.Count}";
     }
 
+    private void MarkAwaitingReportCompleted()
+    {
+        var selected = SelectedActive().ToList();
+        var waiting = selected.Where(x => x.AwaitsReport).ToList();
+        if (waiting.Count == 0) return;
+
+        _ignoreWatcherUntil = DateTime.Now.AddSeconds(1);
+        var closed = 0;
+        foreach (var item in waiting)
+        {
+            if (!ObsidianSyncService.MarkCompleted(FilePath, item.CaseId))
+                continue;
+
+            item.State.CheckConfirmed = true;
+            item.State.ServiceNoteVerified = true;
+            item.State.OneCRecorded = true;
+            item.State.LastMessage = "Отмечено выполненным вручную, без отчёта";
+            item.State.UpdatedAt = DateTime.Now;
+            closed++;
+        }
+
+        SaveStates();
+        Sync();
+        if (closed == 0)
+        {
+            Status = "Не удалось отметить строки в Obsidian";
+            return;
+        }
+
+        var skipped = selected.Count - waiting.Count;
+        Status = skipped == 0
+            ? $"Отмечено выполненными: {closed}"
+            : $"Отмечено выполненными: {closed}. Без статуса «Ожидается отчёт» пропущено: {skipped}";
+    }
+
     private void SaveProblem()
     {
         var item = SelectedCase;
@@ -1227,6 +1277,7 @@ public sealed class ObsidianCasesViewModel : BaseViewModel, IDisposable
         Cases.Where(x => x.IsSelected && !x.IsCompleted);
 
     private bool HasSelectedActive() => SelectedActive().Any();
+    private bool HasSelectedAwaitingReport() => SelectedActive().Any(x => x.AwaitsReport);
     private bool HasSelectedReady() => SelectedActive().Any(x => x.PlanReady);
 
     private static OrderEntry CloneSnapshot(OrderEntry source) => new()
